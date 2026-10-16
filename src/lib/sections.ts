@@ -1,0 +1,977 @@
+import type { Section, Field } from "./types";
+const text = (key: string, label: string, hint?: string): Field => ({
+  key,
+  label,
+  hint,
+});
+const date = (key: string, label: string): Field => ({
+  key,
+  label,
+  type: "date",
+});
+const area = (key: string, label: string): Field => ({
+  key,
+  label,
+  type: "textarea",
+});
+const select = (key: string, label: string, options: string[]): Field => ({
+  key,
+  label,
+  type: "select",
+  options,
+});
+const yn = ["Yes", "No", "I don’t know", "Not applicable"];
+export const destinations = [
+  "United Kingdom",
+  "United States",
+  "Canada",
+  "Germany",
+  "New Zealand",
+  "Ireland",
+  "Schengen area",
+  "Other",
+];
+export const sections: Section[] = [
+  {
+    key: "identity",
+    title: "About you",
+    description: "Names and identity, entered once and ready to reuse.",
+    journey: "profile",
+    icon: "user",
+    fields: [
+      text("givenNames", "Given names"),
+      text("middleNames", "Middle names"),
+      text("familyName", "Family name"),
+      text("nativeName", "Full name in native alphabet"),
+      text("preferredName", "Preferred name"),
+      date("birthDate", "Date of birth"),
+      text("birthCity", "City of birth"),
+      text("birthRegion", "Region of birth"),
+      text("birthCountry", "Country of birth"),
+      text("citizenship", "Citizenship"),
+      text("otherCitizenships", "Other/current or previous citizenships"),
+      select("maritalStatus", "Marital status", [
+        "Single",
+        "Married",
+        "Divorced",
+        "Widowed",
+        "Other",
+      ]),
+      select("sexAsRecorded", "Sex as recorded on selected identity document", [
+        "Female",
+        "Male",
+        "X / another recorded designation",
+        "Prefer to add later",
+      ]),
+      area("previousNames", "Other names previously used"),
+    ],
+  },
+  {
+    key: "contact",
+    title: "Contact & addresses",
+    description: "How to reach you, and where you live.",
+    journey: "profile",
+    icon: "map",
+    fields: [
+      { key: "email", label: "Email", type: "email" },
+      { key: "phone", label: "Primary phone", type: "tel" },
+      text("otherPhone", "Alternative phone"),
+      text("street", "Residential street address"),
+      text("city", "City"),
+      text("region", "State / province / region"),
+      text("postcode", "Postal code"),
+      text("country", "Country of residence"),
+      select("sameMailing", "Is your mailing address the same?", yn),
+      area("mailingAddress", "Different mailing address, if applicable"),
+      text("timezone", "Your timezone"),
+      text("permanentResidence", "Permanent residence in another country"),
+    ],
+  },
+  {
+    key: "passports",
+    title: "Passports & identity",
+    description: "Keep each document separate. Never invent a missing number.",
+    journey: "profile",
+    icon: "identity",
+    repeatable: true,
+    fields: [
+      text("type", "Document type"),
+      text("number", "Passport / identity number"),
+      text("bookNumber", "Passport book number, if applicable"),
+      text("issuingCountry", "Issuing country"),
+      text("issuingCity", "Issuing city"),
+      date("issueDate", "Issue date"),
+      date("expiryDate", "Expiry date"),
+      text("nameAsPrinted", "Name as printed"),
+      select("lostStolen", "Has this document been lost or stolen?", yn),
+      area("lossDetails", "Explanation, if relevant"),
+    ],
+  },
+  {
+    key: "family",
+    title: "Family & contacts",
+    description: "Add only the people relevant to your applications.",
+    journey: "profile",
+    icon: "users",
+    repeatable: true,
+    fields: [
+      select("relationship", "Relationship", [
+        "Parent",
+        "Sibling",
+        "Spouse / partner",
+        "Child",
+        "Guardian",
+        "Emergency contact",
+        "Other",
+      ]),
+      text("givenNames", "Given names"),
+      text("familyName", "Family name"),
+      date("birthDate", "Date of birth"),
+      text("citizenship", "Citizenship"),
+      text("country", "Residence country"),
+      area("address", "Address"),
+      text("phone", "Phone"),
+      text("email", "Email"),
+      text("occupation", "Occupation"),
+      select("inUS", "Currently in the United States?", yn),
+      text("usStatus", "U.S. status, if known"),
+    ],
+  },
+  {
+    key: "education",
+    title: "Education history",
+    description:
+      "One school or qualification at a time. Dates and results can wait.",
+    journey: "admission",
+    icon: "education",
+    repeatable: true,
+    fields: [
+      text("institution", "Institution name"),
+      text("country", "Institution country"),
+      area("address", "Institution address"),
+      text("qualification", "Qualification / award title"),
+      text("subject", "Subject / major"),
+      text("level", "Qualification level"),
+      date("startDate", "Attendance start"),
+      date("endDate", "Attendance end / expected end"),
+      date("awardDate", "Qualification award date"),
+      select("completion", "Completion status", [
+        "Completed",
+        "Ongoing",
+        "Withdrawn",
+        "Results pending",
+      ]),
+      select("willComplete", "Do you intend to complete it?", yn),
+      area("nonCompletionReason", "Reason for non-completion, if relevant"),
+      text("gradingSystem", "Grading system"),
+      text("grade", "Achieved / predicted grade"),
+      text("maximumGrade", "Maximum grade"),
+      text("language", "Language of instruction"),
+      area("backlogs", "Backlogs or repeated subjects, if relevant"),
+    ],
+  },
+  {
+    key: "study-goals",
+    title: "Your study plans",
+    description: "The subjects, places and possibilities you have in mind.",
+    journey: "admission",
+    icon: "compass",
+    fields: [
+      text("level", "Intended study level"),
+      text("subjects", "Subjects / career interests"),
+      text("destinations", "Preferred destinations"),
+      text("universities", "Preferred institutions"),
+      text("intake", "Preferred intake"),
+      text("budget", "Tuition budget and currency"),
+      select("scholarship", "Would you like scholarship guidance?", yn),
+      area("preferences", "Other study preferences"),
+    ],
+  },
+  {
+    key: "tests",
+    title: "Languages & tests",
+    description:
+      "Completed tests, pending results and future plans all belong here.",
+    journey: "admission",
+    icon: "languages",
+    repeatable: true,
+    fields: [
+      text("test", "Test name / type"),
+      select("status", "Test status", [
+        "Completed",
+        "Booked",
+        "Planned",
+        "Results pending",
+        "Exemption requested",
+      ]),
+      date("testDate", "Test date"),
+      text("reference", "Report / registration number"),
+      text("overall", "Overall result"),
+      text("listening", "Listening"),
+      text("reading", "Reading"),
+      text("writing", "Writing"),
+      text("speaking", "Speaking"),
+      text("otherScores", "Other component scores"),
+      date("expiryDate", "Expiry date, if relevant"),
+      select(
+        "languageCourse",
+        "Would you consider a preparatory language course?",
+        yn,
+      ),
+    ],
+  },
+  {
+    key: "employment",
+    title: "Work & experience",
+    description:
+      "Jobs, placements and internships, with evidence when available.",
+    journey: "profile",
+    icon: "briefcase",
+    repeatable: true,
+    fields: [
+      text("employer", "Employer / organization"),
+      text("role", "Role"),
+      text("country", "Country"),
+      area("address", "Address"),
+      date("startDate", "Start date"),
+      date("endDate", "End date"),
+      select("current", "Is this current?", yn),
+      area("duties", "Responsibilities / achievements"),
+      text("monthlyIncome", "Monthly income and currency, if relevant"),
+      text("contact", "Verification contact, if relevant"),
+    ],
+  },
+  {
+    key: "gaps",
+    title: "Gaps & activities",
+    description: "Tell the story between qualifications, in your own time.",
+    journey: "admission",
+    icon: "timeline",
+    repeatable: true,
+    fields: [
+      date("startDate", "Start date"),
+      date("endDate", "End date"),
+      text("duration", "Reported duration, if dates are unknown"),
+      text("activity", "Activity / reason"),
+      area("description", "What were you doing?"),
+      select("workExperience", "Was relevant work experience involved?", yn),
+    ],
+  },
+  {
+    key: "references",
+    title: "References",
+    description:
+      "Keep academic and professional referees separate from emergency contacts.",
+    journey: "admission",
+    icon: "users",
+    repeatable: true,
+    fields: [
+      text("name", "Referee name"),
+      text("relationship", "Relationship"),
+      text("organization", "Institution / organization"),
+      text("position", "Position"),
+      { key: "email", label: "Professional email", type: "email" },
+      text("phone", "Phone"),
+      select("permission", "Have they agreed to provide a reference?", yn),
+      select("submission", "Expected submission method", [
+        "Direct by referee",
+        "Applicant upload",
+        "Not known yet",
+      ]),
+    ],
+  },
+  {
+    key: "statements",
+    title: "SOP, CV & supporting work",
+    description: "Guidance now; write externally and link your drafts below.",
+    journey: "admission",
+    icon: "file",
+    fields: [
+      area("motivation", "Why this subject?"),
+      area(
+        "preparation",
+        "How have your studies and experiences prepared you?",
+      ),
+      area("universityReasons", "Why your chosen university / program?"),
+      area("careerGoals", "Your career or research goals"),
+      area("context", "Circumstances you want considered"),
+      select("sopStatus", "Statement status", [
+        "Not started",
+        "Drafting externally",
+        "Draft uploaded",
+        "Needs feedback",
+        "Reviewed",
+      ]),
+      area("portfolio", "Portfolio, publications or project links"),
+    ],
+  },
+  {
+    key: "travel-history",
+    title: "Travel & immigration history",
+    description: "Actual past travel, separate from future plans.",
+    journey: "visa",
+    icon: "globe",
+    repeatable: true,
+    fields: [
+      text("country", "Country"),
+      date("arrival", "Arrival date"),
+      date("departure", "Departure date"),
+      text("purpose", "Purpose"),
+      text("visaType", "Visa / permit type"),
+      text("visaReference", "Visa reference"),
+      select(
+        "refusal",
+        "Any refusal, denied entry or withdrawal relevant to this record?",
+        yn,
+      ),
+      area("refusalDetails", "Decision date and explanation"),
+      select("petition", "Immigrant petition filed, if relevant?", yn),
+      area("petitionDetails", "Petition details, if relevant"),
+    ],
+  },
+  {
+    key: "trip-plans",
+    title: "Trip & stay",
+    description:
+      "Purpose, itinerary and accommodation for the planned journey.",
+    journey: "visa",
+    icon: "plane",
+    fields: [
+      text("purpose", "Purpose / visa classification"),
+      select("specificPlans", "Have you made specific travel plans?", yn),
+      date("arrival", "Intended arrival"),
+      date("departure", "Intended departure"),
+      text("arrivalCity", "Arrival city / first entry"),
+      text("destinations", "Destinations / main destination"),
+      area("itinerary", "Proposed itinerary"),
+      area("address", "Where will you stay?"),
+      area("companions", "Travel companions, if any"),
+      text("entries", "Requested entries, if relevant"),
+    ],
+  },
+  {
+    key: "funding",
+    title: "Funding & support",
+    description: "Distinguish tuition, living costs and each funding source.",
+    journey: "visa",
+    icon: "wallet",
+    repeatable: true,
+    fields: [
+      select("type", "Funding type", [
+        "Self",
+        "Family sponsor",
+        "Scholarship",
+        "Loan",
+        "Blocked account",
+        "Declaration of commitment",
+        "Other",
+      ]),
+      text("name", "Funder / institution"),
+      text("relationship", "Relationship to applicant"),
+      text("amount", "Amount"),
+      text("currency", "Currency"),
+      text("coverage", "What costs and period does it cover?"),
+      text("contact", "Contact details"),
+      area("address", "Address"),
+      area("plan", "Remaining funding plan / evidence pending"),
+    ],
+  },
+  {
+    key: "visa-contacts",
+    title: "Hosts & visa contacts",
+    description:
+      "Host, institution, U.S. point of contact or additional student contact.",
+    journey: "visa",
+    icon: "users",
+    repeatable: true,
+    fields: [
+      select("type", "Contact role", [
+        "Host / inviter",
+        "U.S. point of contact",
+        "Student additional contact",
+        "Institution official",
+        "Other",
+      ]),
+      text("name", "Name"),
+      text("organization", "Organization"),
+      text("relationship", "Relationship"),
+      area("address", "Address"),
+      text("phone", "Phone"),
+      { key: "email", label: "Email", type: "email" },
+    ],
+  },
+  {
+    key: "study-visa",
+    title: "Your intended studies",
+    description: "Reuse admission evidence and confirm the selected program.",
+    journey: "visa",
+    icon: "education",
+    visaKinds: ["Study"],
+    fields: [
+      text("institution", "Provider / school"),
+      text("course", "Course of study"),
+      area("address", "Provider address / study location"),
+      date("startDate", "Course starts"),
+      date("endDate", "Course ends"),
+      text("studentId", "Provider student ID"),
+      text("sevisId", "SEVIS ID, for applicable U.S. student routes"),
+      text("casNumber", "CAS reference, for applicable UK route"),
+      area("otherLocations", "Other regular study locations"),
+    ],
+  },
+  {
+    key: "intentions",
+    title: "Your situation & plans",
+    description:
+      "These answers belong to this application. Keep them truthful and personal.",
+    journey: "visa",
+    icon: "file",
+    fields: [
+      area("homeTies", "Home-country family, work or financial commitments"),
+      area(
+        "studyRelationship",
+        "How does planned study relate to previous study or work?",
+      ),
+      area("whyCountry", "Why this country?"),
+      area("whyProvider", "Why this provider?"),
+      area("benefits", "How will this course benefit you?"),
+      area("afterStudy", "What are your plans after study / visit?"),
+    ],
+  },
+  {
+    key: "germany-study",
+    title: "Germany study requirements",
+    description:
+      "Admission conditions, language and finance—not a universal checklist.",
+    journey: "visa",
+    icon: "education",
+    countries: ["Germany"],
+    visaKinds: ["Study"],
+    fields: [
+      select("admissionRoute", "Admission route", [
+        "Admitted to degree",
+        "Accepted preparatory program",
+        "Seeking a university place",
+      ]),
+      select("canStart", "Can you begin studies immediately?", yn),
+      text("conditions", "Admission conditions / preparation"),
+      select("mode", "Program mode", ["Full-time", "Part-time", "Doctorate"]),
+      text("qualificationRoute", "Entrance qualification route"),
+      text("languageEvidence", "Language proof route"),
+      select(
+        "tuitionAdditional",
+        "Tuition payable in addition to semester fees?",
+        yn,
+      ),
+      text("livingEvidence", "First-year livelihood evidence"),
+      text("apsStatus", "APS applicability / status"),
+      select("legalAge", "Of legal age in application country?", yn),
+    ],
+  },
+  {
+    key: "usa-contact-history",
+    title: "USA contact history",
+    description:
+      "Historical contact identifiers where requested. Never passwords.",
+    journey: "visa",
+    icon: "at",
+    countries: ["United States"],
+    repeatable: true,
+    fields: [
+      select("type", "Identifier type", ["Phone", "Email", "Social media"]),
+      text("platform", "Platform, if social media"),
+      text("identifier", "Phone / email / social identifier"),
+      date("from", "Used from, if known"),
+      date("to", "Used until, if known"),
+    ],
+  },
+  {
+    key: "declarations",
+    restricted: true,
+    title: "Private declarations",
+    description:
+      "Restricted applicant answers. Never inferred or defaulted to No.",
+    journey: "visa",
+    icon: "shield",
+    fields: [
+      {
+        ...select(
+          "healthReview",
+          "Health questions reviewed for selected application?",
+          [
+            "Not reviewed",
+            "Needs private discussion",
+            "Reviewed in external portal",
+          ],
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "securityReview",
+          "Security / immigration declarations reviewed?",
+          [
+            "Not reviewed",
+            "Needs private discussion",
+            "Reviewed in external portal",
+          ],
+        ),
+        sensitive: true,
+      },
+      {
+        ...area("privateNotes", "Private notes for an authorized reviewer"),
+        sensitive: true,
+      },
+    ],
+  },
+  {
+    key: "visa-insurance",
+    title: "Insurance & coverage",
+    description:
+      "Student health cover and travel cover are different. Add the relevant policy.",
+    journey: "visa",
+    icon: "shield",
+    repeatable: true,
+    fields: [
+      select("type", "Insurance type", [
+        "Student health",
+        "Incoming / temporary",
+        "Travel medical",
+        "Other",
+      ]),
+      text("insurer", "Insurer"),
+      text("policy", "Policy reference"),
+      date("start", "Coverage starts"),
+      date("end", "Coverage ends"),
+      text("territory", "Covered countries / territory"),
+      text("amount", "Coverage amount and currency"),
+      area("pending", "Proof or details still pending"),
+    ],
+  },
+  {
+    key: "representation",
+    title: "Submission & assistance",
+    description:
+      "Who is helping, and where this application is being prepared for.",
+    journey: "visa",
+    icon: "users",
+    fields: [
+      text("submissionCountry", "Country you will be in when submitting"),
+      text("post", "Submission post / mission"),
+      select("assisted", "Has someone assisted with the application?", yn),
+      text("preparer", "Preparer name / organization"),
+      text("relationship", "Relationship / role"),
+      text("preparerContact", "Preparer contact details"),
+    ],
+  },
+  {
+    key: "nz-history",
+    title: "New Zealand history",
+    description:
+      "New Zealand-specific history, separate from your general travel records.",
+    journey: "visa",
+    icon: "globe",
+    countries: ["New Zealand"],
+    fields: [
+      select("priorVisa", "Previously applied for a New Zealand visa?", yn),
+      select("priorNzeta", "Previously requested an NZeTA?", yn),
+      select("priorTravel", "Previously travelled to New Zealand?", yn),
+      select(
+        "currentStudentVisa",
+        "Currently hold a New Zealand student visa?",
+        yn,
+      ),
+      select(
+        "totalStay",
+        "Will total NZ time, including this visit, reach 24 months?",
+        yn,
+      ),
+      area("details", "Relevant dates, references or details still to confirm"),
+    ],
+  },
+  {
+    key: "nz-study-help",
+    title: "Study assistance & fees",
+    description:
+      "Education assistance and future study funding are separate questions.",
+    journey: "visa",
+    icon: "education",
+    countries: ["New Zealand"],
+    visaKinds: ["Study"],
+    fields: [
+      select(
+        "agentOffer",
+        "Education agent helped obtain your offer / enrolment?",
+        yn,
+      ),
+      select(
+        "sameSubmitter",
+        "Is that person also submitting this visa application?",
+        yn,
+      ),
+      select(
+        "immigrationAdvice",
+        "Did the education agent also provide immigration advice?",
+        yn,
+      ),
+      select("multiYear", "Is this a multi-year program?", yn),
+      select("fees", "Planned tuition payment", [
+        "Full program",
+        "Year by year",
+        "Not decided",
+      ]),
+      area(
+        "futureFunding",
+        "How will remaining tuition and living expenses be paid?",
+      ),
+    ],
+  },
+  {
+    key: "usa-identity",
+    restricted: true,
+    title: "USA identity details",
+    description:
+      "Only complete questions that apply to the current DS-160 route.",
+    journey: "visa",
+    icon: "identity",
+    countries: ["United States"],
+    fields: [
+      select("telecode", "Do you use a telecode name?", yn),
+      text("telecodeSurname", "Telecode surname, if applicable"),
+      text("telecodeGiven", "Telecode given names, if applicable"),
+      {
+        ...text("ssn", "U.S. Social Security number, if applicable"),
+        sensitive: true,
+      },
+      {
+        ...text("taxpayerId", "U.S. taxpayer ID, if applicable"),
+        sensitive: true,
+      },
+      area(
+        "otherNationality",
+        "Other or previous nationality / permanent residence details",
+      ),
+    ],
+  },
+  {
+    key: "usa-history",
+    title: "Previous U.S. applications",
+    description: "Each question is separate. Missing is never treated as No.",
+    journey: "visa",
+    icon: "history",
+    countries: ["United States"],
+    fields: [
+      select("visited", "Have you ever been in the United States?", yn),
+      select("visaIssued", "Have you ever been issued a U.S. visa?", yn),
+      select(
+        "refused",
+        "U.S. visa refused, admission refused or admission application withdrawn?",
+        yn,
+      ),
+      select(
+        "petition",
+        "Has anyone filed an immigrant petition on your behalf?",
+        yn,
+      ),
+      area("details", "Relevant dates, references and explanations"),
+    ],
+  },
+  {
+    key: "usa-background",
+    title: "Additional background",
+    restricted: true,
+    description:
+      "Private applicant-provided answers for the selected USA application.",
+    journey: "visa",
+    icon: "shield",
+    countries: ["United States"],
+    fields: [
+      area("languages", "Languages you speak"),
+      select("clan", "Do you belong to a clan or tribe?", yn),
+      area(
+        "organizations",
+        "Relevant professional, social or charitable organizations",
+      ),
+      select(
+        "skills",
+        "Specialized skills or training covered by the current portal question?",
+        yn,
+      ),
+      select("military", "Have you served in the military?", yn),
+      select(
+        "paramilitary",
+        "Involvement in a paramilitary, vigilante, rebel or insurgent organization?",
+        yn,
+      ),
+    ],
+  },
+  {
+    key: "usa-health",
+    title: "Health questions",
+    restricted: true,
+    description:
+      "Preparation summaries only. Review the exact current DS-160 wording and time scope before answering or filing.",
+    journey: "visa",
+    icon: "shield",
+    countries: ["United States"],
+    fields: [
+      {
+        ...select(
+          "communicable",
+          "Communicable disease of public-health significance?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "disorder",
+          "Physical or mental disorder posing a safety or welfare threat?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select("drugAbuse", "Current or past drug abuse or addiction?", yn),
+        sensitive: true,
+      },
+      {
+        ...area("explanation", "Explanation / question requiring private help"),
+        sensitive: true,
+      },
+    ],
+  },
+  {
+    key: "usa-criminal",
+    title: "Criminal & trafficking questions",
+    restricted: true,
+    description:
+      "Preparation summaries only. Review the exact current DS-160 wording and time scope before answering or filing.",
+    journey: "visa",
+    icon: "shield",
+    countries: ["United States"],
+    fields: [
+      {
+        ...select(
+          "arrest",
+          "Arrested or convicted, including relevant pardon/amnesty circumstances?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "substances",
+          "Controlled-substance violations or conspiracy?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "prostitution",
+          "Prostitution or procuring covered by the portal question?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select("laundering", "Money-laundering involvement or intent?", yn),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "trafficking",
+          "Human-trafficking offense or conspiracy?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "traffickingFamily",
+          "Specified family relationship and knowing benefit from trafficking?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "traffickingHelp",
+          "Knowing assistance or collusion in severe trafficking?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...area("explanation", "Explanation / question requiring private help"),
+        sensitive: true,
+      },
+    ],
+  },
+  {
+    key: "usa-security",
+    title: "Security questions",
+    restricted: true,
+    description:
+      "Preparation summaries only. Review the exact current DS-160 wording and time scope before answering or filing.",
+    journey: "visa",
+    icon: "shield",
+    countries: ["United States"],
+    fields: [
+      {
+        ...select(
+          "espionage",
+          "Intended espionage, sabotage, export-control violations or other unlawful activity?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select("terrorism", "Intended or past terrorist activity?", yn),
+        sensitive: true,
+      },
+      {
+        ...select("support", "Financial or other support for terrorism?", yn),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "membership",
+          "Terrorist organization membership or representation?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "family",
+          "Specified family relationship to a person involved in terrorism?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...area("explanation", "Explanation / question requiring private help"),
+        sensitive: true,
+      },
+    ],
+  },
+  {
+    key: "usa-rights",
+    title: "Human-rights questions",
+    restricted: true,
+    description:
+      "Preparation summaries only. Review the exact current DS-160 wording and time scope before answering or filing.",
+    journey: "visa",
+    icon: "shield",
+    countries: ["United States"],
+    fields: [
+      {
+        ...select("genocide", "Involvement in genocide?", yn),
+        sensitive: true,
+      },
+      { ...select("torture", "Involvement in torture?", yn), sensitive: true },
+      {
+        ...select(
+          "killings",
+          "Extrajudicial killings, political killings or other violence?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select("childSoldiers", "Recruitment or use of child soldiers?", yn),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "religion",
+          "Government-official involvement in severe religious-freedom violations?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "population",
+          "Coercive population controls, abortion or sterilization?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "organs",
+          "Coercive transplantation of organs or tissue?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...area("explanation", "Explanation / question requiring private help"),
+        sensitive: true,
+      },
+    ],
+  },
+  {
+    key: "usa-immigration-disclosures",
+    title: "Immigration & other declarations",
+    restricted: true,
+    description:
+      "Preparation summaries only. Review the exact current DS-160 wording and time scope before answering or filing.",
+    journey: "visa",
+    icon: "shield",
+    countries: ["United States"],
+    fields: [
+      {
+        ...select(
+          "fraud",
+          "Immigration benefit sought through fraud or misrepresentation?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select("deportation", "Removed or deported from any country?", yn),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "custody",
+          "Withheld custody of a U.S. citizen child contrary to a U.S. court custody decision?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...select("voting", "Voted in the United States unlawfully?", yn),
+        sensitive: true,
+      },
+      {
+        ...select(
+          "renunciation",
+          "Renounced U.S. citizenship to avoid taxation?",
+          yn,
+        ),
+        sensitive: true,
+      },
+      {
+        ...area("explanation", "Explanation / question requiring private help"),
+        sensitive: true,
+      },
+    ],
+  },
+];
+export function relevantSections(
+  journey: string,
+  country?: string,
+  kind?: string,
+) {
+  return sections.filter(
+    (s) =>
+      s.journey === journey &&
+      (!s.countries || !country || s.countries.includes(country)) &&
+      (!s.visaKinds || !kind || s.visaKinds.includes(kind)),
+  );
+}

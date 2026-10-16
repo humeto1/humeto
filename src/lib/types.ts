@@ -1,0 +1,96 @@
+export type Role = "platform_admin" | "owner" | "consultant" | "student";
+export type Actor = {
+  id: string;
+  name: string;
+  email: string;
+  tenantId: string;
+  tenantName: string;
+  workspaceType: string;
+  role: Role;
+  personId: string | null;
+};
+export type Person = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  email: string;
+  destination: string;
+  course: string;
+  status: string;
+  initials: string;
+  color: string;
+  created_at: string;
+  updated_at: string;
+};
+export type Application = {
+  id: string;
+  tenant_id: string;
+  person_id: string;
+  person_name?: string;
+  kind: string;
+  country: string;
+  institution: string;
+  program: string;
+  intake: string;
+  status: string;
+  created_at: string;
+  revision: number;
+  submission_reference?: string;
+  submitted_at?: string;
+};
+export type Task = {
+  id: string;
+  tenant_id: string;
+  person_id: string | null;
+  person_name?: string;
+  title: string;
+  stage: string;
+  important: number;
+  urgent: number;
+  due_date: string;
+  assignee: string;
+  revision: number;
+  created_at: string;
+};
+export type DocumentRow = {
+  id: string;
+  tenant_id: string;
+  person_id: string;
+  person_name?: string;
+  title: string;
+  category: string;
+  section_key: string;
+  status: string;
+  current_version: number;
+  created_at: string;
+  original_name: string;
+  mime_type: string;
+  byte_size: number;
+};
+export type Field = {
+  key: string;
+  label: string;
+  type?: "text" | "email" | "date" | "textarea" | "select" | "number" | "tel";
+  options?: string[];
+  hint?: string;
+  sensitive?: boolean;
+};
+export type Section = {
+  key: string;
+  title: string;
+  description: string;
+  journey: "profile" | "admission" | "visa";
+  icon: string;
+  fields: Field[];
+  repeatable?: boolean;
+  restricted?: boolean;
+  visaKinds?: string[];
+  countries?: string[];
+};
+export type Intake = {
+  section_key: string;
+  data: Record<string, unknown>;
+  state: string;
+  revision: number;
+  updated_at: string;
+};
