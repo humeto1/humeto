@@ -129,10 +129,10 @@ const iconMap: Record<string, LucideIcon> = {
 };
 const navItems = [
   ["overview", "Overview", LayoutDashboard],
+  ["tasks", "Tasks to-do", CheckSquare],
   ["students", "Applicants", Users],
   ["applications", "Applications", GraduationCap],
   ["documents", "Documents", FolderOpen],
-  ["tasks", "Tasks & priorities", CheckSquare],
   ["assistant", "Humeto assistant", Sparkles],
   ["requests", "Requests", MessageSquare],
   ["activity", "Activity", History],
@@ -792,11 +792,13 @@ export default function Workspace({
           <div className="breadcrumb">
             Workspace <ChevronRight size={12} />
             <strong>
-              {view === "profile"
-                ? p?.name
-                : view === "platform"
-                  ? "Institutes & subscriptions"
-                  : view[0].toUpperCase() + view.slice(1)}
+              {view === "tasks"
+                ? "Tasks to-do"
+                : view === "profile"
+                  ? p?.name
+                  : view === "platform"
+                    ? "Institutes & subscriptions"
+                    : view[0].toUpperCase() + view.slice(1)}
             </strong>
           </div>
           <div className="topbar-right">
