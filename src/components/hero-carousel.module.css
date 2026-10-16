@@ -1,0 +1,310 @@
+.carousel {
+  overflow: clip;
+}
+.slide[hidden] {
+  display: none;
+}
+.slide :global(.hero) {
+  min-height: 655px;
+  padding-bottom: 55px;
+}
+.slide :global(.hero h1) {
+  font-size: clamp(44px, 4.55vw, 65px);
+}
+.slide :global(.hero-photo > img) {
+  object-fit: cover;
+}
+.slide :global(.hero-buttons) {
+  flex-wrap: wrap;
+}
+.controls {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  padding-bottom: 14px;
+}
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  flex: 1;
+}
+.tabs button {
+  position: relative;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 13px 0 17px;
+  color: #8a9484;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.tabs button.selected {
+  color: #193e32;
+  font-weight: 650;
+}
+.tabNumber {
+  font-size: 9px;
+  opacity: 0.65;
+}
+.track {
+  position: absolute;
+  height: 3px;
+  background: #e3e8d8;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.track > span {
+  display: block;
+  height: 100%;
+  background: #728b46;
+}
+.selected .track {
+  background: #d9e6bb;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.actions button {
+  display: grid;
+  place-items: center;
+  width: 33px;
+  height: 33px;
+  background: transparent;
+  border: 1px solid #dce2d2;
+  border-radius: 50%;
+  color: #193e32;
+  cursor: pointer;
+}
+.actions button:hover {
+  background: #eaf0dc;
+}
+.counter {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #7a876e;
+  margin-right: 8px;
+}
+.timing {
+  text-align: center;
+  color: #879080;
+  font-size: 9px;
+  margin: 0 0 35px;
+}
+.taskCard,
+.assistantCard {
+  right: -20px;
+  bottom: 100px;
+  width: 335px;
+  padding: 18px;
+  transform: rotate(2deg);
+}
+.cardHeading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #294934;
+  font-size: 11px;
+  margin-bottom: 13px;
+}
+.cardHeading > span {
+  margin-left: auto;
+  font-size: 7px;
+  color: #879080;
+}
+.matrix {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+.matrix > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px;
+  border-radius: 6px;
+  background: #eef2df;
+}
+.matrix > div:nth-child(2) {
+  background: #e3eddf;
+}
+.matrix > div:nth-child(3) {
+  background: #f6eddb;
+}
+.matrix > div:nth-child(4) {
+  background: #efedf2;
+}
+.matrix small {
+  font-size: 6px;
+  letter-spacing: 0.35px;
+}
+.matrix strong {
+  font-size: 9px;
+  font-weight: 600;
+}
+.matrix span {
+  font-size: 7px;
+  color: #6d7966;
+}
+.cardFoot {
+  font-size: 8px;
+  margin-top: 13px;
+  color: #7c8a70;
+}
+.futureNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 11px;
+  color: #556b43;
+  margin-top: 30px;
+}
+.futureNote small {
+  display: block;
+  font-size: 10px;
+  margin-top: 6px;
+  color: #89927e;
+}
+.concept {
+  font-size: 7px;
+  letter-spacing: 1px;
+  color: #7c8a70;
+}
+.question {
+  font-size: 11px;
+  background: #eef2e4;
+  border-radius: 8px 8px 0 8px;
+  margin: 13px 0;
+  padding: 12px;
+}
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 2px solid #a5bb73;
+  padding: 3px 12px;
+}
+.answer span,
+.answer small {
+  font-size: 8px;
+  color: #7b886e;
+}
+.answer strong {
+  font-size: 17px;
+  color: #193e32;
+}
+.suggestion {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: 8px;
+  color: #678147;
+  border-top: 1px solid #edf0e6;
+  margin-top: 15px;
+  padding-top: 11px;
+}
+.controls button:focus-visible {
+  outline: 2px solid #547539;
+  outline-offset: 5px;
+}
+@media (max-width: 1100px) {
+  .taskCard,
+  .assistantCard {
+    right: -5px;
+    width: 290px;
+  }
+  .tabs button {
+    font-size: 10px;
+  }
+  .slide :global(.hero-note) {
+    white-space: normal;
+  }
+}
+@media (max-width: 800px) {
+  .slide :global(.hero) {
+    min-height: 0;
+    padding-bottom: 48px;
+  }
+  .slide :global(.hero-copy) {
+    min-height: 345px;
+  }
+  .slide :global(.hero h1) {
+    font-size: 58px;
+  }
+  .controls {
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .tabs {
+    flex-basis: 100%;
+    gap: 12px;
+  }
+  .actions {
+    margin: 0 auto;
+  }
+  .tabs button {
+    font-size: 10px;
+    align-items: flex-start;
+    min-height: 55px;
+  }
+  .timing {
+    padding: 0 22px;
+  }
+  .futureNote {
+    justify-content: center;
+  }
+}
+@media (max-width: 520px) {
+  .slide :global(.hero h1) {
+    font-size: 45px;
+  }
+  .slide :global(.hero-copy) {
+    min-height: 370px;
+  }
+  .taskCard,
+  .assistantCard {
+    width: 260px;
+    right: 0;
+    padding: 14px;
+    bottom: 90px;
+  }
+  .tabs button {
+    font-size: 9px;
+    gap: 5px;
+  }
+  .tabNumber {
+    display: none;
+  }
+}
+.slide:not([hidden]) {
+  animation: cover-arrive 450ms ease-out;
+}
+@keyframes cover-arrive {
+  from {
+    opacity: 0.5;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 800px) {
+  .slide :global(.hero-visual) {
+    height: 500px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .slide:not([hidden]) {
+    animation: none;
+  }
+}

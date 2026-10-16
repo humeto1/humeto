@@ -1,0 +1,13 @@
+{
+  "tool": "Built-in image_gen",
+  "assets": [
+    {
+      "path": "public/assets/hero-tasks.webp",
+      "prompt": "Editorial lifestyle photograph for a premium warm cream and forest-green productivity SaaS homepage. A relaxed young South Asian female creative professional planning her day at a sunlit oak desk with a laptop, notebook and small plant in a beautiful airy contemporary studio. Natural candid expression, subtle sage and warm beige colors, tactile realistic details, aspirational but authentic. Landscape 4:3 composition, subject centered with space at bottom for website UI overlays. No text, no logos, no watermarks. Photorealistic natural."
+    },
+    {
+      "path": "public/assets/hero-assistant.webp",
+      "prompt": "Editorial lifestyle photograph for a premium warm cream and forest-green application assistant SaaS homepage. A focused young international applicant with curly dark hair reviewing papers beside an open laptop in a sunlit quiet library, warm wood and soft greenery, hopeful confident mood, candid realistic texture. Landscape 4:3 composition, subject centered, lower portion with desk space for website UI overlays. Screen content softly out of focus, no readable text, no logos, no watermarks. Photorealistic natural."
+    }
+  ]
+}
