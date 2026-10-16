@@ -46,3 +46,21 @@ Open `/login` and choose Institute, Student, Individual or Super admin. These ar
 - PostgreSQL migration before multi-server production. SQLite is intentional for the current single-host local development phase.
 
 The wider product plan and deliverable ledger are in the parent `planning/` directory. Do not publish that directory or the original applicant source documents with the application.
+
+## Task assistant (local command testing)
+
+Open `/workspace/assistant` as an institute owner/consultant or individual owner. Try:
+
+- `Create an important task to create a group with the new prospect team and remind me tomorrow`
+- `How many important tasks are pending?`
+- `Show my important not urgent pending tasks`
+- `Mark "exact task title or task ID" done`
+- `Remind me about "task ID" in 30 minutes`
+
+Task changes require applying the review card. It records a task to create the group; it does not operate WhatsApp or create a real group. Chats are private to the signed-in user. Counts are computed from the existing task data; personal scope currently matches the assignee display name. Staff can deliberately ask for team/workspace tasks within the tenant's existing permissions.
+
+Tomorrow without a time means 09:00 in the browser's detected timezone, displayed before applying. Reminders persist in SQLite, surface in the in-app inbox/bell when due and can be dismissed or snoozed through a new reviewed command. There is **no external/background push delivery while the app is closed**; due reminders remain available when the user returns. Completing the task removes its reminders from the active inbox.
+
+The default engine is explicitly labelled **Local command testing**, with predictable supported commands. It is not a live AI chatbot. The user chose this mode for the current delivery. The optional OpenAI structured-intent adapter needs `HUMETO_AGENT_PROVIDER=openai`, `OPENAI_API_KEY` and `HUMETO_AGENT_MODEL` configured server-side before use; it has not been live-tested. No key belongs in a `NEXT_PUBLIC_` variable or source control. Provider errors do not trigger a silent mock-AI fallback.
+
+WhatsApp account linking, Telegram and email remain planned. See `../planning/AI_TASK_ASSISTANT_PLAN.md` for architecture, scope and verification. The development script uses `next dev --webpack` to avoid the refresh loop observed with this installed Turbopack version; the production build still uses Next's default compiler.

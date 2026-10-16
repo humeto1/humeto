@@ -15,6 +15,7 @@ export default async function Page({
       "documents",
       "applications",
       "tasks",
+      "assistant",
       "requests",
       "activity",
       "settings",
@@ -24,6 +25,8 @@ export default async function Page({
     notFound();
   const a = await requireActor();
   if (view === "platform" && a.role !== "platform_admin") notFound();
+  if (view === "assistant" && !["owner", "consultant"].includes(a.role))
+    notFound();
   return (
     <Workspace
       actor={a}

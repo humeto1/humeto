@@ -47,6 +47,7 @@ import {
   Eye,
   Camera,
   Copy,
+  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
@@ -59,6 +60,8 @@ import type {
 } from "@/lib/types";
 import { sections, destinations } from "@/lib/sections";
 import ImportHistory from "./import-history";
+import TaskAssistant from "./task-assistant";
+import ReminderBell from "./reminder-bell";
 import ImportPanel from "./import-panel";
 import ApplicationChecklist from "./application-checklist";
 import SectionEditor, { type EditorHandle } from "./section-editor";
@@ -130,6 +133,7 @@ const navItems = [
   ["applications", "Applications", GraduationCap],
   ["documents", "Documents", FolderOpen],
   ["tasks", "Tasks & priorities", CheckSquare],
+  ["assistant", "Humeto assistant", Sparkles],
   ["requests", "Requests", MessageSquare],
   ["activity", "Activity", History],
 ] as const;
@@ -700,7 +704,11 @@ export default function Workspace({
           ) : (
             navItems
               .filter(
-                ([key]) => !(isStudent && ["activity", "tasks"].includes(key)),
+                ([key]) =>
+                  !(
+                    isStudent &&
+                    ["activity", "tasks", "assistant"].includes(key)
+                  ),
               )
               .map(([key, label, Icon]) => (
                 <button
@@ -806,14 +814,18 @@ export default function Workspace({
               />
               <kbd>⌘ K</kbd>
             </label>
-            <button
-              className="notification-button"
-              onClick={() => void navigate("/workspace/requests")}
-              aria-label="View information requests"
-            >
-              <Bell size={18} />
-              {data.requests.some((r) => r.status === "Open") && <span />}
-            </button>
+            {staff ? (
+              <ReminderBell />
+            ) : (
+              <button
+                className="notification-button"
+                onClick={() => void navigate("/workspace/requests")}
+                aria-label="View information requests"
+              >
+                <Bell size={18} />
+                {data.requests.some((r) => r.status === "Open") && <span />}
+              </button>
+            )}
             <span className="topbar-avatar">{initials(actor.name)}</span>
           </div>
         </header>
@@ -1437,14 +1449,22 @@ export default function Workspace({
               )}
             </>
           )}
+          {view === "assistant" && staff && (
+            <TaskAssistant actor={actor} onChange={refresh} />
+          )}
           {view === "tasks" && (
             <>
               {title(
                 "Busy isn’t the goal. Progress is.",
                 "Keep importance and urgency visible as work moves forward.",
-                staff && writable
-                  ? button("Add task", () => showModal("task"))
-                  : undefined,
+                staff && writable ? (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <a href="/workspace/assistant" className="btn secondary">
+                      <Sparkles size={14} /> Ask Humeto
+                    </a>
+                    {button("Add task", () => showModal("task"))}
+                  </div>
+                ) : undefined,
               )}
               <div className="filter-bar">
                 <div className="segmented">
@@ -1696,6 +1716,40 @@ export default function Workspace({
                     </div>
                   )}
                 </section>
+                {staff && (
+                  <section className="panel settings-panel">
+                    <Sparkles size={25} />
+                    <h2>Your assistant & channels</h2>
+                    <p>
+                      Test task conversations inside Humeto. Your messages are
+                      private to your account; applied changes appear in the
+                      shared task views.
+                    </p>
+                    <a
+                      className="btn secondary small"
+                      href="/workspace/assistant"
+                    >
+                      Open Humeto assistant <ArrowUpRight size={14} />
+                    </a>
+                    <dl>
+                      <dt>In-app task chat</dt>
+                      <dd>
+                        <Badge>Local testing available</Badge>
+                      </dd>
+                      <dt>WhatsApp account linking</dt>
+                      <dd>Planned</dd>
+                      <dt>Telegram</dt>
+                      <dd>Planned</dd>
+                      <dt>Email</dt>
+                      <dd>Planned</dd>
+                    </dl>
+                    <p>
+                      External channels are not connected. Start with the in-app
+                      assistant; account connections will be added in a later
+                      delivery.
+                    </p>
+                  </section>
+                )}
                 <section className="panel settings-panel">
                   <ShieldCheck size={25} />
                   <h2>Local build notes</h2>
