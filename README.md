@@ -64,3 +64,13 @@ Tomorrow without a time means 09:00 in the browser's detected timezone, displaye
 The default engine is explicitly labelled **Local command testing**, with predictable supported commands. It is not a live AI chatbot. The user chose this mode for the current delivery. The optional OpenAI structured-intent adapter needs `HUMETO_AGENT_PROVIDER=openai`, `OPENAI_API_KEY` and `HUMETO_AGENT_MODEL` configured server-side before use; it has not been live-tested. No key belongs in a `NEXT_PUBLIC_` variable or source control. Provider errors do not trigger a silent mock-AI fallback.
 
 WhatsApp account linking, Telegram and email remain planned. See `../planning/AI_TASK_ASSISTANT_PLAN.md` for architecture, scope and verification. The development script uses `next dev --webpack` to avoid the refresh loop observed with this installed Turbopack version; the production build still uses Next's default compiler.
+
+## Leads, journeys and commercial tracking
+
+`/workspace/leads` supports manual/custom-field intake, reviewed local add-lead commands, previewed CSV imports (500 rows), and expiring inquiry links with downloadable QR codes. The QR code is rendered locally; it calls no third-party image service. Public forms submit to this installation, so localhost links work only on this computer. Email and WhatsApp source tags are manual attribution until actual connectors are implemented.
+
+Registration creates one applicant transactionally and transfers the agreed PKR fee, upfront target, timeline and contingent incentive. It does not record payment. Receipts have unique replay keys; applicant indicators show recorded paid/pending totals and independent application counts. Agreements, receipt corrections/refunds and invoices are not implemented as a full accounting module yet.
+
+Applicants and applications have independent Kanban boards with drag/drop and stage selectors. Task board dragging changes stage; matrix dragging changes priority while preserving stage. Marking an application Ready still requires working-checklist review and Submitted still needs an actual external reference. Staff can record a note, link and uploaded supporting file version with an application stage change; history retains before/after status. Humeto does not submit university or visa applications itself.
+
+CRM AI, Task AI and Extension AI entry points are visible at the top. Only the documented local commands and reviewed extension matching are active. Gmail reading/sending, automatic forwarded-mail identity matching, student reply rescheduling and AI attachment completion remain planned in `../planning/INTELLIGENT_CRM_AND_LEADS_PLAN.md`.

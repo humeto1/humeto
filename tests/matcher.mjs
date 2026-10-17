@@ -47,3 +47,33 @@ test("ambiguous duplicate canonical values abstain instead of choosing a record"
     null,
   );
 });
+
+test("review separates suggested, ambiguous and preserved answers before any fill", async () => {
+  const { reviewFields, reviewCounts } =
+    await import("../extension/review-state.mjs");
+  const rows = reviewFields(
+    [
+      { label: "First name", value: "", type: "text" },
+      {
+        label: "First name",
+        context: "Parent information",
+        value: "",
+        type: "text",
+      },
+      { label: "Email address", value: "existing@example.com", type: "email" },
+    ],
+    [
+      { key: "givenNames", label: "First name", value: "Amira" },
+      { key: "email", label: "Email", value: "new@example.com" },
+    ],
+  );
+  assert.deepEqual(reviewCounts(rows), {
+    suggested: 1,
+    attention: 1,
+    preserved: 1,
+  });
+  assert.deepEqual(
+    rows.map((r) => r.selected),
+    [true, false, false],
+  );
+});

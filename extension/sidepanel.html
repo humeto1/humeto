@@ -42,7 +42,8 @@
         </div>
         <div class="notice">
           Saved answers are provided information, not automatically verified.
-          Review every suggested value.
+          Review the suggested values together, then fill your selected empty
+          fields in one batch.
         </div>
         <button id="scan">Find fields on this page</button>
         <p class="tiny">
@@ -50,6 +51,44 @@
           to fill. Only ordinary visible fields are inspected.
         </p>
         <h3 id="page-name"></h3>
+        <div id="review-tools" hidden>
+          <p class="review-heading">One review. One batch. Your control.</p>
+          <div class="review-counts" aria-label="Page review summary">
+            <span><strong id="suggested-count">0</strong> Suggested</span>
+            <span><strong id="attention-count">0</strong> Need attention</span>
+            <span><strong id="preserved-count">0</strong> Preserved</span>
+          </div>
+          <div
+            class="review-filters"
+            role="group"
+            aria-label="Show form fields"
+          >
+            <button type="button" data-view="suggested" aria-pressed="true">
+              Suggestions
+            </button>
+            <button type="button" data-view="attention" aria-pressed="false">
+              Needs attention
+            </button>
+            <button type="button" data-view="preserved" aria-pressed="false">
+              Existing answers
+            </button>
+            <button type="button" data-view="all" aria-pressed="false">
+              All
+            </button>
+          </div>
+          <div class="selection-tools">
+            <button type="button" id="select-suggestions">
+              Select suggestions</button
+            ><button type="button" id="clear-selection">Clear selection</button>
+          </div>
+          <p class="tiny">
+            Selection spans these views. Existing answers stay untouched. Close
+            the panel whenever you want to work manually.
+          </p>
+          <p id="empty-view" hidden>
+            No fields in this view. Choose another view above.
+          </p>
+        </div>
         <div id="matches"></div>
         <button id="fill" hidden>Fill selected empty fields →</button>
         <p class="tiny">

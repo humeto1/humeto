@@ -1,4 +1,4 @@
-import { matchField } from "./matcher.mjs";
+import { reviewFields, reviewCounts } from "./review-state.mjs";
 const $ = (s) => document.querySelector(s),
   esc = (s) =>
     String(s).replace(
@@ -17,9 +17,62 @@ let profile = null,
   activeTab = null,
   base = "",
   token = "";
+let rows = [],
+  view = "suggested";
 function status(s) {
   $("#status").textContent = s;
 }
+function refreshReview() {
+  const counts = reviewCounts(rows);
+  for (const group of ["suggested", "attention", "preserved"])
+    $("#" + group + "-count").textContent = counts[group];
+  let shown = 0;
+  for (const card of document.querySelectorAll(".match")) {
+    const row = rows[Number(card.dataset.row)];
+    card.hidden = view !== "all" && row.group !== view;
+    if (!card.hidden) shown++;
+  }
+  for (const button of document.querySelectorAll("[data-view]"))
+    button.setAttribute("aria-pressed", String(button.dataset.view === view));
+  $("#empty-view").hidden = shown > 0;
+  const selected = [
+    ...document.querySelectorAll("input[data-index]:checked:not(:disabled)"),
+  ].filter(
+    (check) =>
+      document.querySelector(`[data-fact="${check.dataset.index}"]`).value !==
+      "",
+  ).length;
+  $("#fill").textContent =
+    `Fill ${selected} selected empty field${selected === 1 ? "" : "s"} →`;
+  $("#fill").disabled = selected === 0 || !scan;
+}
+for (const button of document.querySelectorAll("[data-view]"))
+  button.onclick = () => {
+    view = button.dataset.view;
+    refreshReview();
+  };
+$("#clear-selection").onclick = () => {
+  for (const check of document.querySelectorAll("input[data-index]"))
+    check.checked = false;
+  refreshReview();
+};
+$("#select-suggestions").onclick = () => {
+  for (const check of document.querySelectorAll("input[data-index]")) {
+    const row = rows[Number(check.dataset.index)];
+    if (!check.disabled && row.group === "suggested") check.checked = true;
+  }
+  refreshReview();
+};
+$("#matches").onchange = (event) => {
+  const selected = event.target;
+  if (selected.matches("select[data-fact]")) {
+    const check = document.querySelector(
+      `[data-index="${selected.dataset.fact}"]`,
+    );
+    if (!check.disabled) check.checked = selected.value !== "";
+  }
+  refreshReview();
+};
 async function load() {
   const r = await fetch(base + "/api/assist", {
     headers: { Authorization: "Bearer " + token },
@@ -61,6 +114,8 @@ $("#disconnect").onclick = async () => {
   $("#pair").hidden = false;
   $("#connected").hidden = true;
   $("#matches").replaceChildren();
+  $("#review-tools").hidden = true;
+  rows = [];
   status(
     "Disconnected. Revoke the token in Humeto settings if you no longer need it.",
   );
@@ -68,6 +123,10 @@ $("#disconnect").onclick = async () => {
 $("#scan").onclick = async () => {
   status("Inspecting visible fields…");
   $("#fill").hidden = true;
+  $("#review-tools").hidden = true;
+  $("#matches").replaceChildren();
+  scan = null;
+  rows = [];
   $("#scan").disabled = true;
   try {
     await load();
@@ -87,15 +146,23 @@ $("#scan").onclick = async () => {
     scan = await chrome.tabs.sendMessage(activeTab, { type: "HUMETO_SCAN" });
     $("#page-name").textContent =
       scan.title + " · " + new URL(scan.url).hostname;
-    $("#matches").innerHTML = scan.fields
-      .map((field, i) => {
-        const matched = matchField(field, profile.facts);
-        return `<article class="match"><label><input type="checkbox" data-index="${i}" ${matched && !field.value ? "checked" : ""} ${field.value ? "disabled" : ""}><strong>${esc(field.label)}</strong></label><small>${field.value ? "Existing answer preserved" : "Empty " + esc(field.type) + " field"}</small><select data-fact="${i}" aria-label="Profile field for ${esc(field.label)}"><option value="">Leave for manual entry</option>${profile.facts.map((f, j) => `<option value="${j}" ${matched?.fact === f ? "selected" : ""}>${esc(f.label)} · ${esc(f.value.slice(0, 60))}</option>`).join("")}</select><small>${matched ? "Suggested match · review required" : "No confident match · choose manually if appropriate"}</small><div data-result="${i}"></div></article>`;
-      })
+    rows = reviewFields(scan.fields, profile.facts);
+    view = rows.some((row) => row.group === "suggested")
+      ? "suggested"
+      : rows.some((row) => row.group === "attention")
+        ? "attention"
+        : "preserved";
+    $("#matches").innerHTML = rows
+      .map(
+        ({ field, match, index: i, selected, group }) =>
+          `<article class="match" data-row="${i}"><label><input type="checkbox" data-index="${i}" ${selected ? "checked" : ""} ${field.value ? "disabled" : ""}><strong>${esc(field.label)}</strong></label><small>${field.value ? "Existing answer preserved" : "Empty " + esc(field.type) + " field"}</small><select data-fact="${i}" aria-label="Profile field for ${esc(field.label)}" ${field.value ? "disabled" : ""}><option value="">Leave for manual entry</option>${profile.facts.map((f, j) => `<option value="${j}" ${match?.fact === f ? "selected" : ""}>${esc(f.label)} · ${esc(f.value.slice(0, 60))}</option>`).join("")}</select><small>${group === "preserved" ? "Humeto will not replace this answer" : match ? "Suggested mapping · review the value before applying" : "No unique match · keep manual or choose a value"}</small><div data-result="${i}"></div></article>`,
+      )
       .join("");
+    $("#review-tools").hidden = !scan.fields.length;
+    refreshReview();
     $("#fill").hidden = !scan.fields.length;
     status(
-      `${scan.fields.length} visible field(s). Review each mapping before filling. File uploads and unusual controls need manual assistance.`,
+      `${scan.fields.length} visible fields. Review suggestions together and fill one approved batch. Uncertain matches and file uploads stay under your control.`,
     );
   } catch (e) {
     status(e.message);
@@ -151,14 +218,22 @@ $("#fill").onclick = async () => {
       const index = scan.fields.findIndex((f) => f.id === row.id),
         el = document.querySelector(`[data-result="${index}"]`);
       if (el) el.textContent = row.reason;
+      if (row.ok && index >= 0) {
+        const check = document.querySelector(`[data-index="${index}"]`);
+        check.checked = false;
+        check.disabled = true;
+        document.querySelector(`[data-fact="${index}"]`).disabled = true;
+        rows[index].group = "preserved";
+      }
     }
     status(
       `${result.results.filter((r) => r.ok).length} field(s) filled. Verify all values in the portal yourself. Nothing was submitted.`,
     );
   } catch (e) {
+    scan = null;
     status(e.message);
   } finally {
-    $("#fill").disabled = false;
+    refreshReview();
   }
 };
 const stored = await chrome.storage.session.get("humetoPair");

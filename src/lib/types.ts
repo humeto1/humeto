@@ -10,6 +10,8 @@ export type Actor = {
   personId: string | null;
 };
 export type Person = {
+  revision: number;
+  journey_stage: string;
   id: string;
   tenant_id: string;
   name: string;

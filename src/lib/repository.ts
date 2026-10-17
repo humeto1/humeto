@@ -99,6 +99,26 @@ export function subscription(a: Actor) {
 }
 export function bootstrap(a: Actor) {
   return {
+    leads: ["owner", "consultant"].includes(a.role)
+      ? db()
+          .prepare(
+            "SELECT * FROM leads WHERE tenant_id=? ORDER BY created_at DESC,rowid DESC",
+          )
+          .all(a.tenantId)
+          .map((r) => ({ ...r, extras: JSON.parse(String(r.extras)) }))
+      : [],
+    finance:
+      a.role === "platform_admin" || a.role === "student"
+        ? []
+        : db()
+            .prepare(
+              "SELECT f.*,COALESCE((SELECT SUM(amount) FROM payments p WHERE p.person_id=f.person_id AND p.tenant_id=f.tenant_id),0) AS paid FROM case_finance f WHERE f.tenant_id=?",
+            )
+            .all(a.tenantId)
+            .map((r) => ({
+              ...r,
+              pending: Math.max(0, Number(r.expected_fee) - Number(r.paid)),
+            })),
     people: people(a),
     applications: applications(a),
     tasks: tasks(a),

@@ -55,8 +55,26 @@ CREATE INDEX IF NOT EXISTS idx_people_tenant ON people(tenant_id);CREATE INDEX I
     d.exec(
       "ALTER TABLE applications ADD COLUMN submission_reference TEXT NOT NULL DEFAULT '';ALTER TABLE applications ADD COLUMN submitted_at TEXT NOT NULL DEFAULT ''",
     );
+  d.exec(`CREATE TABLE IF NOT EXISTS application_events(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,application_id TEXT NOT NULL,from_status TEXT NOT NULL,to_status TEXT NOT NULL,note TEXT NOT NULL DEFAULT '',source_url TEXT NOT NULL DEFAULT '',document_id TEXT NOT NULL DEFAULT '',document_version INTEGER NOT NULL DEFAULT 0,created_by TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS inquiry_links(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL REFERENCES tenants(id),token_hash TEXT NOT NULL UNIQUE,created_by TEXT NOT NULL,expires_at INTEGER NOT NULL,revoked INTEGER NOT NULL DEFAULT 0,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS inquiry_limits(link_id TEXT PRIMARY KEY,window_start INTEGER NOT NULL,count INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS leads(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL REFERENCES tenants(id),name TEXT NOT NULL,email TEXT NOT NULL,phone TEXT NOT NULL DEFAULT '',source TEXT NOT NULL DEFAULT 'Manual',stage TEXT NOT NULL DEFAULT 'New',destination TEXT NOT NULL DEFAULT '',course TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '',follow_up TEXT NOT NULL DEFAULT '',timeline TEXT NOT NULL DEFAULT '',expected_fee INTEGER NOT NULL DEFAULT 0,upfront_fee INTEGER NOT NULL DEFAULT 0,incentive INTEGER NOT NULL DEFAULT 0,extras TEXT NOT NULL DEFAULT '{}',revision INTEGER NOT NULL DEFAULT 1,person_id TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lead_email ON leads(tenant_id,email COLLATE NOCASE);
+CREATE TABLE IF NOT EXISTS case_finance(person_id TEXT PRIMARY KEY REFERENCES people(id),tenant_id TEXT NOT NULL,expected_fee INTEGER NOT NULL DEFAULT 0,upfront_fee INTEGER NOT NULL DEFAULT 0,incentive INTEGER NOT NULL DEFAULT 0,currency TEXT NOT NULL DEFAULT 'PKR',timeline TEXT NOT NULL DEFAULT '',revision INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS payments(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,person_id TEXT NOT NULL REFERENCES people(id),amount INTEGER NOT NULL CHECK(amount>0),reference TEXT NOT NULL,client_key TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT DEFAULT CURRENT_TIMESTAMP,UNIQUE(tenant_id,client_key));`);
+  const personCols = d
+    .prepare("PRAGMA table_info(people)")
+    .all()
+    .map((c) => c.name);
+  if (!personCols.includes("revision"))
+    d.exec(
+      "ALTER TABLE people ADD COLUMN revision INTEGER NOT NULL DEFAULT 1; ALTER TABLE people ADD COLUMN journey_stage TEXT NOT NULL DEFAULT 'Planning'",
+    );
   globalDb.humetoDb = d;
-  if (process.env.HUMETO_LOCAL_DEMO === "true") seed(d);
+  if (process.env.HUMETO_LOCAL_DEMO === "true") {
+    seed(d);
+    seedCRM(d);
+  }
   initializeChecklists(d);
   return d;
 }
@@ -375,4 +393,161 @@ function initializeChecklists(d: DatabaseSync) {
     .all();
   for (const app of apps)
     createChecklist(String(app.id), String(app.tenant_id), String(app.kind));
+}
+
+function seedCRM(d: DatabaseSync) {
+  d.exec("CREATE TABLE IF NOT EXISTS demo_migrations(name TEXT PRIMARY KEY)");
+  if (
+    !d
+      .prepare("SELECT name FROM demo_migrations WHERE name='crm-journeys-v1'")
+      .get()
+  ) {
+    for (const [pid, stage] of [
+      ["amira", "Documents"],
+      ["daniel", "Offers"],
+      ["james", "Applying"],
+      ["sofia", "Visa"],
+    ])
+      d.prepare(
+        "UPDATE people SET journey_stage=? WHERE id=? AND tenant_id='northstar' AND journey_stage='Planning' AND revision=1",
+      ).run(stage, pid);
+    d.prepare(
+      "INSERT INTO demo_migrations(name) VALUES('crm-journeys-v1')",
+    ).run();
+  }
+  if (d.prepare("SELECT name FROM demo_migrations WHERE name='crm-v1'").get())
+    return;
+  d.exec("BEGIN IMMEDIATE");
+  try {
+    const leads = [
+      [
+        "demo-lead-noor",
+        "Noor Ahmed",
+        "noor.ahmed@example.com",
+        "New",
+        "Inquiry",
+        "United Kingdom",
+        100000,
+        50000,
+        25000,
+      ],
+      [
+        "demo-lead-zain",
+        "Zain Ali",
+        "zain.ali@example.com",
+        "Counselling",
+        "WhatsApp",
+        "Canada",
+        150000,
+        50000,
+        40000,
+      ],
+      [
+        "demo-lead-hana",
+        "Hana Yusuf",
+        "hana.yusuf@example.com",
+        "Awaiting registration",
+        "Email",
+        "Germany",
+        80000,
+        40000,
+        20000,
+      ],
+      [
+        "demo-lead-maya",
+        "Maya Tan",
+        "maya.tan@example.com",
+        "Qualified",
+        "CSV",
+        "Ireland",
+        120000,
+        60000,
+        30000,
+      ],
+    ];
+    for (const [
+      lid,
+      name,
+      email,
+      stage,
+      source,
+      country,
+      fee,
+      upfront,
+      incentive,
+    ] of leads)
+      d.prepare(
+        "INSERT OR IGNORE INTO leads(id,tenant_id,name,email,stage,source,destination,course,expected_fee,upfront_fee,incentive,timeline,notes,follow_up) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      ).run(
+        lid,
+        "northstar",
+        name,
+        email,
+        stage,
+        source,
+        country,
+        "Masters · interest to discuss",
+        fee,
+        upfront,
+        incentive,
+        "Target intake: September 2027",
+        "Fictional demo lead. Source illustrates a channel; no email or WhatsApp integration is active.",
+        "2026-10-20",
+      );
+    if (
+      d
+        .prepare(
+          "SELECT id FROM people WHERE id='fatima' AND tenant_id='northstar'",
+        )
+        .get()
+    ) {
+      for (const [aid, kind, country, institution, status] of [
+        [
+          "demo-usa-refused",
+          "Study visa",
+          "United States",
+          "Sample US student visa case",
+          "Failed",
+        ],
+        [
+          "demo-uk-restart",
+          "Admission",
+          "United Kingdom",
+          "Sample UK University",
+          "Draft",
+        ],
+        [
+          "demo-uk-offer",
+          "Admission",
+          "United Kingdom",
+          "Sample London Institute",
+          "Offer received",
+        ],
+      ])
+        d.prepare(
+          "INSERT OR IGNORE INTO applications(id,tenant_id,person_id,kind,country,institution,program,intake,status) VALUES(?,?,?,?,?,?,?,?,?)",
+        ).run(
+          aid,
+          "northstar",
+          "fatima",
+          kind,
+          country,
+          institution,
+          "MS Computer Science",
+          "September 2027",
+          status,
+        );
+      d.prepare(
+        "INSERT OR IGNORE INTO case_finance(person_id,tenant_id,expected_fee,upfront_fee,incentive,timeline) VALUES('fatima','northstar',100000,50000,25000,'USA refusal retained; preparing UK alternatives')",
+      ).run();
+      d.prepare(
+        "INSERT OR IGNORE INTO payments(id,tenant_id,person_id,amount,reference,client_key,created_by) VALUES('demo-payment-fatima','northstar','fatima',25000,'DEMO receipt 001','demo-receipt-fatima','ayesha')",
+      ).run();
+    }
+    d.prepare("INSERT INTO demo_migrations(name) VALUES('crm-v1')").run();
+    d.exec("COMMIT");
+  } catch (e) {
+    d.exec("ROLLBACK");
+    throw e;
+  }
 }

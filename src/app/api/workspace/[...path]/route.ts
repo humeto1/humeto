@@ -1,3 +1,5 @@
+import { crmMutation, transaction } from "@/lib/crm";
+import { applicationStages } from "@/lib/pipeline";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { mkdirSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
@@ -161,6 +163,11 @@ async function handle(req: Request, parts: string[], a: Actor) {
       if (!app || !canSeePerson(a, app.person_id))
         return fail("Application not found.", 404);
       return NextResponse.json({
+        events: db()
+          .prepare(
+            "SELECT * FROM application_events WHERE tenant_id=? AND application_id=? ORDER BY rowid DESC LIMIT 30",
+          )
+          .all(a.tenantId, rid),
         requirements: db()
           .prepare(
             "SELECT * FROM requirements WHERE tenant_id=? AND application_id=? ORDER BY created_at,id",
@@ -436,6 +443,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ id: docId, version });
   }
   const body = await req.json();
+  const crm = crmMutation(req, parts, a, body);
+  if (crm) return crm;
   if (resource === "imports" && req.method === "POST" && !rid) {
     if (a.role === "platform_admin" || !writable(a))
       return fail("Workspace is read-only.", 403);
@@ -681,6 +690,27 @@ async function handle(req: Request, parts: string[], a: Actor) {
         course: optionalString,
       })
       .parse(body);
+    const email = input.email.toLowerCase();
+    if (
+      db()
+        .prepare(
+          "SELECT id FROM people WHERE tenant_id=? AND email=? COLLATE NOCASE",
+        )
+        .get(a.tenantId, email)
+    )
+      return fail("This email already belongs to an applicant.", 409);
+    if (
+      db()
+        .prepare(
+          "SELECT id FROM leads WHERE tenant_id=? AND email=? COLLATE NOCASE",
+        )
+        .get(a.tenantId, email)
+    )
+      return fail(
+        "This email belongs to a lead. Register that lead to retain its history and fees.",
+        409,
+      );
+    input.email = email;
     const sub = db()
       .prepare("SELECT case_limit FROM subscriptions WHERE tenant_id=?")
       .get(a.tenantId) as { case_limit: number };
@@ -926,16 +956,20 @@ async function handle(req: Request, parts: string[], a: Actor) {
     if (!staff(a)) return fail("Application management is not permitted.", 403);
     const input = z
       .object({
-        status: z.enum([
-          "Draft",
-          "Collecting",
-          "Review",
-          "Ready",
-          "Submitted",
-          "Decision received",
-        ]),
+        status: z.enum(applicationStages),
         revision: z.number().int().positive(),
         submissionReference: optionalString,
+        note: z.string().trim().max(2000).default(""),
+        sourceUrl: z
+          .string()
+          .trim()
+          .max(2000)
+          .refine(
+            (v) => !v || /^https?:\/\//i.test(v),
+            "Use a full http or https link.",
+          )
+          .default(""),
+        documentId: optionalString,
       })
       .parse(body);
     if (input.status === "Submitted" && !input.submissionReference)
@@ -944,8 +978,19 @@ async function handle(req: Request, parts: string[], a: Actor) {
       );
     const app = db()
       .prepare("SELECT * FROM applications WHERE id=? AND tenant_id=?")
-      .get(rid, a.tenantId) as { person_id: string } | undefined;
+      .get(rid, a.tenantId) as
+      { person_id: string; status: string } | undefined;
     if (!app) return fail("Application not found.", 404);
+    let evidenceVersion = 0;
+    if (input.documentId) {
+      const doc = db()
+        .prepare(
+          "SELECT current_version FROM documents WHERE id=? AND tenant_id=? AND person_id=?",
+        )
+        .get(input.documentId, a.tenantId, app.person_id);
+      if (!doc) return fail("Evidence must belong to this applicant.", 400);
+      evidenceVersion = Number(doc.current_version);
+    }
     if (input.status === "Ready") {
       const missing = db()
         .prepare(
@@ -957,30 +1002,48 @@ async function handle(req: Request, parts: string[], a: Actor) {
           "Review or explicitly waive all mandatory working-checklist items before marking Ready.",
         );
     }
-    const result = db()
-      .prepare(
-        "UPDATE applications SET status=?,submission_reference=CASE WHEN ?!='' THEN ? ELSE submission_reference END,submitted_at=CASE WHEN ?='Submitted' THEN CURRENT_TIMESTAMP ELSE submitted_at END,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
-      )
-      .run(
-        input.status,
-        input.submissionReference,
-        input.submissionReference,
-        input.status,
-        rid,
+    return transaction(() => {
+      const result = db()
+        .prepare(
+          "UPDATE applications SET status=?,submission_reference=CASE WHEN ?!='' THEN ? ELSE submission_reference END,submitted_at=CASE WHEN ?='Submitted' THEN CURRENT_TIMESTAMP ELSE submitted_at END,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+        )
+        .run(
+          input.status,
+          input.submissionReference,
+          input.submissionReference,
+          input.status,
+          rid,
+          a.tenantId,
+          input.revision,
+        );
+      if (result.changes !== 1)
+        return fail("Application changed elsewhere.", 409);
+      db()
+        .prepare(
+          "INSERT INTO application_events(id,tenant_id,application_id,from_status,to_status,note,source_url,document_id,document_version,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        )
+        .run(
+          id(),
+          a.tenantId,
+          rid,
+          app.status,
+          input.status,
+          input.note,
+          input.sourceUrl,
+          input.documentId,
+          evidenceVersion,
+          a.id,
+        );
+      audit(
         a.tenantId,
-        input.revision,
+        a.id,
+        "updated",
+        "application",
+        rid,
+        `Set status to ${input.status}${input.submissionReference ? " · reference " + input.submissionReference : ""}`,
       );
-    if (result.changes !== 1)
-      return fail("Application changed elsewhere.", 409);
-    audit(
-      a.tenantId,
-      a.id,
-      "updated",
-      "application",
-      rid,
-      `Set status to ${input.status}${input.submissionReference ? " · reference " + input.submissionReference : ""}`,
-    );
-    return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true });
+    });
   }
   if (
     resource === "applications" &&

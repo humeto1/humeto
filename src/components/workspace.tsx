@@ -59,6 +59,17 @@ import type {
   Intake,
 } from "@/lib/types";
 import { sections, destinations } from "@/lib/sections";
+import ApplicationEvidence from "./application-evidence";
+import Leads from "./leads";
+import PipelineBoard from "./pipeline-board";
+import CaseFinance from "./case-finance";
+import {
+  applicantStages,
+  applicationStages,
+  money,
+  type Lead,
+  type Finance,
+} from "@/lib/pipeline";
 import ImportHistory from "./import-history";
 import TaskAssistant from "./task-assistant";
 import ReminderBell from "./reminder-bell";
@@ -90,6 +101,8 @@ type Subscription = {
   expires_at: string;
 };
 type Data = {
+  leads: Lead[];
+  finance: Finance[];
   people: Person[];
   applications: Application[];
   tasks: Task[];
@@ -130,6 +143,7 @@ const iconMap: Record<string, LucideIcon> = {
 const navItems = [
   ["overview", "Overview", LayoutDashboard],
   ["tasks", "Tasks to-do", CheckSquare],
+  ["leads", "Leads", AtSign],
   ["students", "Applicants", Users],
   ["applications", "Applications", GraduationCap],
   ["documents", "Documents", FolderOpen],
@@ -231,6 +245,8 @@ export default function Workspace({
     [toast, setToast] = useState(""),
     [mobileNav, setMobileNav] = useState(false),
     [taskView, setTaskView] = useState("board"),
+    [peopleView, setPeopleView] = useState("board"),
+    [appsView, setAppsView] = useState("board"),
     [journey, setJourney] = useState<string>(
       sections.find((s) => s.key === initialSection)?.journey || "profile",
     ),
@@ -520,9 +536,140 @@ export default function Workspace({
       </div>
     );
   }
+  function personIndicators(personId: string) {
+    const finance = data.finance?.find((f) => f.person_id === personId);
+    const apps = data.applications.filter((a) => a.person_id === personId);
+    return (
+      <div className="person-indicators">
+        <span title="Separate applications">{apps.length} apps</span>
+        {staff && !finance && <small>Fee not set</small>}
+        {staff && finance && (
+          <>
+            <span className="paid" title="Recorded receipts">
+              +{money(finance?.paid || 0)}
+            </span>
+            <span className="pending" title="Outstanding agreed student fees">
+              −{money(finance?.pending || 0)}
+            </span>
+            <small>PKR</small>
+          </>
+        )}
+      </div>
+    );
+  }
+  function applicantCard(p: Person) {
+    return (
+      <article className="applicant-card" key={p.id}>
+        <div className="applicant-card-top">
+          <Avatar person={p} />
+          <ArrowUpRight size={17} />
+        </div>
+        {personIndicators(p.id)}
+        <button
+          className="crm-card-title"
+          onClick={() => void navigate("/workspace/students/" + p.id)}
+        >
+          {p.name}
+        </button>
+        <p>{p.email}</p>
+        <div className="applicant-course">
+          <GraduationCap size={14} />
+          {p.course || "Add study plans later"}
+        </div>
+        <div className="applicant-card-bottom">
+          <span>{p.destination || "Undecided"}</span>
+          <Badge>{p.journey_stage}</Badge>
+        </div>
+        <div className="application-mini-list">
+          {data.applications
+            .filter((a) => a.person_id === p.id)
+            .map((a) => (
+              <span key={a.id}>
+                {a.country} · {a.kind}
+                <b>{a.status}</b>
+              </span>
+            ))}
+        </div>
+      </article>
+    );
+  }
+  async function moveApplicant(p: Person, stage: string) {
+    await mutate(
+      "applicant-stage/" + p.id,
+      "PATCH",
+      { stage, revision: p.revision },
+      "Applicant moved. Individual application outcomes preserved.",
+    );
+  }
+  async function moveApplication(a: Application, stage: string) {
+    if (stage === "Submitted") {
+      setSelectedApp(a);
+      showModal("application-details");
+      notify("Add the actual external portal reference to record submission.");
+      return;
+    }
+    await mutate(
+      "applications/" + a.id,
+      "PATCH",
+      { status: stage, revision: a.revision },
+      "Application moved. Applicant journey preserved.",
+    );
+  }
+  function applicationCard(a: Application) {
+    return (
+      <article className="application-card" key={a.id}>
+        <div className="application-card-header">
+          <span className="application-icon">
+            {a.kind === "Admission" ? (
+              <GraduationCap size={22} />
+            ) : (
+              <Globe size={22} />
+            )}
+          </span>
+          <Badge tone={a.status === "Failed" ? "red" : undefined}>
+            {a.status}
+          </Badge>
+        </div>
+        <span className="eyebrow">
+          {a.kind} · {a.country}
+        </span>
+        <h3>{a.institution || a.country + " application"}</h3>
+        <p>{a.program || "Purpose to add"}</p>
+        <div className="application-details">
+          <span>
+            <User size={13} />
+            {a.person_name}
+          </span>
+          <span>
+            <Calendar size={13} />
+            {a.intake || "Intake to add"}
+          </span>
+        </div>
+        <div className="application-footer">
+          <button
+            onClick={() => {
+              setSelectedApp(a);
+              showModal("application-details");
+            }}
+          >
+            Review / record update <ArrowUpRight size={14} />
+          </button>
+          <span>v{a.revision}</span>
+        </div>
+      </article>
+    );
+  }
   function taskCard(t: Task) {
     return (
-      <article className="task-card" key={t.id}>
+      <article
+        className="task-card"
+        key={t.id}
+        draggable={staff && writable && !busy}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("application/humeto-task", t.id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+      >
         <div className="task-card-top">
           <Badge
             tone={
@@ -707,7 +854,7 @@ export default function Workspace({
                 ([key]) =>
                   !(
                     isStudent &&
-                    ["activity", "tasks", "assistant"].includes(key)
+                    ["activity", "tasks", "assistant", "leads"].includes(key)
                   ),
               )
               .map(([key, label, Icon]) => (
@@ -832,6 +979,48 @@ export default function Workspace({
           </div>
         </header>
         <main className="app-content">
+          {!isPlatform && (
+            <div
+              className="ai-feature-rail"
+              aria-label="Humeto intelligent assistants"
+            >
+              <span>
+                <Sparkles size={16} /> Your Humeto copilots
+              </span>
+              <a
+                className={
+                  ["leads", "applications", "students", "profile"].includes(
+                    view,
+                  )
+                    ? "active"
+                    : ""
+                }
+                href={staff ? "/workspace/leads" : "/workspace/requests"}
+              >
+                CRM AI <small>{staff ? "Lead commands" : "Requests"}</small>
+              </a>
+              <a
+                className={
+                  ["assistant", "tasks"].includes(view) ? "active" : ""
+                }
+                href={staff ? "/workspace/assistant" : "/workspace/requests"}
+              >
+                Task AI <small>{staff ? "Local commands" : "Follow-ups"}</small>
+              </a>
+              <a href="/workspace/settings">
+                Extension AI <small>Review & fill</small>
+              </a>
+            </div>
+          )}
+          {view === "leads" && staff && (
+            <Leads
+              leads={data.leads || []}
+              refresh={refresh}
+              writable={writable}
+              search={search}
+            />
+          )}
+
           {factHits.length > 0 && (
             <section className="fact-results panel">
               <div className="panel-title">
@@ -1112,33 +1301,32 @@ export default function Workspace({
                   Shared profile · separate admission & visa journeys
                 </span>
               </div>
-              <div className="applicant-grid">
-                {filteredPeople.map((p) => (
+              <div className="segmented pipeline-view">
+                {["board", "cards"].map((v) => (
                   <button
-                    className="applicant-card"
-                    key={p.id}
-                    onClick={() => void navigate("/workspace/students/" + p.id)}
+                    className={peopleView === v ? "active" : ""}
+                    key={v}
+                    onClick={() => setPeopleView(v)}
                   >
-                    <div className="applicant-card-top">
-                      <Avatar person={p} />
-                      <ArrowUpRight size={17} />
-                    </div>
-                    <h3>{p.name}</h3>
-                    <p>{p.email}</p>
-                    <div className="applicant-course">
-                      <GraduationCap size={14} />
-                      {p.course || "Add study plans later"}
-                    </div>
-                    <div className="applicant-card-bottom">
-                      <span>
-                        <Globe size={13} />
-                        {p.destination || "Undecided"}
-                      </span>
-                      <Badge>{p.status}</Badge>
-                    </div>
+                    {v === "board" ? "Journey board" : "Cards"}
                   </button>
                 ))}
               </div>
+              {peopleView === "board" ? (
+                <PipelineBoard
+                  label="Applicant journey"
+                  items={filteredPeople}
+                  stages={applicantStages}
+                  stageOf={(p) => p.journey_stage}
+                  render={applicantCard}
+                  editable={staff && writable && !busy}
+                  move={moveApplicant}
+                />
+              ) : (
+                <div className="applicant-grid">
+                  {filteredPeople.map(applicantCard)}
+                </div>
+              )}
               {!filteredPeople.length && (
                 <Empty
                   title={
@@ -1182,6 +1370,15 @@ export default function Workspace({
                   </button>
                 )}
               </div>
+              {personIndicators(p.id)}
+              {staff && (
+                <CaseFinance
+                  personId={p.id}
+                  finance={data.finance?.find((f) => f.person_id === p.id)}
+                  refresh={refresh}
+                  writable={writable}
+                />
+              )}
               <div className="journey-tabs">
                 {[
                   ["profile", "Shared profile", User],
@@ -1388,6 +1585,47 @@ export default function Workspace({
                 Local pilot storage · PDF, PNG and JPEG up to 15 MB. Automated
                 malware scanning is not connected; use fictional test files.
               </div>
+              <section
+                className="document-intake-guide"
+                aria-label="Documents to reusable information"
+              >
+                <div>
+                  <span>01</span>
+                  <strong>Upload once</strong>
+                  <p>
+                    Keep supporting documents with the right applicant and
+                    question group.
+                  </p>
+                </div>
+                <div>
+                  <span>02</span>
+                  <strong>Check the details</strong>
+                  <p>
+                    Review the applicant’s profile before reusing answers. AI
+                    document reading is not connected yet.
+                  </p>
+                  <a
+                    href={
+                      isStudent && actor.personId
+                        ? `/workspace/students/${actor.personId}`
+                        : "/workspace/students"
+                    }
+                  >
+                    Review applicant information <ArrowUpRight size={12} />
+                  </a>
+                </div>
+                <div>
+                  <span>03</span>
+                  <strong>Assist, at your pace</strong>
+                  <p>
+                    Pair the extension, review a batch of suggested answers, and
+                    fill selected empty fields.
+                  </p>
+                  <a href="/workspace/settings">
+                    Open extension settings <ArrowUpRight size={12} />
+                  </a>
+                </div>
+              </section>
               {docsTable(filteredDocs)}
               <ImportHistory refreshKey={importRefresh} />
             </>
@@ -1401,48 +1639,38 @@ export default function Workspace({
                   ? button("Create application", () => showModal("application"))
                   : undefined,
               )}
-              <div className="application-grid">
-                {filteredApps.map((a) => (
-                  <article className="application-card" key={a.id}>
-                    <div className="application-card-header">
-                      <span className="application-icon">
-                        {a.kind === "Admission" ? (
-                          <GraduationCap size={22} />
-                        ) : (
-                          <Globe size={22} />
-                        )}
-                      </span>
-                      <Badge>{a.status}</Badge>
-                    </div>
-                    <span className="eyebrow">
-                      {a.kind.toUpperCase()} · {a.country.toUpperCase()}
-                    </span>
-                    <h3>{a.institution || a.country + " application"}</h3>
-                    <p>{a.program || "Program / purpose to add"}</p>
-                    <div className="application-details">
-                      <span>
-                        <User size={13} />
-                        {a.person_name}
-                      </span>
-                      <span>
-                        <Calendar size={13} />
-                        {a.intake || "Intake to add"}
-                      </span>
-                    </div>
-                    <div className="application-footer">
-                      <button
-                        onClick={() => {
-                          setSelectedApp(a);
-                          showModal("application-details");
-                        }}
-                      >
-                        Review preparation <ArrowUpRight size={14} />
-                      </button>
-                      <span>v{a.revision}</span>
-                    </div>
-                  </article>
-                ))}
+              <div className="filter-bar">
+                <div className="segmented">
+                  {["board", "cards"].map((v) => (
+                    <button
+                      className={appsView === v ? "active" : ""}
+                      key={v}
+                      onClick={() => setAppsView(v)}
+                    >
+                      {v === "board" ? "Application board" : "Cards"}
+                    </button>
+                  ))}
+                </div>
+                <span className="subtle">
+                  Tracking external applications · each application has its own
+                  outcome
+                </span>
               </div>
+              {appsView === "board" ? (
+                <PipelineBoard
+                  label="Application pipeline"
+                  items={filteredApps}
+                  stages={applicationStages}
+                  stageOf={(a) => a.status}
+                  render={applicationCard}
+                  editable={staff && writable && !busy}
+                  move={moveApplication}
+                />
+              ) : (
+                <div className="application-grid">
+                  {filteredApps.map(applicationCard)}
+                </div>
+              )}
               {!filteredApps.length && (
                 <Empty
                   title="A new possibility starts here."
@@ -1496,7 +1724,35 @@ export default function Workspace({
               {taskView === "board" ? (
                 <div className="kanban-board">
                   {states.map((s) => (
-                    <section className="kanban-column" key={s}>
+                    <section
+                      className="kanban-column"
+                      key={s}
+                      onDragOver={(e) => {
+                        if (
+                          staff &&
+                          writable &&
+                          e.dataTransfer.types.includes(
+                            "application/humeto-task",
+                          )
+                        )
+                          e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const task = data.tasks.find(
+                          (t) =>
+                            t.id ===
+                            e.dataTransfer.getData("application/humeto-task"),
+                        );
+                        if (task && staff && writable && task.stage !== s)
+                          void mutate(
+                            "tasks/" + task.id,
+                            "PATCH",
+                            { stage: s, revision: task.revision },
+                            "Task moved. Priority preserved.",
+                          );
+                      }}
+                    >
                       <h2>
                         <span
                           className={
@@ -1525,7 +1781,39 @@ export default function Workspace({
                     ["Delegate", "Not important + urgent"],
                     ["Later", "Not important + not urgent"],
                   ].map(([q, desc]) => (
-                    <section key={q}>
+                    <section
+                      key={q}
+                      onDragOver={(e) => {
+                        if (
+                          staff &&
+                          writable &&
+                          e.dataTransfer.types.includes(
+                            "application/humeto-task",
+                          )
+                        )
+                          e.preventDefault();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const task = data.tasks.find(
+                          (t) =>
+                            t.id ===
+                            e.dataTransfer.getData("application/humeto-task"),
+                        );
+                        if (task && staff && writable && quadrant(task) !== q)
+                          void mutate(
+                            "tasks/" + task.id,
+                            "PATCH",
+                            {
+                              stage: task.stage,
+                              revision: task.revision,
+                              important: q === "Do now" || q === "Schedule",
+                              urgent: q === "Do now" || q === "Delegate",
+                            },
+                            "Task priority changed. Workflow stage preserved.",
+                          );
+                      }}
+                    >
                       <div className="matrix-heading">
                         <h2>{q}</h2>
                         <small>{desc}</small>
@@ -2567,6 +2855,7 @@ export default function Workspace({
                   writable={writable}
                   onChange={() => void refresh()}
                 />
+                <ApplicationEvidence applicationId={selectedApp.id} />
                 {selectedApp.submission_reference && (
                   <div className="notice">
                     Recorded portal reference:{" "}
@@ -2596,6 +2885,9 @@ export default function Workspace({
                             status: f.get("status"),
                             revision: selectedApp.revision,
                             submissionReference: f.get("submissionReference"),
+                            note: f.get("note"),
+                            sourceUrl: f.get("sourceUrl"),
+                            documentId: f.get("documentId"),
                           },
                           "Application status recorded.",
                         );
@@ -2604,14 +2896,7 @@ export default function Workspace({
                       <label>
                         Status
                         <select name="status" defaultValue={selectedApp.status}>
-                          {[
-                            "Draft",
-                            "Collecting",
-                            "Review",
-                            "Ready",
-                            "Submitted",
-                            "Decision received",
-                          ].map((s) => (
+                          {applicationStages.map((s) => (
                             <option key={s}>{s}</option>
                           ))}
                         </select>
@@ -2622,6 +2907,37 @@ export default function Workspace({
                           name="submissionReference"
                           placeholder="Required to record Submitted"
                         />
+                      </label>
+                      <label>
+                        Update note / decision reason
+                        <textarea
+                          name="note"
+                          maxLength={2000}
+                          placeholder="For example: USA refusal received; preparing a UK route separately."
+                        />
+                      </label>
+                      <label>
+                        External application or evidence link
+                        <input
+                          name="sourceUrl"
+                          type="url"
+                          placeholder="https://…"
+                        />
+                      </label>
+                      <label>
+                        Supporting document / screenshot
+                        <select name="documentId">
+                          <option value="">No document attached</option>
+                          {data.documents
+                            .filter(
+                              (d) => d.person_id === selectedApp.person_id,
+                            )
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.title} · v{d.current_version}
+                              </option>
+                            ))}
+                        </select>
                       </label>
                       <button className="btn primary full" disabled={busy}>
                         Save status

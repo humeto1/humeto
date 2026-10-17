@@ -2,6 +2,7 @@
 (() => {
   if (globalThis.__humetoAssistInstalled) return;
   globalThis.__humetoAssistInstalled = true;
+  let reviewedFields = new Map();
   function labelFor(el) {
     const ids = (el.getAttribute("aria-labelledby") || "")
       .split(/\s+/)
@@ -48,7 +49,15 @@
   chrome.runtime.onMessage.addListener((msg, sender, reply) => {
     if (sender.id !== chrome.runtime.id) return;
     if (msg.type === "HUMETO_SCAN") {
+      reviewedFields = new Map();
       const fields = controls().map((el, i) => {
+        reviewedFields.set(String(i), {
+          el,
+          label: labelFor(el),
+          type: el.type,
+          context: context(el),
+          autocomplete: el.autocomplete,
+        });
         el.dataset.humetoField = String(i);
         return {
           id: String(i),
@@ -73,10 +82,18 @@
       }
       const results = [];
       for (const item of msg.items || []) {
-        const el = document.querySelector(
-          `[data-humeto-field="${String(item.id).replace(/[^0-9]/g, "")}"]`,
-        );
-        if (!el || el.disabled || el.readOnly || labelFor(el) !== item.label) {
+        const reviewed = reviewedFields.get(String(item.id));
+        const el = reviewed?.el;
+        if (
+          !el ||
+          !el.isConnected ||
+          !controls().includes(el) ||
+          reviewed.type !== el.type ||
+          reviewed.context !== context(el) ||
+          reviewed.autocomplete !== el.autocomplete ||
+          labelFor(el) !== item.label ||
+          reviewed.label !== item.label
+        ) {
           results.push({
             id: item.id,
             ok: false,

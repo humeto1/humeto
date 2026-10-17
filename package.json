@@ -8,17 +8,20 @@
     "start": "next start --hostname 127.0.0.1 --port 4173",
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-concurrency=1 tests/*.mjs",
-    "seed:assets": "node scripts/seed-demo-assets.mjs"
+    "seed:assets": "node scripts/seed-demo-assets.mjs",
+    "package:extension": "node scripts/package-extension.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.577.0",
     "next": "16.4.2",
+    "qrcode": "^1.5.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "playwright": "^1.62.1",

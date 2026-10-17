@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { request, chromium } from "playwright";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
@@ -153,6 +153,105 @@ test("packaged extension scans and fills a real Chromium fixture without overwri
       { tabId: tab.id, items: [] },
     );
     assert.ok(wrongPage.error);
+    // A page can change a control after review. Never fill a newly sensitive or replaced node.
+    await page.locator("[name=given]").fill("");
+    const rescan = () =>
+      worker.evaluate(
+        (tabId) => chrome.tabs.sendMessage(tabId, { type: "HUMETO_SCAN" }),
+        tab.id,
+      );
+    const sendFill = (field, value) =>
+      worker.evaluate(
+        ({ tabId, url, item }) =>
+          chrome.tabs.sendMessage(tabId, {
+            type: "HUMETO_FILL",
+            url,
+            items: [item],
+          }),
+        {
+          tabId: tab.id,
+          url: scan.url,
+          item: { id: field.id, label: field.label, value },
+        },
+      );
+    let fresh = await rescan();
+    let reviewed = fresh.fields.find((f) => f.name === "given");
+    await page.locator("[name=given]").evaluate((el) => (el.type = "password"));
+    assert.equal(
+      (await sendFill(reviewed, "Must stay empty")).results[0].ok,
+      false,
+    );
+    await page.locator("[name=given]").evaluate((el) => (el.type = "text"));
+    fresh = await rescan();
+    reviewed = fresh.fields.find((f) => f.name === "given");
+    await page
+      .locator("[name=given]")
+      .evaluate((el) => el.replaceWith(el.cloneNode(true)));
+    assert.equal(
+      (await sendFill(reviewed, "Must stay empty")).results[0].ok,
+      false,
+    );
+    assert.equal(await page.locator("[name=given]").inputValue(), "");
+    await page.reload();
+    const panel = await context.newPage();
+    await panel.setViewportSize({ width: 380, height: 1100 });
+    await panel.route(base + "/api/assist", (route) =>
+      route.fulfill({
+        json: {
+          applicant: { id: "fixture", name: "Amira Shah · sample" },
+          facts: [
+            { key: "givenNames", label: "First name", value: "Amira" },
+            { key: "familyName", label: "Surname", value: "Shah" },
+          ],
+          expiresAt: Date.now() + 3600000,
+        },
+      }),
+    );
+    await panel.goto(
+      `chrome-extension://${worker.url().split("/")[2]}/sidepanel.html`,
+    );
+    await panel.locator("#base").selectOption(base);
+    await panel
+      .locator("#token")
+      .fill("fixture-token-not-a-real-account-token");
+    await panel.locator("#connect").click();
+    await panel.locator("#connected").waitFor({ state: "visible" });
+    await worker.evaluate(
+      (tabId) => chrome.tabs.update(tabId, { active: true }),
+      tab.id,
+    );
+    await panel.locator("#scan").click();
+    await panel.locator("#review-tools").waitFor({ state: "visible" });
+    assert.equal(await panel.locator("#suggested-count").textContent(), "2");
+    assert.equal(await panel.locator("#preserved-count").textContent(), "1");
+    assert.equal(await panel.locator("#attention-count").textContent(), "3");
+    await panel.locator("#clear-selection").click();
+    assert.equal(await panel.locator("#fill").isDisabled(), true);
+    await panel.locator("#select-suggestions").click();
+    assert.equal(await panel.locator("#fill").isEnabled(), true);
+    mkdirSync("artifacts", { recursive: true });
+    await panel.screenshot({
+      path: "artifacts/extension-review.jpg",
+      type: "jpeg",
+      fullPage: true,
+    });
+    await panel.locator('[data-view="attention"]').click();
+    assert.equal(await panel.locator(".match:not([hidden])").count(), 3);
+    await panel.locator("#fill").click();
+    await panel
+      .locator("#status")
+      .filter({ hasText: "2 field(s) filled" })
+      .waitFor();
+    assert.equal(await page.locator("[name=given]").inputValue(), "Amira");
+    assert.equal(await page.locator("[name=surname]").inputValue(), "Shah");
+    assert.equal(await page.locator("[name=parentFirstName]").inputValue(), "");
+    assert.equal(
+      await page.locator("[name=email]").inputValue(),
+      "existing@example.com",
+    );
+    assert.equal(await panel.locator("#fill").isDisabled(), true);
+    assert.equal(await panel.locator("#suggested-count").textContent(), "0");
+    assert.equal(await panel.locator("#preserved-count").textContent(), "3");
   } finally {
     await context.close();
     rmSync(profile, { recursive: true, force: true });
