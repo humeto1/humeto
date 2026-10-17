@@ -1,0 +1,72 @@
+# Humeto technology stack
+
+Verified from the installed workspace and package manifest on 17 October 2026. This describes the running local application, with future architecture separated below.
+
+## Current implementation
+
+| Layer               | Technology                                                                                    | Role                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Web frontend        | Next.js 16.4.2 App Router, React / React DOM 19.3.1                                           | Homepage, server-rendered routes and interactive client workspaces                             |
+| Language            | TypeScript 5.9.3; JavaScript for extension/scripts                                            | Typed app, domain validation and browser integration                                           |
+| Backend             | Node.js; Next.js Route Handlers                                                               | Authentication, tenant-scoped APIs, commands, file access and review workflows                 |
+| Runtime             | Node 25.9.0 on this computer; package minimum Node 22.13                                      | Local runtime with built-in `node:sqlite`; supported production runtime still needs validation |
+| Database            | SQLite via `node:sqlite`, WAL, transactions, indexes and task-event triggers                  | Durable local tenant records, revisions, conversations, reviews, reminders and audit history   |
+| File storage        | Private filesystem under `.data/uploads/`                                                     | Original PDF/PNG/JPEG binaries and preserved versions; metadata/hash in SQLite                 |
+| Validation          | Zod 4.6.7 installed (`^4.3.6` declared)                                                       | Server input and structured-intent validation                                                  |
+| Interface           | Custom CSS, Lucide React 0.577.0                                                              | Responsive design, icons and state styling                                                     |
+| QR codes            | qrcode 1.5.4                                                                                  | Locally generated inquiry-form QR codes                                                        |
+| Chrome extension    | Manifest V3 alpha 0.2.0; JavaScript/ES modules, side panel, content script and service worker | Scoped pairing, generic field matching and reviewed empty-field fills                          |
+| AI mode             | Deterministic local command/date/keyword interpretation                                       | Current task/CRM testing and review suggestions without paid model calls                       |
+| Optional AI adapter | Server-side `fetch` to OpenAI Responses API with structured intent validation                 | Present for task interpretation; inactive and not live-tested in the current release           |
+| Testing             | Node test runner, Playwright 1.62.1 / Chromium                                                | API/role/revision/workflow tests and extension/browser checks                                  |
+| Formatting          | Prettier 3.9.10                                                                               | Source formatting                                                                              |
+| Source control      | Git                                                                                           | Application history; local plans, environment files, data and artifacts are ignored            |
+
+Exact installed versions come from the lockfile/local packages; declared ranges can resolve differently after dependency updates.
+
+## Authentication and data boundaries
+
+Opaque HTTP-only session cookies map to server records. Passwords use salted scrypt hashes. Server checks enforce workspace tenant, role, person scope, subscription access and current revisions. Audited review actions and replay keys protect supported mutations. API responses use private/no-store headers; originals are downloaded through authorized endpoints. These are implemented controls, not a declaration that production security review is complete.
+
+The extension uses one-hour revocable applicant-scoped pairing. It reads facts and offers reviewed matching; it does not need stored passwords for university/visa portals. Permissions/host access must be reviewed again before public extension distribution.
+
+## Local operation
+
+- `npm ci` installs the locked dependencies.
+- `npm run dev` starts Webpack development at `http://localhost:4174`.
+- `npm run build` creates the optimized Next.js release.
+- `npm start` runs that release at `http://localhost:4173`.
+- Both servers bind to `127.0.0.1`; they are local previews.
+- `npm run typecheck` runs TypeScript checks.
+- `npm run test:release` starts an isolated compiled server with a disposable demo database, runs the suite and removes successful-run fixtures. Build first.
+- `npm test` targets an already running development server and can write test records there. Prefer the isolated release runner for normal verification.
+- Last application release: 55 passing checks. A documentation-only change does not rerun or alter that result.
+
+## Planned architecture, not connected today
+
+| Need                                        | Direction                                                                                | Current boundary                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Multi-server/concurrent production database | PostgreSQL, versioned migrations and connection controls                                 | Current backend is SQLite on one host                                   |
+| Production documents                        | Private object storage, malware scanning, encryption/key management and retention        | Current originals live on local disk                                    |
+| Reliable background work                    | Durable jobs/outbox, retries, deduplication and delivery records                         | Current reminders are in-app; no closed-app device push                 |
+| Connected communication                     | Authorized Gmail sync/outbox, then validated messaging channels                          | Pasted email review and saved drafts only; no Gmail/WhatsApp connection |
+| Document intelligence                       | Source-linked fact review, then configured OCR/vision                                    | Current uploads do not extract profile answers                          |
+| AI across the products                      | Optional configured model adapters with shared authorization/review tools                | Local command testing is the user's current selection                   |
+| Mobile / voice                              | Shared server APIs; evaluate PWA/native implementation and device push at that milestone | Responsive web app only; no selected mobile framework yet               |
+| Live commercial SaaS                        | Subscription payment integration, lifecycle and production operations                    | Manual institute subscriptions and local fee ledger only                |
+
+The current stack keeps local setup and service costs small. It does not establish production cost, capacity or compliance. Provider selection and provisioning are separate future decisions.
+
+## Code map
+
+- `src/app/`: routes, API endpoints and global styles.
+- `src/components/`: homepage, CRM/intake/tasks, request and inbox interfaces.
+- `src/lib/db.ts`: SQLite connection, schema initialization and fictional demo seeding.
+- `src/lib/auth.ts`, `repository.ts`: session/access and scoped data reads.
+- `src/lib/agent/`, `crm-agent.ts`: local task/CRM command interpretation and reviewed actions.
+- `src/lib/request-workflow.ts`, `update-inbox.ts`: reply/file/date and external-update review workflows.
+- `extension/`: loadable Chrome extension source; `public/humeto-assist.zip`: packaged local alpha.
+- `tests/`, `scripts/`: verification, release runner, packaging and fictional asset setup.
+- `planning/`: local product plan/backlog/research; explicitly Git-ignored.
+
+See [the app guide](APP_GUIDE.md) for workflows and [README](../README.md) for startup.

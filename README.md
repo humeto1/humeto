@@ -1,118 +1,66 @@
-# Humeto local application
+# Humeto
 
-Next.js App Router + React + TypeScript + Node.js + SQLite WAL. The approved homepage is preserved, and its primary calls to action open the real local application.
+A local Next.js application combining an education/immigration CRM, Tasks to-do and a reviewed form-filling extension. The homepage and populated demos use fictional data. This is a working local pilot, not the completed production product.
 
-## Start locally
+## Documentation
 
-Requires Node.js 22.13+ (tested here on Node 25.9). Install dependencies with `npm ci`.
+- [App guide](docs/APP_GUIDE.md): login, roles, screens, workflows and current limits.
+- [Tech stack](docs/TECH_STACK.md): installed technologies, architecture, commands and planned changes.
+- Local product plan: [planning/APP_PLAN.md](planning/APP_PLAN.md).
+- Local pending checklist: [planning/PENDING_FEATURES.md](planning/PENDING_FEATURES.md).
+- Local requirement audit and delivery history: `planning/REQUIREMENTS_COVERAGE_AUDIT.md` and `planning/BUILD_DELIVERABLES.md`.
 
-- `npm run dev` — development with hot reload at http://localhost:4174.
-- `npm run build` then `npm start` — compiled local release at http://localhost:4173.
-- `npm test` — integration/matcher/Chromium-extension checks against the running development server on port 4174. Tests require fictional seeded demo data. Install the matching Chromium with `npx playwright install chromium` if it is unavailable.
-- `npm run seed:assets` — creates clearly labelled fictional image documents after the local database is initialized through the login page.
+The entire `/planning/` folder is excluded through `.gitignore` at the user's request. It contains the private roadmap and reference material and will not be included in a normal clone. Tracked operational documentation lives in `docs/`. The old parent `planning/README.md` points here; use this app's planning folder for future edits.
 
-The current local environment enables demo entry through `.env.local`. Only loopback hosts can use demo sign-in. Both start scripts bind to 127.0.0.1, not the public network. Do not enable local demo entry for a public deployment.
+## Run locally
 
-## Explore
+Requires Node.js 22.13+; the current development machine uses Node 25.9.0. Install locked dependencies with `npm ci`.
 
-Open `/login` and choose Institute, Student, Individual or Super admin. These are separate local sessions backed by an HTTP-only cookie. You can also create a local individual account, or use super admin to create an institute and its password-protected owner account. Passwords are hashed, not stored in plaintext. No email is sent.
+| Command                          | Purpose                                                                              |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| `npm run dev`                    | Webpack development preview at http://localhost:4174                                 |
+| `npm run build` then `npm start` | Compiled release at http://localhost:4173                                            |
+| `npm run typecheck`              | TypeScript checks                                                                    |
+| `npm run test:release`           | Test the compiled build in a disposable database/server; build first                 |
+| `npm test`                       | Test against an existing development server; may write test fixtures to its database |
+| `npm run package:extension`      | Repackage the local Chrome extension                                                 |
+| `npm run seed:assets`            | Create labelled fictional document images after initializing the demo database       |
 
-## Implemented
+Install the matching test browser with `npx playwright install chromium` if needed. Both servers bind to loopback `127.0.0.1`. They do not publish the app to the internet.
 
-- Persistent tenant-scoped applicant profiles, applications, tasks, information requests, audit events and subscriptions.
-- Separate shared-profile, admission and visa journeys; country/purpose filtering; six questions at a time; one repeatable record at a time; autosave, skip/resume and revision-conflict detection.
-- Repeatable education, tests, passports, family, employment, gaps, funding, travel and contact records.
-- Germany/NZ/USA reference-derived preparation groups, including restricted USA disclosures. These are preparation concepts, not a verified full live visa questionnaire or eligibility determination.
-- Fact search including aliases such as DOB; copy values with applicant/section context. Restricted values are excluded from general search.
-- Private PDF/PNG/JPEG upload, category/group links, display labels, review state, preserved versions and authorized original download.
-- Selected folder/file import, one confirmed applicant per batch, relative-path provenance, tenant/applicant-scoped duplicate linking and import history.
-- Application working checklists, reviewed/waived gates for Ready, preparation snapshots and stored actual portal reference when recording Submitted. No external submission occurs.
-- Tasks in board/list/Eisenhower matrix views; stage independent of importance/urgency.
-- Staff/student account creation by workspace owner with staff seat checks; student access restricted to linked applicant.
-- Super-admin institute creation and manual plan/status/seat/case/storage allowances. Read-only access blocks mutations while preserving existing reads/downloads.
-- Humeto Assist Manifest V3 local alpha: one-hour revocable, applicant-scoped pairing; generic label/autocomplete matching; review-before-fill; existing values preserved. See `extension/README.md`.
+## Login
 
-## Persistent files
+Open [the login page](http://localhost:4173/login). The configured local preview offers Institute, Student, Super admin and Individual demo buttons; **no demo password is required**. Local demo entry is restricted to loopback hosts. New individual accounts and platform-created institute owners use their own credentials. Password hashes, not plaintext passwords, are stored. Recovery/MFA/invitation workflows remain production work.
 
-`.data/humeto.sqlite` is the database. `.data/uploads/` stores original binaries with generated private filenames; original names/paths stay in database metadata. These are excluded from Git and the Next public directory. Rebuilding/restarting does not reset the database. Back up the database and upload directory together before relying on records. This local build is for fictional test data until the production gates below are complete.
+Use `.env.example` for supported configuration names. Current development enables local demos in the ignored `.env.local`. Do not enable demo entry on public hosting. Keep provider credentials server-side and outside Git; never use a `NEXT_PUBLIC_` variable for a model key.
 
-## Still to implement / validate
+## Current stack
 
-- Production auth recovery, MFA, invite links, password lifecycle and a full independent access review.
-- Malware scanning, encrypted-storage/key management, robust backup/restore operations, retention/deletion and rate/size controls at a deployment proxy.
-- Fine-grained evidence assertions and verification, immutable per-field history, application-specific narrative overrides and exact current official requirement templates.
-- OCR/AI extraction and authoring, actual Google Drive OAuth/sync, live payments and communications. No fake successes or fabricated extraction are shown.
-- More generic extension coverage: split dates, nested/cross-origin frames, dynamic custom widgets and controlled attachment workflows. No automatic signatures, submissions or payments.
-- PostgreSQL migration before multi-server production. SQLite is intentional for the current single-host local development phase.
+Next.js 16.4.2 App Router, React 19.3.1 and TypeScript 5.9.3; Node.js API routes; SQLite WAL through `node:sqlite`; private local file storage; custom CSS/Lucide icons; Zod validation; QRCode; Chrome Manifest V3 extension; Node tests and Playwright. Current AI behavior is **local command testing**. A server-side OpenAI task-intent adapter exists but is inactive and not live-tested. See [full stack details](docs/TECH_STACK.md).
 
-The wider product plan and deliverable ledger are in the parent `planning/` directory. Do not publish that directory or the original applicant source documents with the application.
+## Working local features
 
-## Task assistant (local command testing)
+- Three-cover homepage with illustrative CRM/task/extension examples.
+- Institute/individual/platform workspaces, tenant/role checks, sessions and manual subscription/seat/case/storage limits.
+- 32 intake sections / 260 field definitions, separate admission/visa journeys, repeatable histories, small question groups, autosave, skip/resume and fact search.
+- Private PDF/PNG/JPEG uploads, selected-folder import, provenance, duplicates, original downloads and preserved versions.
+- Lead manual/custom-field/CSV/inquiry-QR intake, follow-up queues and registration into applicants.
+- Independent applicant/application Kanban, desktop drag/drop, stage evidence/history, readiness review and actual external submission references.
+- PKR fee agreements, recorded receipts, paid/pending indicators and contingent case incentive estimates.
+- Tasks to-do board/list/matrix, local reviewed task commands, in-app reminders, project/goal links and monthly completion/reopening reports.
+- CRM local reviewed case commands and saved fee/document reminder drafts.
+- Student/staff request conversations, reviewed availability dates, follow-up replacement, received-file review and reopening after replacement versions.
+- Private pasted-email update inbox, exact email/reference hints and explicit one-case review/apply with stale/duplicate/chronology protection.
+- [Humeto Assist local alpha 0.2.0](extension/README.md): scoped pairing, reviewed identity/contact matching and protected empty-field fills.
 
-Open `/workspace/assistant` as an institute owner/consultant or individual owner. Try:
+## What remains
 
-- `Create an important task to create a group with the new prospect team and remind me tomorrow`
-- `How many important tasks are pending?`
-- `Show my important not urgent pending tasks`
-- `Mark "exact task title or task ID" done`
-- `Remind me about "task ID" in 30 minutes`
+Document-source fact review and OCR; broader extension controls/attachments; live Gmail/Drive/messaging and outbound email; proactive task conversations, recurrence and paper capture; complete installment/invoice/commission operations; configurable CRM pipelines and speed analytics; mobile/voice/device push; production identity, storage, operations and billing. Details and acceptance criteria are in the local pending checklist and app plan.
 
-Task changes require applying the review card. It records a task to create the group; it does not operate WhatsApp or create a real group. Chats are private to the signed-in user. Counts are computed from the existing task data; personal scope currently matches the assignee display name. Staff can deliberately ask for team/workspace tasks within the tenant's existing permissions.
+Uploads do not extract or authenticate documents today. Stored drafts are not sent. Pasted-email review is not Gmail sync. In-app reminders are not closed-app device push. External applications are completed on their portals, with Humeto assistance; universal portal compatibility has not been established.
 
-Tomorrow without a time means 09:00 in the browser's detected timezone, displayed before applying. Reminders persist in SQLite, surface in the in-app inbox/bell when due and can be dismissed or snoozed through a new reviewed command. There is **no external/background push delivery while the app is closed**; due reminders remain available when the user returns. Completing the task removes its reminders from the active inbox.
+## Persistence and verification
 
-The default engine is explicitly labelled **Local command testing**, with predictable supported commands. It is not a live AI chatbot. The user chose this mode for the current delivery. The optional OpenAI structured-intent adapter needs `HUMETO_AGENT_PROVIDER=openai`, `OPENAI_API_KEY` and `HUMETO_AGENT_MODEL` configured server-side before use; it has not been live-tested. No key belongs in a `NEXT_PUBLIC_` variable or source control. Provider errors do not trigger a silent mock-AI fallback.
+`.data/humeto.sqlite` stores records; `.data/uploads/` stores private original binaries. Both are excluded from Git. Rebuilding/restarting preserves them. Back up the database and uploads together before relying on records; production restore/security/retention procedures still need validation. The current pilot should use fictional data.
 
-WhatsApp account linking, Telegram and email remain planned. See `../planning/AI_TASK_ASSISTANT_PLAN.md` for architecture, scope and verification. The development script uses `next dev --webpack` to avoid the refresh loop observed with this installed Turbopack version; the production build still uses Next's default compiler.
-
-## Leads, journeys and commercial tracking
-
-`/workspace/leads` supports manual/custom-field intake, reviewed local add-lead commands, previewed CSV imports (500 rows), and expiring inquiry links with downloadable QR codes. The QR code is rendered locally; it calls no third-party image service. Public forms submit to this installation, so localhost links work only on this computer. Email and WhatsApp source tags are manual attribution until actual connectors are implemented.
-
-Registration creates one applicant transactionally and transfers the agreed PKR fee, upfront target, timeline and contingent incentive. It does not record payment. Receipts have unique replay keys; applicant indicators show recorded paid/pending totals and independent application counts. Agreements, receipt corrections/refunds and invoices are not implemented as a full accounting module yet.
-
-Applicants and applications have independent Kanban boards with drag/drop and stage selectors. Task board dragging changes stage; matrix dragging changes priority while preserving stage. Marking an application Ready still requires working-checklist review and Submitted still needs an actual external reference. Staff can record a note, link and uploaded supporting file version with an application stage change; history retains before/after status. Humeto does not submit university or visa applications itself.
-
-CRM AI, Task AI and Extension AI entry points are visible at the top. Only the documented local commands and reviewed extension matching are active. Gmail reading/sending, automatic forwarded-mail identity matching and AI attachment interpretation remain planned in `../planning/INTELLIGENT_CRM_AND_LEADS_PLAN.md`.
-
-## Projects, goals and monthly progress
-
-Open `/workspace/progress` to create/edit/archive shared projects and goals, link tasks, view monthly contributions and search completion/reopening history. Tasks can link to one project and multiple goals, including during creation. The workspace team sees these plans; private journal/project permissions are not implemented yet.
-
-Stage events are recorded at the database boundary for both reviewed assistant changes and manual changes. Completion snapshots preserve the task title/project/goal attribution at that time. Monthly reports use the chosen timezone, count each task once using its latest completion in the month, show raw completion/reopening event counts separately and expose the underlying tasks. Reopening does not erase history or revive the old reminder. Existing Done tasks with unknown completion dates are not assigned invented dates. Goal outcome status remains an explicit user assessment; task counts do not measure percentage achievement of a goal.
-
-The Leads screen has a due/upcoming/undated follow-up queue. Creating a follow-up produces a real assigned important task for the lead's saved date, once per lead/date. It sends no external message; a later lead-date change does not silently alter that task.
-
-## CRM AI local chat
-
-`/workspace/crm-ai` supports explicit local commands for listing an applicant's cases, creating Draft external-application tracking cases, moving one application, closing one applicant relationship or active application, and preparing fee/document reminder drafts. Use the examples in the interface. Exact email and application IDs avoid silently choosing between several cases. Failed/approved/enrolled outcomes are preserved when a generic close command is requested. Ready and Submitted still go through the existing checklist/reference review.
-
-Chats/actions/drafts are private to the actor. Applied case changes are shared and audited. Changes require a durable, expiring review action; cancellation, replay, ownership and stale-record checks are enforced. Fee drafts use the ledger, document drafts use open requests and changed source records invalidate a pending draft proposal. Drafts are stored locally and can be downloaded; no email is sent or queued for automatic delivery. This is deterministic local command testing, not a live model or Gmail connection.
-
-`npm run test:release` tests a compiled build against a separately launched loopback server and disposable demo database. It selects a free port and cleans up a successful run. The browser-extension fixture uses a temporary copy with that test port added only in the test copy; distributed extension permissions are unchanged. Run `npm run build` first. This isolates test writes from the preview database.
-
-
-## Document request conversations and follow-ups
-
-`/workspace/requests` now connects a specific request to its student/staff replies, expected availability date, follow-up task/reminder, supporting file version and review history. Students can type an update, upload a new private file or link an accessible file from their own library. The student overview links directly to each conversation. Staff can require a supporting file before resolving a request.
-
-Local date interpretation supports one explicit `YYYY-MM-DD`, “tomorrow” or “after/in N days” alongside an availability statement. Relative dates are anchored to the reply receipt timestamp in the selected IANA timezone. The proposed follow-up is 09:00 local time and requires consultant confirmation. Negative/ambiguous/multiple dates need clarification; a changed conversation invalidates an older proposal. Scheduling replaces the old reminder and updates one assigned follow-up task. These are in-app reminders, not background push or student email delivery.
-
-A linked/uploaded file stops the existing upload follow-up and enters **File received**, separate from **Resolved**. Staff must explicitly accept the current version with a review note to resolve a file request. Changes requested, reopening, acceptance and subsequent versions retain history; a replacement version or revoked document review reopens the request. Acceptance is a staff workflow decision, not certification of authenticity or an automatic application-checklist approval. No file contents are read by AI in this delivery.
-
-Server checks enforce applicant/tenant/restricted-group access, staff-only date/review decisions, read-only subscription restrictions, current revisions, replay-safe reply keys and transactional upload/reply linkage. CRM document reminder drafts exclude files awaiting review and future scheduled follow-ups, so they do not immediately chase the same upload again. Private request titles are excluded from ordinary staff follow-up task titles.
-
-Gmail/WhatsApp replies and attachment ingestion, OCR/classification, student fact confirmation and automatic externally delivered follow-ups remain future work. The conversation here is an actual local portal workflow, not a simulated email integration. Verification: 49 automated checks pass against a disposable compiled release, including date interpretation, stale proposals, idempotency, reminder replacement/completion, file review/version reopening, role/tenant/restricted-group boundaries and read-only behavior.
-
-
-## Private application-update inbox
-
-`/workspace/updates` is an owner/consultant and individual-owner **local email review** workspace. Capture plain email/forwarded-message text, original received time, optional message ID and source link. It is not a connected mailbox. Captured originals remain private to that actor; shared case history records the applied status, reviewer note and source reference. Private API responses use `Cache-Control: private, no-store`.
-
-Exact registered emails suggest applicant candidates; exact application IDs/submission references provide case hints. A forwarding address, name or phone never silently chooses a student. Multiple/absent/different email matches require an explicit identity-check note. Conservative subject keyword hints are labelled and require reading the source. Quoted text, instructions and links in the message cannot execute actions. Body text is rendered as plain text; no remote email images are fetched.
-
-Select one application and outcome, write an evidence note, prepare a 15-minute review and explicitly apply it. Review preparation changes no case. Applying rechecks the applicant identity and application revision, changes that application transactionally and retains the original/review/history. Sibling applications and the applicant journey stay unchanged. Duplicate captures/source IDs and repeated apply clicks do not create repeat updates. Message times older than the latest case event, expired/stale reviews, final outcomes, unrelated application kinds and Ready/Submitted gate bypasses are rejected. Ignored items retain their evidence and can be reopened.
-
-The inbox loads 100 private records at a time with an earlier-update control. Search filters the currently loaded subject/sender view. It currently handles manually captured case-outcome updates; Gmail OAuth/watch/history ingestion, verified sender/source metadata, aliases, attachment ingestion, request-reply correlation, automatic background review routing and institute-student-role mail connections remain future integration work. The individual-owner account can test the current workflow. This does not send email.
-
-Verification: the optimized build and **55 automated checks** pass against an isolated compiled release, including six new inbox workflow checks. Browser testing covered matched-case preview/apply, a captured unknown applicant remaining pending, and narrow-screen rendering without horizontal overflow. Fictional preview data includes one applied conditional offer and a separate unmatched enquiry.
+Last app release (`8834cdc`): optimized build, **55 passing automated checks** and documented browser checks. `npm run test:release` uses a separate loopback server/disposable database and a temporary extension fixture port, preserving distributed extension permissions. Documentation-only edits do not imply a new release test run.
