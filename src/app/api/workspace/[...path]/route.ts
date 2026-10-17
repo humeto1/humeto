@@ -1,3 +1,12 @@
+import {
+  requestRead,
+  requestMutation,
+  prepareRequestUpload,
+  saveReply,
+  requestDocumentChanged,
+  requestDocumentReviewChanged,
+  RequestWorkflowError,
+} from "@/lib/request-workflow";
 import { progressRead, progressMutation } from "@/lib/task-progress";
 import { crmMutation, transaction } from "@/lib/crm";
 import { applicationStages } from "@/lib/pipeline";
@@ -45,6 +54,8 @@ const string = z.string().trim().max(500),
 async function handle(req: Request, parts: string[], a: Actor) {
   const [resource, rid, action] = parts;
   if (req.method === "GET") {
+    const conversation = requestRead(parts, a);
+    if (conversation) return conversation;
     const progress = progressRead(req, parts, a);
     if (progress) return progress;
     if (resource === "bootstrap") return NextResponse.json(bootstrap(a));
@@ -352,6 +363,22 @@ async function handle(req: Request, parts: string[], a: Actor) {
         .replace(/[\r\n]/g, "")
         .slice(0, 1000);
     const sha = createHash("sha256").update(bytes).digest("hex");
+    const requestUpload = prepareRequestUpload(a, form, pid, sha);
+    if (requestUpload && rid)
+      return fail(
+        "Upload a new response document here; existing file versions update their linked requests separately.",
+      );
+    if (requestUpload && runId)
+      return fail(
+        "Folder imports and request replies are separate operations.",
+      );
+    if (requestUpload?.replay)
+      return NextResponse.json({
+        id: requestUpload.replay.document_id,
+        version: requestUpload.replay.document_version,
+        replyId: requestUpload.replay.id,
+        replayed: true,
+      });
     if (runId) {
       const run = db()
         .prepare("SELECT person_id FROM import_runs WHERE id=? AND tenant_id=?")
@@ -437,6 +464,16 @@ async function handle(req: Request, parts: string[], a: Actor) {
         docId,
         `Uploaded document version ${version}`,
       );
+      if (rid) requestDocumentChanged(a, docId, version);
+      if (requestUpload)
+        saveReply(a, requestUpload.r, {
+          message: requestUpload.data.message,
+          documentId: docId,
+          documentVersion: version,
+          timezone: requestUpload.data.timezone,
+          clientKey: requestUpload.data.clientKey,
+          payloadHash: requestUpload.hash,
+        });
       db().exec("COMMIT");
     } catch (e) {
       db().exec("ROLLBACK");
@@ -446,6 +483,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ id: docId, version });
   }
   const body = await req.json();
+  const requestChange = requestMutation(req, parts, a, body, writable(a));
+  if (requestChange) return requestChange;
   const progress = progressMutation(req, parts, a, body);
   if (progress) return progress;
   const crm = crmMutation(req, parts, a, body);
@@ -1214,28 +1253,31 @@ async function handle(req: Request, parts: string[], a: Actor) {
       a.role !== "owner"
     )
       return fail("Restricted evidence section.", 403);
-    const result = db()
-      .prepare(
-        "UPDATE documents SET status=?,title=?,category=?,section_key=? WHERE id=? AND tenant_id=?",
-      )
-      .run(
-        input.status,
-        input.title,
-        input.category,
-        input.sectionKey,
-        rid,
+    return transaction(() => {
+      const result = db()
+        .prepare(
+          "UPDATE documents SET status=?,title=?,category=?,section_key=? WHERE id=? AND tenant_id=?",
+        )
+        .run(
+          input.status,
+          input.title,
+          input.category,
+          input.sectionKey,
+          rid,
+          a.tenantId,
+        );
+      if (!result.changes) return fail("Document not found.", 404);
+      requestDocumentReviewChanged(a, rid, input.status);
+      audit(
         a.tenantId,
+        a.id,
+        "reviewed",
+        "document",
+        rid,
+        "Updated document review / organization",
       );
-    if (!result.changes) return fail("Document not found.", 404);
-    audit(
-      a.tenantId,
-      a.id,
-      "reviewed",
-      "document",
-      rid,
-      "Updated document review / organization",
-    );
-    return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true });
+    });
   }
   if (resource === "requests" && !rid && req.method === "POST") {
     if (!staff(a)) return fail("Creating requests is not permitted.", 403);
@@ -1245,14 +1287,20 @@ async function handle(req: Request, parts: string[], a: Actor) {
         sectionKey: optionalString,
         title: string.min(2).max(200),
         message: string.min(2).max(2000),
+        requiresDocument: z.boolean().default(false),
       })
       .parse(body);
     if (!canSeePerson(a, input.personId))
       return fail("Applicant not found.", 404);
+    const section = sections.find((s) => s.key === input.sectionKey);
+    if (input.sectionKey && !section)
+      return fail("Choose a known question group.");
+    if (section?.restricted && a.role !== "owner")
+      return fail("Restricted information request.", 403);
     const requestId = id();
     db()
       .prepare(
-        "INSERT INTO requests(id,tenant_id,person_id,section_key,title,message,created_by) VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO requests(id,tenant_id,person_id,section_key,title,message,created_by,requires_document) VALUES(?,?,?,?,?,?,?,?)",
       )
       .run(
         requestId,
@@ -1262,6 +1310,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         input.title,
         input.message,
         a.id,
+        Number(input.requiresDocument),
       );
     audit(
       a.tenantId,
@@ -1272,31 +1321,6 @@ async function handle(req: Request, parts: string[], a: Actor) {
       "Created an information request",
     );
     return NextResponse.json({ id: requestId });
-  }
-  if (resource === "requests" && rid && req.method === "PATCH") {
-    if (!writable(a)) return fail("Workspace is read-only.", 403);
-    const r = db()
-      .prepare("SELECT person_id FROM requests WHERE id=? AND tenant_id=?")
-      .get(rid, a.tenantId) as { person_id: string } | undefined;
-    if (!r || !canSeePerson(a, r.person_id))
-      return fail("Request not found.", 404);
-    const input = z
-      .object({ status: z.enum(["Open", "Responded", "Resolved"]) })
-      .parse(body);
-    if (input.status === "Resolved" && !isStaff(a))
-      return fail("Only staff can resolve requests.", 403);
-    db()
-      .prepare("UPDATE requests SET status=? WHERE id=? AND tenant_id=?")
-      .run(input.status, rid, a.tenantId);
-    audit(
-      a.tenantId,
-      a.id,
-      "responded",
-      "person",
-      r.person_id,
-      "Updated information request",
-    );
-    return NextResponse.json({ ok: true });
   }
   if (resource === "platform" && a.role === "platform_admin") {
     if (req.method === "POST" && !rid) {
@@ -1417,6 +1441,7 @@ async function route(
     const { path } = await ctx.params;
     return await handle(req, path, a);
   } catch (e) {
+    if (e instanceof RequestWorkflowError) return fail(e.message, e.status);
     if (e instanceof z.ZodError)
       return fail(e.issues[0]?.message || "Invalid input.");
     if (e instanceof Error && e.message === "ORIGIN")

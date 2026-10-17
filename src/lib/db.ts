@@ -1,3 +1,7 @@
+import {
+  initializeRequestWorkflow,
+  seedRequestWorkflow,
+} from "./request-schema";
 import { initializeCrmAgent } from "./crm-agent-schema";
 import { initializeTaskProgress, seedTaskProgress } from "./task-schema";
 import "server-only";
@@ -74,11 +78,13 @@ CREATE TABLE IF NOT EXISTS payments(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,
     );
   initializeTaskProgress(d);
   initializeCrmAgent(d);
+  initializeRequestWorkflow(d);
   globalDb.humetoDb = d;
   if (process.env.HUMETO_LOCAL_DEMO === "true") {
     seed(d);
     seedCRM(d);
     seedTaskProgress(d);
+    seedRequestWorkflow(d);
   }
   initializeChecklists(d);
   return d;

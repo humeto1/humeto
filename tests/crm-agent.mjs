@@ -258,6 +258,33 @@ test("CRM email reminders remain local drafts and refuse stale fee data", async 
   a = action(s);
   assert.match(a.payload.body, /Share your passport/);
   assert.equal((await decide(c, a.id)).status(), 200);
+  // A confirmed future date or a received file must suppress repeat upload drafts.
+  const fixture = new DatabaseSync(
+    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
+  );
+  fixture
+    .prepare(
+      "UPDATE requests SET status='Waiting for document',follow_up_at='2099-01-01T04:00:00.000Z' WHERE person_id=?",
+    )
+    .run(p.id);
+  s = await message(c, `Draft document reminder for ${p.email}`);
+  assert.match(
+    s.messages.at(-1).content,
+    /No information\/document requests need an upload reminder/,
+  );
+  fixture
+    .prepare(
+      "UPDATE requests SET status='File received',follow_up_at='' WHERE person_id=?",
+    )
+    .run(p.id);
+  s = await message(c, `Draft document reminder for ${p.email}`);
+  assert.match(s.messages.at(-1).content, /files waiting for review/);
+  fixture
+    .prepare("UPDATE requests SET status='Changes requested' WHERE person_id=?")
+    .run(p.id);
+  s = await message(c, `Draft document reminder for ${p.email}`);
+  assert.match(action(s).payload.body, /Share your passport/);
+  fixture.close();
 });
 test("CRM access rejects students/platform/cross-origin and does not expose another tenant", async () => {
   const owner = await ctx("ayesha"),

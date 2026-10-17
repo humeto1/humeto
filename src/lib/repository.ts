@@ -95,7 +95,12 @@ export function requests(a: Actor) {
         s.sql +
         " ORDER BY r.created_at DESC",
     )
-    .all(a.tenantId, ...s.params);
+    .all(a.tenantId, ...s.params)
+    .filter(
+      (r) =>
+        ["owner", "student"].includes(a.role) ||
+        !sections.find((s) => s.key === r.section_key)?.restricted,
+    );
 }
 export function activity(a: Actor) {
   if (a.role === "student" || a.role === "platform_admin") return [];

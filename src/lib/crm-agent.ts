@@ -1,3 +1,4 @@
+import { sections } from "./sections";
 import "server-only";
 import { db, id, audit, createChecklist } from "./db";
 import { transaction } from "./crm";
@@ -62,9 +63,14 @@ function basis(a: Actor, pid: string, kind: "fee" | "document") {
   }
   const requests = db()
     .prepare(
-      "SELECT id,title FROM requests WHERE tenant_id=? AND person_id=? AND status='Open' ORDER BY id",
+      "SELECT id,title,section_key FROM requests WHERE tenant_id=? AND person_id=? AND (status IN ('Open','Responded','Changes requested') OR (status='Waiting for document' AND follow_up_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now'))) ORDER BY id",
     )
-    .all(a.tenantId, pid);
+    .all(a.tenantId, pid)
+    .filter(
+      (r) =>
+        a.role === "owner" ||
+        !sections.find((s) => s.key === r.section_key)?.restricted,
+    );
   return {
     key: JSON.stringify(requests),
     pending: 0,
@@ -225,7 +231,7 @@ function interpret(
     if (kind === "document" && !b.items.length)
       return {
         content:
-          "There are no open information/document requests for this applicant. Create a specific request first so the reminder describes an actual pending item.",
+          "No information/document requests need an upload reminder right now. Check Requests for scheduled follow-ups or files waiting for review.",
       };
     const subject =
       kind === "fee"

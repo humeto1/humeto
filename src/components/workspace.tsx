@@ -59,6 +59,8 @@ import type {
   Intake,
 } from "@/lib/types";
 import { sections, destinations } from "@/lib/sections";
+import RequestCenter from "./request-center";
+import type { RequestRow } from "@/lib/request-workflow";
 import CrmAssistant from "./crm-assistant";
 import TaskProgress from "./task-progress";
 import TaskLinks from "./task-links";
@@ -80,16 +82,6 @@ import ReminderBell from "./reminder-bell";
 import ImportPanel from "./import-panel";
 import ApplicationChecklist from "./application-checklist";
 import SectionEditor, { type EditorHandle } from "./section-editor";
-type RequestRow = {
-  id: string;
-  person_id: string;
-  person_name: string;
-  section_key: string;
-  title: string;
-  message: string;
-  status: string;
-  created_at: string;
-};
 type Activity = {
   id: string;
   actor_name?: string;
@@ -899,11 +891,11 @@ export default function Workspace({
                   <Icon size={18} />
                   {isStudent && key === "students" ? "My information" : label}
                   {key === "requests" &&
-                    data.requests.filter((r) => r.status === "Open").length >
-                      0 && (
+                    data.requests.filter((r) => r.status !== "Resolved")
+                      .length > 0 && (
                       <span className="nav-count">
                         {
-                          data.requests.filter((r) => r.status === "Open")
+                          data.requests.filter((r) => r.status !== "Resolved")
                             .length
                         }
                       </span>
@@ -1001,7 +993,7 @@ export default function Workspace({
                 aria-label="View information requests"
               >
                 <Bell size={18} />
-                {data.requests.some((r) => r.status === "Open") && <span />}
+                {data.requests.some((r) => r.status !== "Resolved") && <span />}
               </button>
             )}
             <span className="topbar-avatar">{initials(actor.name)}</span>
@@ -1279,6 +1271,17 @@ export default function Workspace({
                           <Badge>{r.status}</Badge>
                           <h4>{r.title}</h4>
                           <p>{r.message}</p>
+                          <button
+                            className="btn ghost small"
+                            onClick={() =>
+                              void navigate(
+                                "/workspace/requests?request=" +
+                                  encodeURIComponent(r.id),
+                              )
+                            }
+                          >
+                            Open conversation <ArrowUpRight size={13} />
+                          </button>
                         </div>
                       ))
                     : data.tasks
@@ -1476,11 +1479,11 @@ export default function Workspace({
                   </span>
                 </div>
               )}
-              {personRequests.some((r) => r.status === "Open") && (
+              {personRequests.some((r) => r.status !== "Resolved") && (
                 <div className="notice">
                   <MessageSquare size={17} />
                   {
-                    personRequests.filter((r) => r.status === "Open").length
+                    personRequests.filter((r) => r.status !== "Resolved").length
                   }{" "}
                   open request(s).{" "}
                   <button onClick={() => void navigate("/workspace/requests")}>
@@ -1914,64 +1917,14 @@ export default function Workspace({
                   ? button("New request", () => showModal("request"))
                   : undefined,
               )}
-              <div className="request-grid">
-                {data.requests
-                  .filter((r) =>
-                    (r.title + r.message + r.person_name)
-                      .toLowerCase()
-                      .includes(search.toLowerCase()),
-                  )
-                  .map((r) => (
-                    <article className="request-card" key={r.id}>
-                      <div>
-                        <MessageSquare size={20} />
-                        <Badge>{r.status}</Badge>
-                      </div>
-                      <h3>{r.title}</h3>
-                      <p>{r.message}</p>
-                      <small>
-                        {r.person_name} ·{" "}
-                        {sections.find((s) => s.key === r.section_key)?.title ||
-                          "General information"}
-                      </small>
-                      <div className="request-actions">
-                        <button
-                          className="btn secondary small"
-                          onClick={() =>
-                            void navigate("/workspace/students/" + r.person_id)
-                          }
-                        >
-                          Open profile <ArrowUpRight size={13} />
-                        </button>
-                        {writable && r.status !== "Resolved" && (
-                          <button
-                            className="btn ghost small"
-                            disabled={busy}
-                            onClick={() =>
-                              void mutate(
-                                "requests/" + r.id,
-                                "PATCH",
-                                { status: staff ? "Resolved" : "Responded" },
-                                staff
-                                  ? "Request resolved."
-                                  : "Response recorded for your consultant.",
-                              )
-                            }
-                          >
-                            {staff ? "Resolve" : "Mark responded"}{" "}
-                            <Check size={13} />
-                          </button>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-              </div>
-              {!data.requests.length && (
-                <Empty
-                  title="All caught up."
-                  description="Information requests from your consultant will appear here."
-                />
-              )}
+              <RequestCenter
+                actor={actor}
+                requests={data.requests}
+                documents={data.documents}
+                writable={writable}
+                refresh={refresh}
+                search={search}
+              />
             </>
           )}
           {view === "activity" && (
@@ -3122,7 +3075,13 @@ export default function Workspace({
                     await mutate(
                       "requests",
                       "POST",
-                      Object.fromEntries(new FormData(e.currentTarget)),
+                      {
+                        ...Object.fromEntries(new FormData(e.currentTarget)),
+                        requiresDocument:
+                          new FormData(e.currentTarget).get(
+                            "requiresDocument",
+                          ) === "on",
+                      },
                       "Information request created.",
                     );
                   }}
@@ -3155,6 +3114,14 @@ export default function Workspace({
                   <label>
                     What’s needed, and why?
                     <textarea name="message" required rows={4} />
+                  </label>
+                  <label className="goal-checkbox">
+                    <input
+                      type="checkbox"
+                      name="requiresDocument"
+                      defaultChecked
+                    />
+                    Require a supporting file before resolving
                   </label>
                   <button className="btn primary full" disabled={busy}>
                     Create in-app request

@@ -73,7 +73,7 @@ Registration creates one applicant transactionally and transfers the agreed PKR 
 
 Applicants and applications have independent Kanban boards with drag/drop and stage selectors. Task board dragging changes stage; matrix dragging changes priority while preserving stage. Marking an application Ready still requires working-checklist review and Submitted still needs an actual external reference. Staff can record a note, link and uploaded supporting file version with an application stage change; history retains before/after status. Humeto does not submit university or visa applications itself.
 
-CRM AI, Task AI and Extension AI entry points are visible at the top. Only the documented local commands and reviewed extension matching are active. Gmail reading/sending, automatic forwarded-mail identity matching, student reply rescheduling and AI attachment completion remain planned in `../planning/INTELLIGENT_CRM_AND_LEADS_PLAN.md`.
+CRM AI, Task AI and Extension AI entry points are visible at the top. Only the documented local commands and reviewed extension matching are active. Gmail reading/sending, automatic forwarded-mail identity matching and AI attachment interpretation remain planned in `../planning/INTELLIGENT_CRM_AND_LEADS_PLAN.md`.
 
 ## Projects, goals and monthly progress
 
@@ -90,3 +90,16 @@ The Leads screen has a due/upcoming/undated follow-up queue. Creating a follow-u
 Chats/actions/drafts are private to the actor. Applied case changes are shared and audited. Changes require a durable, expiring review action; cancellation, replay, ownership and stale-record checks are enforced. Fee drafts use the ledger, document drafts use open requests and changed source records invalidate a pending draft proposal. Drafts are stored locally and can be downloaded; no email is sent or queued for automatic delivery. This is deterministic local command testing, not a live model or Gmail connection.
 
 `npm run test:release` tests a compiled build against a separately launched loopback server and disposable demo database. It selects a free port and cleans up a successful run. The browser-extension fixture uses a temporary copy with that test port added only in the test copy; distributed extension permissions are unchanged. Run `npm run build` first. This isolates test writes from the preview database.
+
+
+## Document request conversations and follow-ups
+
+`/workspace/requests` now connects a specific request to its student/staff replies, expected availability date, follow-up task/reminder, supporting file version and review history. Students can type an update, upload a new private file or link an accessible file from their own library. The student overview links directly to each conversation. Staff can require a supporting file before resolving a request.
+
+Local date interpretation supports one explicit `YYYY-MM-DD`, “tomorrow” or “after/in N days” alongside an availability statement. Relative dates are anchored to the reply receipt timestamp in the selected IANA timezone. The proposed follow-up is 09:00 local time and requires consultant confirmation. Negative/ambiguous/multiple dates need clarification; a changed conversation invalidates an older proposal. Scheduling replaces the old reminder and updates one assigned follow-up task. These are in-app reminders, not background push or student email delivery.
+
+A linked/uploaded file stops the existing upload follow-up and enters **File received**, separate from **Resolved**. Staff must explicitly accept the current version with a review note to resolve a file request. Changes requested, reopening, acceptance and subsequent versions retain history; a replacement version or revoked document review reopens the request. Acceptance is a staff workflow decision, not certification of authenticity or an automatic application-checklist approval. No file contents are read by AI in this delivery.
+
+Server checks enforce applicant/tenant/restricted-group access, staff-only date/review decisions, read-only subscription restrictions, current revisions, replay-safe reply keys and transactional upload/reply linkage. CRM document reminder drafts exclude files awaiting review and future scheduled follow-ups, so they do not immediately chase the same upload again. Private request titles are excluded from ordinary staff follow-up task titles.
+
+Gmail/WhatsApp replies and attachment ingestion, OCR/classification, student fact confirmation and automatic externally delivered follow-ups remain future work. The conversation here is an actual local portal workflow, not a simulated email integration. Verification: 49 automated checks pass against a disposable compiled release, including date interpretation, stale proposals, idempotency, reminder replacement/completion, file review/version reopening, role/tenant/restricted-group boundaries and read-only behavior.
