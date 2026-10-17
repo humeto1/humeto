@@ -1,3 +1,4 @@
+import { progressRead, progressMutation } from "@/lib/task-progress";
 import { crmMutation, transaction } from "@/lib/crm";
 import { applicationStages } from "@/lib/pipeline";
 import { NextResponse } from "next/server";
@@ -44,6 +45,8 @@ const string = z.string().trim().max(500),
 async function handle(req: Request, parts: string[], a: Actor) {
   const [resource, rid, action] = parts;
   if (req.method === "GET") {
+    const progress = progressRead(req, parts, a);
+    if (progress) return progress;
     if (resource === "bootstrap") return NextResponse.json(bootstrap(a));
     if (resource === "search") {
       const q = (new URL(req.url).searchParams.get("q") || "")
@@ -443,6 +446,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ id: docId, version });
   }
   const body = await req.json();
+  const progress = progressMutation(req, parts, a, body);
+  if (progress) return progress;
   const crm = crmMutation(req, parts, a, body);
   if (crm) return crm;
   if (resource === "imports" && req.method === "POST" && !rid) {
@@ -843,27 +848,54 @@ async function handle(req: Request, parts: string[], a: Actor) {
         urgent: z.boolean(),
         dueDate: optionalString,
         assignee: optionalString,
+        projectId: optionalString,
+        goalIds: z.array(z.string().max(100)).max(20).default([]),
       })
       .parse(body);
     if (input.personId && !canSeePerson(a, input.personId))
       return fail("Applicant not found.", 404);
-    const tid = id();
-    db()
-      .prepare(
-        "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee) VALUES(?,?,?,?,?,?,?,?)",
+    if (
+      input.projectId &&
+      !db()
+        .prepare("SELECT id FROM projects WHERE id=? AND tenant_id=?")
+        .get(input.projectId, a.tenantId)
+    )
+      return fail("Project not found in this workspace.", 404);
+    const goalIds = [...new Set(input.goalIds)];
+    for (const gid of goalIds)
+      if (
+        !db()
+          .prepare("SELECT id FROM goals WHERE id=? AND tenant_id=?")
+          .get(gid, a.tenantId)
       )
-      .run(
-        tid,
-        a.tenantId,
-        input.personId || null,
-        input.title,
-        Number(input.important),
-        Number(input.urgent),
-        input.dueDate,
-        input.assignee,
-      );
-    audit(a.tenantId, a.id, "created", "task", tid, "Created a task");
-    return NextResponse.json({ id: tid });
+        return fail("Goal not found in this workspace.", 404);
+    return transaction(() => {
+      const tid = id();
+      db()
+        .prepare(
+          "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
+        )
+        .run(
+          tid,
+          a.tenantId,
+          input.personId || null,
+          input.title,
+          Number(input.important),
+          Number(input.urgent),
+          input.dueDate,
+          input.assignee,
+          a.id,
+          input.projectId,
+        );
+      for (const gid of goalIds)
+        db()
+          .prepare(
+            "INSERT INTO task_goals(tenant_id,task_id,goal_id) VALUES(?,?,?)",
+          )
+          .run(a.tenantId, tid, gid);
+      audit(a.tenantId, a.id, "created", "task", tid, "Created a task");
+      return NextResponse.json({ id: tid });
+    });
   }
   if (resource === "tasks" && rid && req.method === "PATCH") {
     if (!staff(a)) return fail("Task management is not permitted.", 403);
@@ -882,7 +914,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
     if (!task) return fail("Task not found.", 404);
     const result = db()
       .prepare(
-        "UPDATE tasks SET stage=?,important=?,urgent=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+        "UPDATE tasks SET stage=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
       )
       .run(
         input.stage,
@@ -890,6 +922,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           ? task.important
           : Number(input.important),
         input.urgent === undefined ? task.urgent : Number(input.urgent),
+        a.id,
         rid,
         a.tenantId,
         input.revision,
@@ -951,6 +984,74 @@ async function handle(req: Request, parts: string[], a: Actor) {
       "Created an application draft",
     );
     return NextResponse.json({ id: aid });
+  }
+  if (
+    resource === "applications" &&
+    rid &&
+    action === "details" &&
+    req.method === "PATCH"
+  ) {
+    if (!staff(a)) return fail("Application management is not permitted.", 403);
+    const v = z
+      .object({
+        institution: optionalString,
+        program: optionalString,
+        intake: optionalString,
+        revision: z.number().int().positive(),
+      })
+      .parse(body);
+    return transaction(() => {
+      const app = db()
+        .prepare("SELECT * FROM applications WHERE id=? AND tenant_id=?")
+        .get(rid, a.tenantId);
+      if (!app) return fail("Application not found.", 404);
+      if (app.revision !== v.revision)
+        return fail("Application changed elsewhere. Refresh first.", 409);
+      if (
+        !["Draft", "Collecting", "Review", "Ready"].includes(String(app.status))
+      )
+        return fail(
+          "Tracking details can be edited during preparation. Create a separate case for a different external application.",
+          409,
+        );
+      const status = app.status === "Ready" ? "Review" : String(app.status);
+      db()
+        .prepare(
+          "UPDATE applications SET institution=?,program=?,intake=?,status=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+        )
+        .run(
+          v.institution,
+          v.program,
+          v.intake,
+          status,
+          rid,
+          a.tenantId,
+          v.revision,
+        );
+      if (status !== app.status)
+        db()
+          .prepare(
+            "INSERT INTO application_events(id,tenant_id,application_id,from_status,to_status,note,created_by) VALUES(?,?,?,?,?,?,?)",
+          )
+          .run(
+            id(),
+            a.tenantId,
+            rid,
+            app.status,
+            status,
+            "Tracking details changed; readiness review required again.",
+            a.id,
+          );
+      audit(
+        a.tenantId,
+        a.id,
+        "details updated",
+        "application",
+        rid,
+        "Updated application institution, program and intake",
+      );
+      return NextResponse.json({ ok: true });
+    });
   }
   if (resource === "applications" && rid && req.method === "PATCH") {
     if (!staff(a)) return fail("Application management is not permitted.", 403);

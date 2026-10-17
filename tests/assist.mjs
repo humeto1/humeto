@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { request, chromium } from "playwright";
-import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  mkdirSync,
+  cpSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
@@ -83,7 +90,24 @@ test("assistant tokens are scoped, expire/revoke and exclude declarations", asyn
 });
 test("packaged extension scans and fills a real Chromium fixture without overwriting", async () => {
   const profile = mkdtempSync(join(tmpdir(), "humeto-extension-"));
-  const extension = resolve("extension");
+  let extension = resolve("extension");
+  if (process.env.HUMETO_ISOLATED_QA === "true") {
+    // Test-only port shim. Keep the distributed extension's permissions unchanged.
+    extension = join(profile, "extension-fixture");
+    cpSync(resolve("extension"), extension, { recursive: true });
+    const manifestPath = join(extension, "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    manifest.host_permissions.push(new URL(base).origin + "/*");
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    const htmlPath = join(extension, "sidepanel.html");
+    writeFileSync(
+      htmlPath,
+      readFileSync(htmlPath, "utf8").replace(
+        '<select id="base">',
+        '<select id="base"><option>' + base + "</option>",
+      ),
+    );
+  }
   const context = await chromium.launchPersistentContext(profile, {
     channel: "chromium",
     timeout: 20000,

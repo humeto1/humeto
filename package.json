@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --test-concurrency=1 tests/*.mjs",
     "seed:assets": "node scripts/seed-demo-assets.mjs",
-    "package:extension": "node scripts/package-extension.mjs"
+    "package:extension": "node scripts/package-extension.mjs",
+    "test:release": "node scripts/test-release.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.577.0",

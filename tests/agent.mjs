@@ -66,6 +66,8 @@ after(async () => {
     db.prepare(
       "DELETE FROM audit WHERE entity_type='task' AND entity_id=?",
     ).run(t);
+    db.prepare("DELETE FROM task_goals WHERE task_id=?").run(t);
+    db.prepare("DELETE FROM task_events WHERE task_id=?").run(t);
     db.prepare("DELETE FROM tasks WHERE id=?").run(t);
   }
   db.close();
@@ -131,6 +133,15 @@ test("assistant creates a reviewed task/reminder once and answers saved priority
   assert.equal(card.payload.stage, "Done");
   assert.equal(card.payload.important, true);
   await action(c, card);
+  const completedHistory = await (
+    await c.get("/api/workspace/task-history")
+  ).json();
+  assert.equal(
+    completedHistory.events.filter(
+      (e) => e.task_id === tid && e.event === "completed",
+    ).length,
+    1,
+  );
   const finished = await (
     await c.get(`/api/agent?threadId=${d.threadId}&timezone=${zone}`)
   ).json();

@@ -74,3 +74,19 @@ Registration creates one applicant transactionally and transfers the agreed PKR 
 Applicants and applications have independent Kanban boards with drag/drop and stage selectors. Task board dragging changes stage; matrix dragging changes priority while preserving stage. Marking an application Ready still requires working-checklist review and Submitted still needs an actual external reference. Staff can record a note, link and uploaded supporting file version with an application stage change; history retains before/after status. Humeto does not submit university or visa applications itself.
 
 CRM AI, Task AI and Extension AI entry points are visible at the top. Only the documented local commands and reviewed extension matching are active. Gmail reading/sending, automatic forwarded-mail identity matching, student reply rescheduling and AI attachment completion remain planned in `../planning/INTELLIGENT_CRM_AND_LEADS_PLAN.md`.
+
+## Projects, goals and monthly progress
+
+Open `/workspace/progress` to create/edit/archive shared projects and goals, link tasks, view monthly contributions and search completion/reopening history. Tasks can link to one project and multiple goals, including during creation. The workspace team sees these plans; private journal/project permissions are not implemented yet.
+
+Stage events are recorded at the database boundary for both reviewed assistant changes and manual changes. Completion snapshots preserve the task title/project/goal attribution at that time. Monthly reports use the chosen timezone, count each task once using its latest completion in the month, show raw completion/reopening event counts separately and expose the underlying tasks. Reopening does not erase history or revive the old reminder. Existing Done tasks with unknown completion dates are not assigned invented dates. Goal outcome status remains an explicit user assessment; task counts do not measure percentage achievement of a goal.
+
+The Leads screen has a due/upcoming/undated follow-up queue. Creating a follow-up produces a real assigned important task for the lead's saved date, once per lead/date. It sends no external message; a later lead-date change does not silently alter that task.
+
+## CRM AI local chat
+
+`/workspace/crm-ai` supports explicit local commands for listing an applicant's cases, creating Draft external-application tracking cases, moving one application, closing one applicant relationship or active application, and preparing fee/document reminder drafts. Use the examples in the interface. Exact email and application IDs avoid silently choosing between several cases. Failed/approved/enrolled outcomes are preserved when a generic close command is requested. Ready and Submitted still go through the existing checklist/reference review.
+
+Chats/actions/drafts are private to the actor. Applied case changes are shared and audited. Changes require a durable, expiring review action; cancellation, replay, ownership and stale-record checks are enforced. Fee drafts use the ledger, document drafts use open requests and changed source records invalidate a pending draft proposal. Drafts are stored locally and can be downloaded; no email is sent or queued for automatic delivery. This is deterministic local command testing, not a live model or Gmail connection.
+
+`npm run test:release` tests a compiled build against a separately launched loopback server and disposable demo database. It selects a free port and cleans up a successful run. The browser-extension fixture uses a temporary copy with that test port added only in the test copy; distributed extension permissions are unchanged. Run `npm run build` first. This isolates test writes from the preview database.

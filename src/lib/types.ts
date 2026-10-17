@@ -41,6 +41,10 @@ export type Application = {
   submitted_at?: string;
 };
 export type Task = {
+  project_id: string;
+  project_title?: string;
+  completed_at: string | null;
+  goals?: { id: string; title: string }[];
   id: string;
   tenant_id: string;
   person_id: string | null;
@@ -95,4 +99,27 @@ export type Intake = {
   state: string;
   revision: number;
   updated_at: string;
+};
+
+export type Workstream = {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  target_date: string;
+  revision: number;
+};
+export type TaskEvent = {
+  id: string;
+  task_id: string;
+  event: string;
+  from_stage: string;
+  to_stage: string;
+  title: string;
+  project_id: string;
+  project_title: string;
+  goals: { id: string; title: string }[];
+  actor_name: string;
+  created_at: string;
+  current_stage: string;
 };

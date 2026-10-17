@@ -267,6 +267,65 @@ export function crmMutation(
     }
   }
   if (resource === "leads") {
+    if (action === "follow-up" && rid && req.method === "POST") {
+      const { revision } = z
+        .object({ revision: z.number().int().positive() })
+        .parse(body);
+      return transaction(() => {
+        const l = db()
+          .prepare("SELECT * FROM leads WHERE id=? AND tenant_id=?")
+          .get(rid, a.tenantId);
+        if (!l) return error("Lead not found.", 404);
+        if (l.revision !== revision)
+          return error("Lead changed elsewhere. Refresh first.", 409);
+        if (l.person_id || l.stage === "Lost")
+          return error(
+            "Use applicant tasks for a registered lead; lost leads do not need follow-up.",
+          );
+        if (!l.follow_up)
+          return error("Set a follow-up date on the lead first.");
+        const existing = db()
+          .prepare(
+            "SELECT f.task_id FROM lead_followups f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id WHERE f.tenant_id=? AND f.lead_id=? AND f.follow_up=?",
+          )
+          .get(a.tenantId, rid, l.follow_up);
+        if (existing)
+          return NextResponse.json({
+            taskId: existing.task_id,
+            replayed: true,
+          });
+        const tid = id();
+        db()
+          .prepare(
+            "INSERT INTO tasks(id,tenant_id,title,due_date,assignee,important,last_actor_id) VALUES(?,?,?,?,?,1,?)",
+          )
+          .run(
+            tid,
+            a.tenantId,
+            "Follow up with " + l.name,
+            l.follow_up,
+            a.name,
+            a.id,
+          );
+        db()
+          .prepare(
+            "INSERT INTO lead_followups(tenant_id,lead_id,follow_up,task_id) VALUES(?,?,?,?)",
+          )
+          .run(a.tenantId, rid, l.follow_up, tid);
+        audit(
+          a.tenantId,
+          a.id,
+          "follow-up scheduled",
+          "lead",
+          rid,
+          "Created follow-up task for " +
+            l.follow_up +
+            "; no external message sent",
+        );
+        return NextResponse.json({ taskId: tid });
+      });
+    }
+
     if (req.method === "POST" && !rid) {
       const input = leadSchema.parse(body);
       if (

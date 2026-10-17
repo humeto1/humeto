@@ -52,11 +52,24 @@ export function tasks(a: Actor) {
   const s = scope(a, "t.person_id");
   return db()
     .prepare(
-      "SELECT t.*,p.name AS person_name FROM tasks t LEFT JOIN people p ON p.id=t.person_id AND p.tenant_id=t.tenant_id WHERE t.tenant_id=?" +
+      "SELECT t.*,p.name AS person_name,(SELECT title FROM projects x WHERE x.id=t.project_id AND x.tenant_id=t.tenant_id) AS project_title FROM tasks t LEFT JOIN people p ON p.id=t.person_id AND p.tenant_id=t.tenant_id WHERE t.tenant_id=?" +
         s.sql +
         " ORDER BY t.created_at DESC",
     )
-    .all(a.tenantId, ...s.params) as unknown as Task[];
+    .all(a.tenantId, ...s.params)
+    .map((t) => ({
+      ...t,
+      ...(!["owner", "consultant"].includes(a.role)
+        ? { project_id: "", project_title: "", last_actor_id: "" }
+        : {}),
+      goals: !["owner", "consultant"].includes(a.role)
+        ? []
+        : db()
+            .prepare(
+              "SELECT g.id,g.title FROM task_goals l JOIN goals g ON g.id=l.goal_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=? AND l.task_id=?",
+            )
+            .all(a.tenantId, t.id),
+    })) as unknown as Task[];
 }
 export function documents(a: Actor) {
   const s = scope(a, "d.person_id");
@@ -99,6 +112,20 @@ export function subscription(a: Actor) {
 }
 export function bootstrap(a: Actor) {
   return {
+    projects: ["owner", "consultant"].includes(a.role)
+      ? db()
+          .prepare(
+            "SELECT * FROM projects WHERE tenant_id=? ORDER BY created_at DESC,rowid DESC",
+          )
+          .all(a.tenantId)
+      : [],
+    goals: ["owner", "consultant"].includes(a.role)
+      ? db()
+          .prepare(
+            "SELECT * FROM goals WHERE tenant_id=? ORDER BY created_at DESC,rowid DESC",
+          )
+          .all(a.tenantId)
+      : [],
     leads: ["owner", "consultant"].includes(a.role)
       ? db()
           .prepare(

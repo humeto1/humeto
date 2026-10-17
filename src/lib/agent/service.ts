@@ -441,7 +441,7 @@ export function decide(
       if (p.kind === "create") {
         taskId = id();
         d.prepare(
-          "INSERT INTO tasks(id,tenant_id,title,stage,important,urgent,due_date,assignee) VALUES(?,?,?,?,?,?,?,?)",
+          "INSERT INTO tasks(id,tenant_id,title,stage,important,urgent,due_date,assignee,last_actor_id) VALUES(?,?,?,?,?,?,?,?,?)",
         ).run(
           taskId,
           a.tenantId,
@@ -451,17 +451,19 @@ export function decide(
           Number(p.urgent),
           p.dueDate,
           p.assignee,
+          a.id,
         );
       } else {
         const result = d
           .prepare(
-            "UPDATE tasks SET stage=?,important=?,urgent=?,due_date=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+            "UPDATE tasks SET stage=?,important=?,urgent=?,due_date=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
           )
           .run(
             p.stage,
             Number(p.important),
             Number(p.urgent),
             p.dueDate,
+            a.id,
             p.taskId,
             a.tenantId,
             p.revision,

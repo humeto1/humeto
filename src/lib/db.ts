@@ -1,3 +1,5 @@
+import { initializeCrmAgent } from "./crm-agent-schema";
+import { initializeTaskProgress, seedTaskProgress } from "./task-schema";
 import "server-only";
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
@@ -70,10 +72,13 @@ CREATE TABLE IF NOT EXISTS payments(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,
     d.exec(
       "ALTER TABLE people ADD COLUMN revision INTEGER NOT NULL DEFAULT 1; ALTER TABLE people ADD COLUMN journey_stage TEXT NOT NULL DEFAULT 'Planning'",
     );
+  initializeTaskProgress(d);
+  initializeCrmAgent(d);
   globalDb.humetoDb = d;
   if (process.env.HUMETO_LOCAL_DEMO === "true") {
     seed(d);
     seedCRM(d);
+    seedTaskProgress(d);
   }
   initializeChecklists(d);
   return d;
@@ -369,7 +374,7 @@ export function createChecklist(
 ) {
   const d = db();
   const items =
-    kind === "Admission"
+    kind === "Admission" || kind === "Scholarship"
       ? [
           ["Confirm identity details", "identity"],
           ["Review education evidence", "education"],

@@ -1,4 +1,5 @@
 "use client";
+import LeadFollowups from "./lead-followups";
 import QRCode from "qrcode";
 import { useState, useEffect, useRef } from "react";
 import { Plus, Upload, Sparkles, Users, ArrowUpRight } from "lucide-react";
@@ -362,6 +363,7 @@ export default function Leads({
           )}
         </section>
       )}
+      <LeadFollowups leads={leads} refresh={refresh} writable={writable} />
       <PipelineBoard
         label="Lead pipeline"
         items={filtered}

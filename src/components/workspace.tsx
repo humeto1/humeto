@@ -59,6 +59,10 @@ import type {
   Intake,
 } from "@/lib/types";
 import { sections, destinations } from "@/lib/sections";
+import CrmAssistant from "./crm-assistant";
+import TaskProgress from "./task-progress";
+import TaskLinks from "./task-links";
+import type { Workstream } from "@/lib/types";
 import ApplicationEvidence from "./application-evidence";
 import Leads from "./leads";
 import PipelineBoard from "./pipeline-board";
@@ -101,6 +105,8 @@ type Subscription = {
   expires_at: string;
 };
 type Data = {
+  projects: Workstream[];
+  goals: Workstream[];
   leads: Lead[];
   finance: Finance[];
   people: Person[];
@@ -143,6 +149,7 @@ const iconMap: Record<string, LucideIcon> = {
 const navItems = [
   ["overview", "Overview", LayoutDashboard],
   ["tasks", "Tasks to-do", CheckSquare],
+  ["progress", "Projects & goals", Compass],
   ["leads", "Leads", AtSign],
   ["students", "Applicants", Users],
   ["applications", "Applications", GraduationCap],
@@ -686,6 +693,18 @@ export default function Workspace({
         </div>
         <h3>{t.title}</h3>
         <p>{t.person_name || "Team task"}</p>
+        <TaskLinks
+          task={t}
+          projects={data.projects || []}
+          goals={data.goals || []}
+          onChange={refresh}
+          writable={staff && writable}
+        />
+        {t.completed_at && (
+          <small className="task-completion-stamp">
+            Completed {new Date(t.completed_at).toLocaleDateString("en-GB")}
+          </small>
+        )}
         <div className="task-meta">
           <span>
             <Calendar size={12} />
@@ -854,7 +873,13 @@ export default function Workspace({
                 ([key]) =>
                   !(
                     isStudent &&
-                    ["activity", "tasks", "assistant", "leads"].includes(key)
+                    [
+                      "activity",
+                      "tasks",
+                      "assistant",
+                      "leads",
+                      "progress",
+                    ].includes(key)
                   ),
               )
               .map(([key, label, Icon]) => (
@@ -939,13 +964,17 @@ export default function Workspace({
           <div className="breadcrumb">
             Workspace <ChevronRight size={12} />
             <strong>
-              {view === "tasks"
-                ? "Tasks to-do"
-                : view === "profile"
-                  ? p?.name
-                  : view === "platform"
-                    ? "Institutes & subscriptions"
-                    : view[0].toUpperCase() + view.slice(1)}
+              {view === "progress"
+                ? "Projects & goals"
+                : view === "crm-ai"
+                  ? "CRM AI"
+                  : view === "tasks"
+                    ? "Tasks to-do"
+                    : view === "profile"
+                      ? p?.name
+                      : view === "platform"
+                        ? "Institutes & subscriptions"
+                        : view[0].toUpperCase() + view.slice(1)}
             </strong>
           </div>
           <div className="topbar-right">
@@ -989,15 +1018,19 @@ export default function Workspace({
               </span>
               <a
                 className={
-                  ["leads", "applications", "students", "profile"].includes(
-                    view,
-                  )
+                  [
+                    "leads",
+                    "applications",
+                    "students",
+                    "profile",
+                    "crm-ai",
+                  ].includes(view)
                     ? "active"
                     : ""
                 }
-                href={staff ? "/workspace/leads" : "/workspace/requests"}
+                href={staff ? "/workspace/crm-ai" : "/workspace/requests"}
               >
-                CRM AI <small>{staff ? "Lead commands" : "Requests"}</small>
+                CRM AI <small>{staff ? "Cases & reminders" : "Requests"}</small>
               </a>
               <a
                 className={
@@ -1360,7 +1393,7 @@ export default function Workspace({
                     {p.course || "Study plans to add"}
                   </p>
                 </div>
-                <Badge>{p.status}</Badge>
+                <Badge>{p.journey_stage || p.status}</Badge>
                 {staff && writable && (
                   <button
                     className="btn secondary small"
@@ -1679,6 +1712,18 @@ export default function Workspace({
               )}
             </>
           )}
+          {view === "crm-ai" && staff && (
+            <CrmAssistant onChange={refresh} writable={writable} />
+          )}
+          {view === "progress" && staff && (
+            <TaskProgress
+              tasks={data.tasks}
+              projects={data.projects || []}
+              goals={data.goals || []}
+              refresh={refresh}
+              writable={writable}
+            />
+          )}
           {view === "assistant" && staff && (
             <TaskAssistant actor={actor} onChange={refresh} />
           )}
@@ -1691,6 +1736,9 @@ export default function Workspace({
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <a href="/workspace/assistant" className="btn secondary">
                       <Sparkles size={14} /> Ask Humeto
+                    </a>
+                    <a className="btn secondary" href="/workspace/progress">
+                      Projects & progress
                     </a>
                     {button("Add task", () => showModal("task"))}
                   </div>
@@ -2670,6 +2718,8 @@ export default function Workspace({
                       "POST",
                       {
                         title: f.get("title"),
+                        projectId: f.get("projectId"),
+                        goalIds: f.getAll("goalIds"),
                         personId: f.get("personId"),
                         dueDate: f.get("dueDate"),
                         assignee: f.get("assignee"),
@@ -2705,6 +2755,30 @@ export default function Workspace({
                       <input name="assignee" defaultValue={actor.name} />
                     </label>
                   </div>
+                  <label>
+                    Project · optional
+                    <select name="projectId">
+                      <option value="">No project</option>
+                      {(data.projects || [])
+                        .filter((p) => p.status !== "Archived")
+                        .map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                  <fieldset className="new-task-goals">
+                    <legend>Contributes to goals · optional</legend>
+                    {(data.goals || [])
+                      .filter((g) => g.status !== "Archived")
+                      .map((g) => (
+                        <label key={g.id}>
+                          <input type="checkbox" name="goalIds" value={g.id} />
+                          {g.title}
+                        </label>
+                      ))}
+                  </fieldset>
                   <div className="checkbox-options">
                     <label>
                       <input type="checkbox" name="important" />
@@ -2855,6 +2929,60 @@ export default function Workspace({
                   writable={writable}
                   onChange={() => void refresh()}
                 />
+                {staff &&
+                  writable &&
+                  ["Draft", "Collecting", "Review", "Ready"].includes(
+                    selectedApp.status,
+                  ) && (
+                    <details className="application-evidence">
+                      <summary>Institution, program & intake</summary>
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const f = new FormData(e.currentTarget);
+                          await mutate(
+                            "applications/" + selectedApp.id + "/details",
+                            "PATCH",
+                            {
+                              institution: f.get("institution"),
+                              program: f.get("program"),
+                              intake: f.get("intake"),
+                              revision: selectedApp.revision,
+                            },
+                            "Tracking details saved. Readiness review is renewed when needed.",
+                          );
+                        }}
+                      >
+                        <label>
+                          Institution
+                          <input
+                            name="institution"
+                            maxLength={500}
+                            defaultValue={selectedApp.institution}
+                          />
+                        </label>
+                        <label>
+                          Program / purpose
+                          <input
+                            name="program"
+                            maxLength={500}
+                            defaultValue={selectedApp.program}
+                          />
+                        </label>
+                        <label>
+                          Intake / target period
+                          <input
+                            name="intake"
+                            maxLength={500}
+                            defaultValue={selectedApp.intake}
+                          />
+                        </label>
+                        <button className="btn secondary full" disabled={busy}>
+                          Save tracking details
+                        </button>
+                      </form>
+                    </details>
+                  )}
                 <ApplicationEvidence applicationId={selectedApp.id} />
                 {selectedApp.submission_reference && (
                   <div className="notice">

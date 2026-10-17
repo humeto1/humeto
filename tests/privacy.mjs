@@ -15,7 +15,9 @@ async function signIn(user) {
   return c;
 }
 after(() => {
-  const db = new DatabaseSync(resolve(".data", "humeto.sqlite"));
+  const db = new DatabaseSync(
+    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
+  );
   db.prepare(
     "DELETE FROM intake WHERE tenant_id='northstar' AND person_id='amira' AND section_key='usa-health' AND data LIKE '%QA private disclosure marker%'",
   ).run();
@@ -24,7 +26,13 @@ after(() => {
       .prepare("SELECT stored_name FROM document_versions WHERE document_id=?")
       .all(documentId)) {
       try {
-        unlinkSync(resolve(".data", "uploads", f.stored_name));
+        unlinkSync(
+          resolve(
+            process.env.HUMETO_DATA_DIR || ".data",
+            "uploads",
+            f.stored_name,
+          ),
+        );
       } catch {}
     }
     db.prepare("DELETE FROM document_versions WHERE document_id=?").run(
