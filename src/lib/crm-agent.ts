@@ -28,11 +28,9 @@ type Payload = {
   basis?: string;
   draftKind?: "fee" | "document";
 };
-function applicant(a: Actor, email: string) {
-  const rows = db()
-    .prepare(
-      "SELECT * FROM people WHERE tenant_id=? AND email=? COLLATE NOCASE",
-    )
+async function applicant(a: Actor, email: string) {
+  const rows = await db()
+    .prepare("SELECT * FROM people WHERE tenant_id=? AND lower(email)=lower(?)")
     .all(a.tenantId, email);
   if (rows.length !== 1)
     throw new CrmError(
@@ -42,9 +40,9 @@ function applicant(a: Actor, email: string) {
     );
   return rows[0];
 }
-function basis(a: Actor, pid: string, kind: "fee" | "document") {
+async function basis(a: Actor, pid: string, kind: "fee" | "document") {
   if (kind === "fee") {
-    const f = db()
+    const f = await db()
       .prepare(
         "SELECT expected_fee FROM case_finance WHERE tenant_id=? AND person_id=?",
       )
@@ -52,25 +50,26 @@ function basis(a: Actor, pid: string, kind: "fee" | "document") {
     if (!f)
       throw new CrmError("Agreed fees have not been set for this applicant.");
     const paid = Number(
-      db()
+      (await db()
         .prepare(
           "SELECT COALESCE(SUM(amount),0) n FROM payments WHERE tenant_id=? AND person_id=?",
         )
-        .get(a.tenantId, pid)!.n,
+        .get(a.tenantId, pid))!.n,
     );
     const pending = Math.max(0, Number(f.expected_fee) - paid);
     return { key: String(pending), pending, items: [] as string[] };
   }
-  const requests = db()
-    .prepare(
-      "SELECT id,title,section_key FROM requests WHERE tenant_id=? AND person_id=? AND (status IN ('Open','Responded','Changes requested') OR (status='Waiting for document' AND follow_up_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now'))) ORDER BY id",
-    )
-    .all(a.tenantId, pid)
-    .filter(
-      (r) =>
-        a.role === "owner" ||
-        !sections.find((s) => s.key === r.section_key)?.restricted,
-    );
+  const requests = (
+    await db()
+      .prepare(
+        "SELECT id,title,section_key FROM requests WHERE tenant_id=? AND person_id=? AND (status IN ('Open','Responded','Changes requested') OR (status='Waiting for document' AND follow_up_at<=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"'))) ORDER BY id",
+      )
+      .all(a.tenantId, pid)
+  ).filter(
+    (r) =>
+      a.role === "owner" ||
+      !sections.find((s) => s.key === r.section_key)?.restricted,
+  );
   return {
     key: JSON.stringify(requests),
     pending: 0,
@@ -79,10 +78,13 @@ function basis(a: Actor, pid: string, kind: "fee" | "document") {
 }
 const help =
   "I can help with registered applicants and external application tracking. Try “Show cases for amira.shah@example.com”, “Open admission case for amira.shah@example.com in United Kingdom”, “Move application APP-ID to Offer received”, “Close application APP-ID”, “Close applicant amira.shah@example.com”, “Draft document reminder for amira.shah@example.com” or “Draft fee reminder for fatima.ahmed@example.com”. Changes need your review. Emails remain drafts; no mailbox is connected.";
-function interpret(
+async function interpret(
   a: Actor,
   message: string,
-): { content: string; payload?: Payload } {
+): Promise<{
+  content: string;
+  payload?: Payload;
+}> {
   const text = message.trim().replace(/^(please\s+|can you\s+)/i, "");
   let match: RegExpMatchArray | null;
   if (
@@ -90,8 +92,8 @@ function interpret(
       /^(?:show|list) (?:cases|applications) for ([^\s]+@[^\s]+)$/i,
     ))
   ) {
-    const p = applicant(a, match[1]);
-    const apps = db()
+    const p = await applicant(a, match[1]);
+    const apps = await db()
       .prepare(
         "SELECT * FROM applications WHERE tenant_id=? AND person_id=? ORDER BY created_at DESC",
       )
@@ -112,7 +114,7 @@ function interpret(
       /^(?:open|create) (admission|study visa|visit visa|visitor visa|schengen visa|scholarship) (?:case|application) for ([^\s]+@[^\s]+) in (.{2,100})$/i,
     ))
   ) {
-    const p = applicant(a, match[2]);
+    const p = await applicant(a, match[2]);
     const kind = (
       {
         admission: "Admission",
@@ -144,7 +146,7 @@ function interpret(
     )) ||
     (match = text.match(/^close (?:application|case) ([A-Za-z0-9-]+)$/i))
   ) {
-    const app = db()
+    const app = await db()
       .prepare(
         "SELECT a.*,p.name,p.email FROM applications a JOIN people p ON p.id=a.person_id AND p.tenant_id=a.tenant_id WHERE a.tenant_id=? AND a.id=?",
       )
@@ -196,7 +198,7 @@ function interpret(
     };
   }
   if ((match = text.match(/^close applicant ([^\s]+@[^\s]+)$/i))) {
-    const p = applicant(a, match[1]);
+    const p = await applicant(a, match[1]);
     if (p.journey_stage === "Closed")
       return {
         content:
@@ -220,9 +222,9 @@ function interpret(
       /^(?:draft|send|prepare)(?: an?)? (fee|document) reminder(?: email)? for ([^\s]+@[^\s]+)$/i,
     ))
   ) {
-    const p = applicant(a, match[2]);
+    const p = await applicant(a, match[2]);
     const kind = match[1].toLowerCase() as "fee" | "document";
-    const b = basis(a, String(p.id), kind);
+    const b = await basis(a, String(p.id), kind);
     if (kind === "fee" && !b.pending)
       return {
         content:
@@ -262,14 +264,16 @@ function interpret(
   }
   return { content: help };
 }
-export function crmState(a: Actor) {
+export async function crmState(a: Actor) {
   return {
     engine: "Local command testing",
-    messages: db()
-      .prepare(
-        "SELECT m.*,a.payload,a.status AS action_status,a.target_id,a.expires_at FROM crm_messages m LEFT JOIN crm_actions a ON a.id=m.action_id AND a.tenant_id=m.tenant_id AND a.user_id=m.user_id WHERE m.tenant_id=? AND m.user_id=? ORDER BY m.rowid DESC LIMIT 100",
-      )
-      .all(a.tenantId, a.id)
+    messages: (
+      await db()
+        .prepare(
+          "SELECT m.*,a.payload,a.status AS action_status,a.target_id,a.expires_at FROM crm_messages m LEFT JOIN crm_actions a ON a.id=m.action_id AND a.tenant_id=m.tenant_id AND a.user_id=m.user_id WHERE m.tenant_id=? AND m.user_id=? ORDER BY m._rowid DESC LIMIT 100",
+        )
+        .all(a.tenantId, a.id)
+    )
       .reverse()
       .map((m) => ({
         id: m.id,
@@ -289,43 +293,46 @@ export function crmState(a: Actor) {
             }
           : null,
       })),
-    drafts: db()
+    drafts: await db()
       .prepare(
-        "SELECT * FROM email_drafts WHERE tenant_id=? AND user_id=? ORDER BY rowid DESC LIMIT 30",
+        "SELECT * FROM email_drafts WHERE tenant_id=? AND user_id=? ORDER BY _rowid DESC LIMIT 30",
       )
       .all(a.tenantId, a.id),
   };
 }
-export function crmMessage(a: Actor, message: string, key: string) {
-  return transaction(() => {
+export async function crmMessage(a: Actor, message: string, key: string) {
+  return await transaction(async () => {
     if (
-      db()
+      await db()
         .prepare(
           "SELECT id FROM crm_messages WHERE tenant_id=? AND user_id=? AND client_key=?",
         )
         .get(a.tenantId, a.id, key)
     )
-      return crmState(a);
-    const recent = db()
+      return await crmState(a);
+    const recent = (await db()
       .prepare(
-        "SELECT count(*) n FROM crm_messages WHERE tenant_id=? AND user_id=? AND role='user' AND created_at>datetime('now','-1 minute')",
+        "SELECT count(*) n FROM crm_messages WHERE tenant_id=? AND user_id=? AND role='user' AND created_at>to_char(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 minute', 'YYYY-MM-DD HH24:MI:SS')",
       )
-      .get(a.tenantId, a.id)!;
+      .get(a.tenantId, a.id))!;
     if (Number(recent.n) >= 30)
       throw new CrmError(
         "Please wait a moment before sending more commands.",
         429,
       );
-    let result: { content: string; payload?: Payload };
+    let result: {
+      content: string;
+      payload?: Payload;
+    };
     try {
-      result = interpret(a, message);
+      result = await interpret(a, message);
     } catch (e) {
       if (e instanceof CrmError) result = { content: e.message };
       else throw e;
     }
     const aid = result.payload ? id() : "";
     if (result.payload)
-      db()
+      await db()
         .prepare(
           "INSERT INTO crm_actions(id,tenant_id,user_id,payload,expires_at) VALUES(?,?,?,?,?)",
         )
@@ -336,42 +343,42 @@ export function crmMessage(a: Actor, message: string, key: string) {
           JSON.stringify(result.payload),
           Date.now() + 15 * 60 * 1000,
         );
-    db()
+    await db()
       .prepare(
         "INSERT INTO crm_messages(id,tenant_id,user_id,role,content,client_key) VALUES(?,?,?,'user',?,?)",
       )
       .run(id(), a.tenantId, a.id, message, key);
-    db()
+    await db()
       .prepare(
         "INSERT INTO crm_messages(id,tenant_id,user_id,role,content,action_id) VALUES(?,?,?,'assistant',?,?)",
       )
       .run(id(), a.tenantId, a.id, result.content, aid);
-    return crmState(a);
+    return await crmState(a);
   });
 }
-export function crmDecide(
+export async function crmDecide(
   a: Actor,
   actionId: string,
   decision: "apply" | "cancel",
 ) {
-  return transaction(() => {
-    const row = db()
+  return await transaction(async () => {
+    const row = await db()
       .prepare(
         "SELECT * FROM crm_actions WHERE id=? AND tenant_id=? AND user_id=?",
       )
       .get(actionId, a.tenantId, a.id);
     if (!row) throw new CrmError("Review action not found.", 404);
-    if (row.status !== "pending") return crmState(a);
+    if (row.status !== "pending") return await crmState(a);
     if (decision === "cancel") {
-      db()
+      await db()
         .prepare("UPDATE crm_actions SET status='cancelled' WHERE id=?")
         .run(actionId);
-      return crmState(a);
+      return await crmState(a);
     }
     if (Number(row.expires_at) < Date.now())
       throw new CrmError("This review expired. Request a fresh proposal.", 409);
     const p = JSON.parse(String(row.payload)) as Payload;
-    const person = db()
+    const person = await db()
       .prepare("SELECT * FROM people WHERE id=? AND tenant_id=?")
       .get(p.personId, a.tenantId);
     if (!person || person.email !== p.email)
@@ -381,7 +388,7 @@ export function crmDecide(
       );
     let targetId = p.personId;
     if (p.kind === "move") {
-      const app = db()
+      const app = await db()
         .prepare(
           "SELECT * FROM applications WHERE id=? AND tenant_id=? AND person_id=?",
         )
@@ -391,12 +398,12 @@ export function crmDecide(
           "Application changed since this review. Request a fresh proposal.",
           409,
         );
-      db()
+      await db()
         .prepare(
           "UPDATE applications SET status=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
         )
         .run(p.stage!, p.applicationId!, a.tenantId, p.revision);
-      db()
+      await db()
         .prepare(
           "INSERT INTO application_events(id,tenant_id,application_id,from_status,to_status,note,created_by) VALUES(?,?,?,?,?,?,?)",
         )
@@ -417,7 +424,7 @@ export function crmDecide(
           409,
         );
       targetId = id();
-      db()
+      await db()
         .prepare(
           "INSERT INTO applications(id,tenant_id,person_id,kind,country,institution,program,intake) VALUES(?,?,?,?,?,?,?,?)",
         )
@@ -431,27 +438,27 @@ export function crmDecide(
           "",
           "",
         );
-      createChecklist(targetId, a.tenantId, p.caseKind!);
+      await createChecklist(targetId, a.tenantId, p.caseKind!);
     } else if (p.kind === "close-applicant") {
       if (person.revision !== p.revision)
         throw new CrmError(
           "Applicant journey changed. Request a fresh proposal.",
           409,
         );
-      db()
+      await db()
         .prepare(
-          "UPDATE people SET journey_stage='Closed',revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND tenant_id=? AND revision=?",
+          "UPDATE people SET journey_stage='Closed',revision=revision+1,updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE id=? AND tenant_id=? AND revision=?",
         )
         .run(p.personId, a.tenantId, p.revision);
     } else {
-      const b = basis(a, p.personId, p.draftKind!);
+      const b = await basis(a, p.personId, p.draftKind!);
       if (b.key !== p.basis)
         throw new CrmError(
           "Pending fees or requests changed. Prepare a fresh reminder draft.",
           409,
         );
       targetId = id();
-      db()
+      await db()
         .prepare(
           "INSERT INTO email_drafts(id,tenant_id,user_id,person_id,recipient,subject,body) VALUES(?,?,?,?,?,?,?)",
         )
@@ -465,10 +472,10 @@ export function crmDecide(
           p.body!,
         );
     }
-    db()
+    await db()
       .prepare("UPDATE crm_actions SET status='applied',target_id=? WHERE id=?")
       .run(targetId, actionId);
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       p.kind === "draft" ? "draft saved" : "CRM command applied",
@@ -480,6 +487,6 @@ export function crmDecide(
       targetId,
       p.summary + (p.kind === "draft" ? " · not sent" : ""),
     );
-    return crmState(a);
+    return await crmState(a);
   });
 }

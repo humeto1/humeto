@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 const config: NextConfig = {
-  serverExternalPackages: ["node:sqlite"],
+  serverExternalPackages: ["pg"],
   poweredByHeader: false,
   async headers() {
     return [

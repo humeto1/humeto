@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { request } from "playwright";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 import { unlinkSync } from "node:fs";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
@@ -27,20 +27,19 @@ async function account(user) {
 }
 after(async () => {
   for (const c of contexts) await c.dispose();
-  const db = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  db.exec("PRAGMA foreign_keys=ON");
+  const db = database();
   for (const id of clean.imports) {
-    db.prepare("DELETE FROM import_items WHERE run_id=?").run(id);
-    db.prepare("DELETE FROM import_runs WHERE id=?").run(id);
+    await db.prepare("DELETE FROM import_items WHERE run_id=?").run(id);
+    await db.prepare("DELETE FROM import_runs WHERE id=?").run(id);
   }
   for (const id of clean.docs) {
-    const files = db
+    const files = await db
       .prepare("SELECT stored_name FROM document_versions WHERE document_id=?")
       .all(id);
-    db.prepare("DELETE FROM document_versions WHERE document_id=?").run(id);
-    db.prepare("DELETE FROM documents WHERE id=?").run(id);
+    await db
+      .prepare("DELETE FROM document_versions WHERE document_id=?")
+      .run(id);
+    await db.prepare("DELETE FROM documents WHERE id=?").run(id);
     for (const f of files) {
       try {
         unlinkSync(
@@ -54,17 +53,17 @@ after(async () => {
     }
   }
   for (const id of clean.requirements)
-    db.prepare("DELETE FROM requirements WHERE id=?").run(id);
+    await db.prepare("DELETE FROM requirements WHERE id=?").run(id);
   for (const id of clean.users) {
-    db.prepare("DELETE FROM sessions WHERE user_id=?").run(id);
-    db.prepare("DELETE FROM memberships WHERE user_id=?").run(id);
-    db.prepare("DELETE FROM users WHERE id=?").run(id);
+    await db.prepare("DELETE FROM sessions WHERE user_id=?").run(id);
+    await db.prepare("DELETE FROM memberships WHERE user_id=?").run(id);
+    await db.prepare("DELETE FROM users WHERE id=?").run(id);
   }
   for (const id of clean.tenants) {
-    db.prepare("DELETE FROM subscriptions WHERE tenant_id=?").run(id);
-    db.prepare("DELETE FROM tenants WHERE id=?").run(id);
+    await db.prepare("DELETE FROM subscriptions WHERE tenant_id=?").run(id);
+    await db.prepare("DELETE FROM tenants WHERE id=?").run(id);
   }
-  db.close();
+  await db.close();
 });
 test("batch import records provenance and links duplicates within one applicant", async () => {
   const c = await account("ayesha");

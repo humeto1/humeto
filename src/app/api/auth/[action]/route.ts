@@ -1,3 +1,4 @@
+import { withTransaction } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db, hashPassword, id, audit } from "@/lib/db";
@@ -11,7 +12,13 @@ import {
 export const runtime = "nodejs";
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ action: string }> },
+  {
+    params,
+  }: {
+    params: Promise<{
+      action: string;
+    }>;
+  },
 ) {
   try {
     ensureOrigin(req);
@@ -37,9 +44,11 @@ export async function POST(
           "solo",
         ])
         .parse(body.userId);
-      const m = db()
+      const m = (await db()
         .prepare("SELECT tenant_id FROM memberships WHERE user_id=?")
-        .get(userId) as { tenant_id: string };
+        .get(userId)) as {
+        tenant_id: string;
+      };
       await newSession(userId, m.tenant_id);
       return NextResponse.json({ ok: true });
     }
@@ -51,17 +60,27 @@ export async function POST(
         })
         .parse(body);
       const key = input.email.toLowerCase();
-      const limit = db()
+      const limit = (await db()
         .prepare("SELECT count,window_start FROM login_attempts WHERE key=?")
-        .get(key) as { count: number; window_start: number } | undefined;
+        .get(key)) as
+        | {
+            count: number;
+            window_start: number;
+          }
+        | undefined;
       if (limit && limit.count >= 8 && Date.now() - limit.window_start < 900000)
         return NextResponse.json(
           { error: "Too many attempts. Try again in 15 minutes." },
           { status: 429 },
         );
-      const user = db()
+      const user = (await db()
         .prepare("SELECT * FROM users WHERE email=?")
-        .get(key) as { id: string; password_hash: string } | undefined;
+        .get(key)) as
+        | {
+            id: string;
+            password_hash: string;
+          }
+        | undefined;
       const valid = verifyPassword(
         input.password,
         user?.password_hash ||
@@ -69,13 +88,13 @@ export async function POST(
       );
       if (!user || !valid) {
         if (!limit || Date.now() - limit.window_start >= 900000)
-          db()
+          await db()
             .prepare(
-              "INSERT OR REPLACE INTO login_attempts(key,count,window_start) VALUES(?,1,?)",
+              "INSERT INTO login_attempts(key,count,window_start) VALUES(?,1,?) ON CONFLICT (key) DO UPDATE SET count=EXCLUDED.count,window_start=EXCLUDED.window_start",
             )
             .run(key, Date.now());
         else
-          db()
+          await db()
             .prepare("UPDATE login_attempts SET count=count+1 WHERE key=?")
             .run(key);
         return NextResponse.json(
@@ -83,10 +102,12 @@ export async function POST(
           { status: 401 },
         );
       }
-      db().prepare("DELETE FROM login_attempts WHERE key=?").run(key);
-      const m = db()
+      await db().prepare("DELETE FROM login_attempts WHERE key=?").run(key);
+      const m = (await db()
         .prepare("SELECT tenant_id FROM memberships WHERE user_id=? LIMIT 1")
-        .get(user.id) as { tenant_id: string };
+        .get(user.id)) as {
+        tenant_id: string;
+      };
       await newSession(user.id, m.tenant_id);
       return NextResponse.json({ ok: true });
     }
@@ -104,7 +125,7 @@ export async function POST(
         })
         .parse(body);
       if (
-        db()
+        await db()
           .prepare("SELECT id FROM users WHERE email=?")
           .get(input.email.toLowerCase())
       )
@@ -115,53 +136,53 @@ export async function POST(
       const uid = id(),
         tid = id(),
         pid = id();
-      db().exec("BEGIN");
       try {
-        db()
-          .prepare("INSERT INTO tenants(id,name,type) VALUES(?,?,?)")
-          .run(tid, input.name + "’s workspace", "individual");
-        db()
-          .prepare(
-            "INSERT INTO users(id,name,email,password_hash) VALUES(?,?,?,?)",
-          )
-          .run(
-            uid,
-            input.name,
-            input.email.toLowerCase(),
-            hashPassword(input.password),
-          );
-        db()
-          .prepare(
-            "INSERT INTO memberships(user_id,tenant_id,role) VALUES(?,?,?)",
-          )
-          .run(uid, tid, "owner");
-        db()
-          .prepare(
-            "INSERT INTO subscriptions(tenant_id,plan,status,seats,case_limit) VALUES(?,?,?,?,?)",
-          )
-          .run(tid, "Individual", "trial", 1, 1);
-        db()
-          .prepare(
-            "INSERT INTO people(id,tenant_id,name,email,initials) VALUES(?,?,?,?,?)",
-          )
-          .run(
-            pid,
-            tid,
-            input.name,
-            input.email,
-            input.name
-              .split(" ")
-              .map((x) => x[0])
-              .join("")
-              .slice(0, 2),
-          );
-        db().exec("COMMIT");
+        const transactionResult = await withTransaction(async () => {
+          await db()
+            .prepare("INSERT INTO tenants(id,name,type) VALUES(?,?,?)")
+            .run(tid, input.name + "’s workspace", "individual");
+          await db()
+            .prepare(
+              "INSERT INTO users(id,name,email,password_hash) VALUES(?,?,?,?)",
+            )
+            .run(
+              uid,
+              input.name,
+              input.email.toLowerCase(),
+              hashPassword(input.password),
+            );
+          await db()
+            .prepare(
+              "INSERT INTO memberships(user_id,tenant_id,role) VALUES(?,?,?)",
+            )
+            .run(uid, tid, "owner");
+          await db()
+            .prepare(
+              "INSERT INTO subscriptions(tenant_id,plan,status,seats,case_limit) VALUES(?,?,?,?,?)",
+            )
+            .run(tid, "Individual", "trial", 1, 1);
+          await db()
+            .prepare(
+              "INSERT INTO people(id,tenant_id,name,email,initials) VALUES(?,?,?,?,?)",
+            )
+            .run(
+              pid,
+              tid,
+              input.name,
+              input.email,
+              input.name
+                .split(" ")
+                .map((x) => x[0])
+                .join("")
+                .slice(0, 2),
+            );
+        });
+        if (transactionResult !== undefined) return transactionResult;
       } catch (e) {
-        db().exec("ROLLBACK");
         throw e;
       }
       await newSession(uid, tid);
-      audit(
+      await audit(
         tid,
         uid,
         "created",

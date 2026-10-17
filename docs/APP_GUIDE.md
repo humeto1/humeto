@@ -1,6 +1,6 @@
 # Humeto local app guide
 
-Updated 17 October 2026. This guide describes working local functionality and its limits. Product roadmap: `planning/APP_PLAN.md` (local and Git-ignored).
+Updated 18 October 2026. This guide describes working local functionality and its limits. Product roadmap: `planning/APP_PLAN.md` (local and Git-ignored).
 
 ## Sign in and roles
 
@@ -69,8 +69,8 @@ See [extension setup and limits](../extension/README.md). Local alpha 0.2.0 pair
 
 ## Data, verification and production status
 
-The SQLite database and original files are in `.data/`, excluded from Git. Back them up together before relying on records. Rebuild/restart does not reset data. Environment secrets, screenshots and private planning are also excluded from Git; ignore rules are not a backup or deployment-security mechanism.
+Live records are in PostgreSQL; original files and the dedicated local cluster/backups are under ignored `.data/`. Start the configured cluster with `npm run db:start`. Take a PostgreSQL dump/upload backup with app writes paused; see [database operation](POSTGRESQL.md). The old SQLite file is retained only as a historical rollback snapshot. Rebuild/restart does not reset data. Environment secrets, screenshots and private planning are also excluded from Git; ignore rules are not a backup or deployment-security mechanism.
 
-Last application release: optimized build with 55 passing automated checks plus recorded browser checks. Prefer `npm run build` then `npm run test:release`, which tests disposable records; ordinary `npm test` targets a running development database. This guide update adds no new runtime features and does not represent a fresh release test run.
+Last application release: optimized build with 61 passing automated checks plus recorded browser checks. Prefer `npm run build` then `npm run test:release`, which tests disposable records; ordinary `npm test` targets a running development database. The database migration preserved 41 tables / 907 rows and five original files, and a PostgreSQL dump/restore was verified. It does not enable new external integrations.
 
 Public production still needs authentication lifecycle, independent access review, secure/scanned storage, backup/restore, retention/export/deletion, durable jobs, load testing, observability and configured external services. See [tech stack](TECH_STACK.md) and the local `planning/PENDING_FEATURES.md` checklist.

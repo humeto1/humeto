@@ -14,7 +14,7 @@ export async function GET(req: Request) {
       },
       { status: 401 },
     );
-  const row = db()
+  const row = (await db()
     .prepare(
       "SELECT t.*,p.name,p.email FROM assist_tokens t JOIN people p ON p.id=t.person_id AND p.tenant_id=t.tenant_id JOIN memberships m ON m.user_id=t.user_id AND m.tenant_id=t.tenant_id WHERE t.token_hash=? AND t.revoked=0 AND t.expires_at>? AND m.role!=? AND (m.role!=? OR m.person_id=t.person_id)",
     )
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
       Date.now(),
       "platform_admin",
       "student",
-    ) as
+    )) as
     | {
         tenant_id: string;
         person_id: string;
@@ -51,12 +51,17 @@ export async function GET(req: Request) {
       !["identity", "contact"].includes(section.key)
     )
       continue;
-    const saved = db()
+    const saved = (await db()
       .prepare(
         "SELECT data,revision,updated_at FROM intake WHERE tenant_id=? AND person_id=? AND section_key=?",
       )
-      .get(row.tenant_id, row.person_id, key) as
-      { data: string; revision: number; updated_at: string } | undefined;
+      .get(row.tenant_id, row.person_id, key)) as
+      | {
+          data: string;
+          revision: number;
+          updated_at: string;
+        }
+      | undefined;
     if (!saved) continue;
     const data = JSON.parse(saved.data);
     for (const field of section.fields) {

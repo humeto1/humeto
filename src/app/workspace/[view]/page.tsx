@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 export default async function Page({
   params,
 }: {
-  params: Promise<{ view: string }>;
+  params: Promise<{
+    view: string;
+  }>;
 }) {
   const { view } = await params;
   if (
@@ -37,7 +39,7 @@ export default async function Page({
   return (
     <Workspace
       actor={a}
-      initial={JSON.parse(JSON.stringify(bootstrap(a)))}
+      initial={JSON.parse(JSON.stringify(await bootstrap(a)))}
       view={view}
     />
   );

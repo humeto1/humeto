@@ -2,7 +2,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { request } from "playwright";
 import { randomUUID } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 import { unlinkSync } from "node:fs";
 import { dayOffset, localInstant } from "../src/lib/agent/dates.ts";
@@ -73,38 +73,36 @@ async function change(c, id, revision, status, extra = {}) {
   });
 }
 function inspect() {
-  return new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
+  return database();
 }
 after(async () => {
   for (const c of contexts) await c.dispose();
   const d = inspect();
   for (const rid of requests) {
-    const r = d
+    const r = await d
       .prepare("SELECT follow_up_task_id FROM requests WHERE id=?")
       .get(rid);
     if (r?.follow_up_task_id) {
-      d.prepare("DELETE FROM task_reminders WHERE task_id=?").run(
-        r.follow_up_task_id,
-      );
-      d.prepare("DELETE FROM tasks WHERE id=?").run(r.follow_up_task_id);
-      d.prepare("DELETE FROM task_events WHERE task_id=?").run(
-        r.follow_up_task_id,
-      );
-      d.prepare(
-        "DELETE FROM audit WHERE entity_type='task' AND entity_id=?",
-      ).run(r.follow_up_task_id);
+      await d
+        .prepare("DELETE FROM task_reminders WHERE task_id=?")
+        .run(r.follow_up_task_id);
+      await d.prepare("DELETE FROM tasks WHERE id=?").run(r.follow_up_task_id);
+      await d
+        .prepare("DELETE FROM task_events WHERE task_id=?")
+        .run(r.follow_up_task_id);
+      await d
+        .prepare("DELETE FROM audit WHERE entity_type='task' AND entity_id=?")
+        .run(r.follow_up_task_id);
     }
     for (const table of ["request_events", "request_replies"])
-      d.prepare(`DELETE FROM ${table} WHERE request_id=?`).run(rid);
-    d.prepare("DELETE FROM requests WHERE id=?").run(rid);
-    d.prepare(
-      "DELETE FROM audit WHERE entity_type='request' AND entity_id=?",
-    ).run(rid);
+      await d.prepare(`DELETE FROM ${table} WHERE request_id=?`).run(rid);
+    await d.prepare("DELETE FROM requests WHERE id=?").run(rid);
+    await d
+      .prepare("DELETE FROM audit WHERE entity_type='request' AND entity_id=?")
+      .run(rid);
   }
   for (const did of documents) {
-    for (const f of d
+    for (const f of await d
       .prepare("SELECT stored_name FROM document_versions WHERE document_id=?")
       .all(did)) {
       try {
@@ -117,13 +115,15 @@ after(async () => {
         );
       } catch {}
     }
-    d.prepare("DELETE FROM document_versions WHERE document_id=?").run(did);
-    d.prepare("DELETE FROM documents WHERE id=?").run(did);
-    d.prepare(
-      "DELETE FROM audit WHERE entity_type='document' AND entity_id=?",
-    ).run(did);
+    await d
+      .prepare("DELETE FROM document_versions WHERE document_id=?")
+      .run(did);
+    await d.prepare("DELETE FROM documents WHERE id=?").run(did);
+    await d
+      .prepare("DELETE FROM audit WHERE entity_type='document' AND entity_id=?")
+      .run(did);
   }
-  d.close();
+  await d.close();
 });
 test("student dates are anchored to receipt, reviewed once, and old reminders are replaced", async () => {
   const owner = await ctx("ayesha"),
@@ -187,11 +187,13 @@ test("student dates are anchored to receipt, reviewed once, and old reminders ar
   assert.equal(thread.request.follow_up_at, saved.proposal.at);
   const d = inspect();
   assert.equal(
-    d
-      .prepare(
-        "SELECT count(*) n FROM task_reminders WHERE task_id=? AND status='scheduled'",
-      )
-      .get(confirmed.taskId).n,
+    (
+      await d
+        .prepare(
+          "SELECT count(*) n FROM task_reminders WHERE task_id=? AND status='scheduled'",
+        )
+        .get(confirmed.taskId)
+    ).n,
     1,
   );
   const next = dayOffset(new Date(), zone, 21);
@@ -201,22 +203,26 @@ test("student dates are anchored to receipt, reviewed once, and old reminders ar
     }),
   );
   assert.equal(
-    d
-      .prepare(
-        "SELECT count(*) n FROM task_reminders WHERE task_id=? AND status='scheduled'",
-      )
-      .get(confirmed.taskId).n,
+    (
+      await d
+        .prepare(
+          "SELECT count(*) n FROM task_reminders WHERE task_id=? AND status='scheduled'",
+        )
+        .get(confirmed.taskId)
+    ).n,
     1,
   );
   assert.equal(
-    d
-      .prepare(
-        "SELECT count(*) n FROM task_reminders WHERE task_id=? AND status='replaced'",
-      )
-      .get(confirmed.taskId).n,
+    (
+      await d
+        .prepare(
+          "SELECT count(*) n FROM task_reminders WHERE task_id=? AND status='replaced'",
+        )
+        .get(confirmed.taskId)
+    ).n,
     1,
   );
-  d.close();
+  await d.close();
   assert.equal((await change(owner, rid, 4, "Resolved")).status(), 400);
 });
 test("ambiguous or negative replies need clarification and stale proposals cannot schedule", async () => {
@@ -331,17 +337,21 @@ test("request uploads stop follow-ups, require review, retain history, and reope
   assert.equal(thread.replies.length, 1);
   const d = inspect();
   assert.equal(
-    d
-      .prepare("SELECT stage FROM tasks WHERE id=?")
-      .get(thread.request.follow_up_task_id).stage,
+    (
+      await d
+        .prepare("SELECT stage FROM tasks WHERE id=?")
+        .get(thread.request.follow_up_task_id)
+    ).stage,
     "Done",
   );
   assert.equal(
-    d
-      .prepare(
-        "SELECT count(*) n FROM task_reminders WHERE task_id=? AND status='scheduled'",
-      )
-      .get(thread.request.follow_up_task_id).n,
+    (
+      await d
+        .prepare(
+          "SELECT count(*) n FROM task_reminders WHERE task_id=? AND status='scheduled'",
+        )
+        .get(thread.request.follow_up_task_id)
+    ).n,
     0,
   );
   assert.equal(
@@ -358,7 +368,8 @@ test("request uploads stop follow-ups, require review, retain history, and reope
   await json(await change(owner, rid, 3, "Resolved", { acceptFile: true }));
   assert.equal((await read(owner, rid)).request.status, "Resolved");
   assert.equal(
-    d.prepare("SELECT status FROM documents WHERE id=?").get(upload.id).status,
+    (await d.prepare("SELECT status FROM documents WHERE id=?").get(upload.id))
+      .status,
     "Reviewed",
   );
   const replacement = await json(
@@ -405,7 +416,7 @@ test("request uploads stop follow-ups, require review, retain history, and reope
     }),
   );
   assert.equal((await read(owner, rid)).request.status, "Changes requested");
-  const count = d.prepare("SELECT count(*) n FROM documents").get().n;
+  const count = (await d.prepare("SELECT count(*) n FROM documents").get()).n;
   assert.equal(
     (
       await student.post(api + "documents", {
@@ -418,8 +429,11 @@ test("request uploads stop follow-ups, require review, retain history, and reope
     ).status(),
     409,
   );
-  assert.equal(d.prepare("SELECT count(*) n FROM documents").get().n, count);
-  d.close();
+  assert.equal(
+    (await d.prepare("SELECT count(*) n FROM documents").get()).n,
+    count,
+  );
+  await d.close();
 });
 test("request threads and attachment links respect person, tenant and restricted-section boundaries", async () => {
   const owner = await ctx("ayesha"),
@@ -484,7 +498,6 @@ test("information-only requests can resolve with notes; reopening preserves conv
   assert.equal(reopened.replies.length, 1);
   assert.equal(reopened.events.length, 3);
 });
-
 test("read-only subscriptions preserve request reads but reject replies and scheduling", async () => {
   const admin = await ctx("admin"),
     owner = await ctx("bright-owner");

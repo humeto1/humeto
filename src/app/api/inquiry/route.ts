@@ -28,7 +28,7 @@ export async function POST(req: Request) {
       })
       .parse(await req.json());
     const d = db();
-    const link = d
+    const link = await d
       .prepare(
         "SELECT l.*,s.status,s.expires_at AS subscription_expiry FROM inquiry_links l JOIN subscriptions s ON s.tenant_id=l.tenant_id WHERE token_hash=? AND revoked=0 AND l.expires_at>?",
       )
@@ -46,55 +46,53 @@ export async function POST(req: Request) {
       );
     // Link-wide limit is persistent and needs no proxy/IP trust; production adds edge bot controls.
     const window = Math.floor(Date.now() / 60000);
-    const limit = d
-      .prepare("SELECT * FROM inquiry_limits WHERE link_id=?")
-      .get(link.id);
-    if (
-      limit &&
-      Number(limit.window_start) === window &&
-      Number(limit.count) >= 15
-    )
+    const limit = await d
+      .prepare(
+        "INSERT INTO inquiry_limits(link_id,window_start,count) VALUES(?,?,1) ON CONFLICT(link_id) DO UPDATE SET count=CASE WHEN inquiry_limits.window_start=excluded.window_start THEN inquiry_limits.count+1 ELSE 1 END,window_start=excluded.window_start RETURNING count",
+      )
+      .get(link.id, window);
+    if (Number(limit?.count) > 15)
       return NextResponse.json(
         { error: "Too many inquiries. Please try again in a minute." },
         { status: 429 },
       );
-    d.prepare(
-      "INSERT INTO inquiry_limits(link_id,window_start,count) VALUES(?,?,1) ON CONFLICT(link_id) DO UPDATE SET count=CASE WHEN window_start=excluded.window_start THEN count+1 ELSE 1 END,window_start=excluded.window_start",
-    ).run(link.id, window);
     if (!v.website) {
       const exists =
-        d
+        (await d
           .prepare(
-            "SELECT id FROM leads WHERE tenant_id=? AND email=? COLLATE NOCASE",
+            "SELECT id FROM leads WHERE tenant_id=? AND lower(email)=lower(?)",
           )
-          .get(link.tenant_id, v.email) ||
-        d
+          .get(link.tenant_id, v.email)) ||
+        (await d
           .prepare(
-            "SELECT id FROM people WHERE tenant_id=? AND email=? COLLATE NOCASE",
+            "SELECT id FROM people WHERE tenant_id=? AND lower(email)=lower(?)",
           )
-          .get(link.tenant_id, v.email);
+          .get(link.tenant_id, v.email));
       if (!exists) {
         const lid = id();
-        d.prepare(
-          "INSERT INTO leads(id,tenant_id,name,email,phone,destination,course,source,notes) VALUES(?,?,?,?,?,?,?,'Inquiry',?)",
-        ).run(
-          lid,
-          link.tenant_id,
-          v.name,
-          v.email,
-          v.phone,
-          v.destination,
-          v.course,
-          "Applicant consented to contact via public inquiry form. Email is self-reported, not verified.",
-        );
-        audit(
-          String(link.tenant_id),
-          String(link.created_by),
-          "inquiry received",
-          "lead",
-          lid,
-          "Received public inquiry; identity not verified",
-        );
+        const inserted = await d
+          .prepare(
+            "INSERT INTO leads(id,tenant_id,name,email,phone,destination,course,source,notes) VALUES(?,?,?,?,?,?,?,'Inquiry',?) ON CONFLICT (tenant_id,lower(email)) DO NOTHING",
+          )
+          .run(
+            lid,
+            link.tenant_id,
+            v.name,
+            v.email,
+            v.phone,
+            v.destination,
+            v.course,
+            "Applicant consented to contact via public inquiry form. Email is self-reported, not verified.",
+          );
+        if (inserted.changes === 1)
+          await audit(
+            String(link.tenant_id),
+            String(link.created_by),
+            "inquiry received",
+            "lead",
+            lid,
+            "Received public inquiry; identity not verified",
+          );
       }
     }
     return NextResponse.json({ ok: true });

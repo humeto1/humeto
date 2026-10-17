@@ -2,7 +2,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { request } from "playwright";
 import { randomUUID } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 import { parseLeadCSV } from "../src/lib/lead-csv.mjs";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174",
@@ -34,27 +34,25 @@ function email() {
 }
 after(async () => {
   for (const c of contexts) await c.dispose();
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
+  const d = database();
   for (const pid of personIds) {
-    d.prepare("DELETE FROM payments WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM case_finance WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM leads WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM people WHERE id=?").run(pid);
-    d.prepare("DELETE FROM audit WHERE entity_id=?").run(pid);
+    await d.prepare("DELETE FROM payments WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM case_finance WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM leads WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM people WHERE id=?").run(pid);
+    await d.prepare("DELETE FROM audit WHERE entity_id=?").run(pid);
   }
   for (const e of leadEmails) {
-    const l = d.prepare("SELECT id FROM leads WHERE email=?").get(e);
-    if (l) d.prepare("DELETE FROM audit WHERE entity_id=?").run(l.id);
-    d.prepare("DELETE FROM leads WHERE email=?").run(e);
+    const l = await d.prepare("SELECT id FROM leads WHERE email=?").get(e);
+    if (l) await d.prepare("DELETE FROM audit WHERE entity_id=?").run(l.id);
+    await d.prepare("DELETE FROM leads WHERE email=?").run(e);
   }
   for (const id of linkIds) {
-    d.prepare("DELETE FROM inquiry_limits WHERE link_id=?").run(id);
-    d.prepare("DELETE FROM inquiry_links WHERE id=?").run(id);
-    d.prepare("DELETE FROM audit WHERE entity_id=?").run(id);
+    await d.prepare("DELETE FROM inquiry_limits WHERE link_id=?").run(id);
+    await d.prepare("DELETE FROM inquiry_links WHERE id=?").run(id);
+    await d.prepare("DELETE FROM audit WHERE entity_id=?").run(id);
   }
-  d.close();
+  await d.close();
 });
 test("quoted lead CSV retains custom fields and rejects malformed amounts", () => {
   const rows = parseLeadCSV(
@@ -287,11 +285,9 @@ test("public inquiry creates one lead without exposing duplicates; expired links
   assert.equal(r.status(), 200, await r.text());
   const { path } = await r.json();
   const token = path.split("/").pop();
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  const link = d
-    .prepare("SELECT id FROM inquiry_links ORDER BY rowid DESC LIMIT 1")
+  const d = database();
+  const link = await d
+    .prepare("SELECT id FROM inquiry_links ORDER BY _rowid DESC LIMIT 1")
     .get();
   linkIds.push(link.id);
   const pub = await ctx();
@@ -317,10 +313,12 @@ test("public inquiry creates one lead without exposing duplicates; expired links
     ).status(),
     403,
   );
-  d.prepare("UPDATE inquiry_links SET expires_at=0 WHERE id=?").run(link.id);
+  await d
+    .prepare("UPDATE inquiry_links SET expires_at=0 WHERE id=?")
+    .run(link.id);
   assert.equal(
     (await pub.post("/api/inquiry", { data: details })).status(),
     404,
   );
-  d.close();
+  await d.close();
 });

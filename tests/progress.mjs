@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { request } from "playwright";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174",
@@ -59,26 +59,24 @@ async function stage(c, id, value) {
 }
 after(async () => {
   for (const c of contexts) await c.dispose();
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
+  const d = database();
   for (const t of taskIds) {
-    d.prepare("DELETE FROM task_reminders WHERE task_id=?").run(t);
-    d.prepare("DELETE FROM task_goals WHERE task_id=?").run(t);
-    d.prepare("DELETE FROM task_events WHERE task_id=?").run(t);
-    d.prepare("DELETE FROM lead_followups WHERE task_id=?").run(t);
-    d.prepare("DELETE FROM tasks WHERE id=?").run(t);
-    d.prepare("DELETE FROM audit WHERE entity_id=?").run(t);
+    await d.prepare("DELETE FROM task_reminders WHERE task_id=?").run(t);
+    await d.prepare("DELETE FROM task_goals WHERE task_id=?").run(t);
+    await d.prepare("DELETE FROM task_events WHERE task_id=?").run(t);
+    await d.prepare("DELETE FROM lead_followups WHERE task_id=?").run(t);
+    await d.prepare("DELETE FROM tasks WHERE id=?").run(t);
+    await d.prepare("DELETE FROM audit WHERE entity_id=?").run(t);
   }
   for (const [kind, id] of planIds) {
-    d.prepare("DELETE FROM " + kind + " WHERE id=?").run(id);
-    d.prepare("DELETE FROM audit WHERE entity_id=?").run(id);
+    await d.prepare("DELETE FROM " + kind + " WHERE id=?").run(id);
+    await d.prepare("DELETE FROM audit WHERE entity_id=?").run(id);
   }
   for (const l of leadIds) {
-    d.prepare("DELETE FROM leads WHERE id=?").run(l);
-    d.prepare("DELETE FROM audit WHERE entity_id=?").run(l);
+    await d.prepare("DELETE FROM leads WHERE id=?").run(l);
+    await d.prepare("DELETE FROM audit WHERE entity_id=?").run(l);
   }
-  d.close();
+  await d.close();
 });
 test("completion and reopening events survive relinking and repeated Done saves", async () => {
   const c = await ctx("ayesha");
@@ -148,13 +146,13 @@ test("monthly progress uses local timezone, snapshots and unique task counts", a
     data: { revision: t.revision, projectId: p, goalIds: [g] },
   });
   await stage(c, tid, "Done");
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  d.prepare(
-    "UPDATE task_events SET created_at='2026-09-30T20:30:00.000Z' WHERE task_id=? AND event='completed'",
-  ).run(tid);
-  d.close();
+  const d = database();
+  await d
+    .prepare(
+      "UPDATE task_events SET created_at='2026-09-30T20:30:00.000Z' WHERE task_id=? AND event='completed'",
+    )
+    .run(tid);
+  await d.close();
   const pk = await (
       await c.get(ep + "task-history?month=2026-10&timezone=Asia%2FKarachi")
     ).json(),
@@ -248,24 +246,26 @@ test("plans, links and reports enforce roles, tenant isolation and stale revisio
 test("completion stops old reminders, and reopening does not reactivate them", async () => {
   const c = await ctx("ayesha"),
     tid = await create(c);
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
+  const d = database();
   const rid = randomUUID();
-  d.prepare(
-    "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone) VALUES(?,'northstar','ayesha',?,?,'Asia/Karachi')",
-  ).run(rid, tid, new Date().toISOString());
+  await d
+    .prepare(
+      "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone) VALUES(?,'northstar','ayesha',?,?,'Asia/Karachi')",
+    )
+    .run(rid, tid, new Date().toISOString());
   await stage(c, tid, "Done");
   assert.equal(
-    d.prepare("SELECT status FROM task_reminders WHERE id=?").get(rid).status,
+    (await d.prepare("SELECT status FROM task_reminders WHERE id=?").get(rid))
+      .status,
     "completed",
   );
   await stage(c, tid, "To do");
   assert.equal(
-    d.prepare("SELECT status FROM task_reminders WHERE id=?").get(rid).status,
+    (await d.prepare("SELECT status FROM task_reminders WHERE id=?").get(rid))
+      .status,
     "completed",
   );
-  d.close();
+  await d.close();
 });
 test("lead follow-up creates one real assigned task per date and guards stale/closed leads", async () => {
   const c = await ctx("ayesha");
@@ -310,7 +310,6 @@ test("lead follow-up creates one real assigned task per date and guards stale/cl
     404,
   );
 });
-
 test("new tasks accept validated project/goal links and reports remain readable when subscription is read-only", async () => {
   const c = await ctx("ayesha"),
     p = await plan(c, "projects", "QA Creation project"),
@@ -325,16 +324,16 @@ test("new tasks accept validated project/goal links and reports remain readable 
   taskIds.push(made.id);
   assert.equal((await task(c, made.id)).project_id, p);
   assert.equal((await task(c, made.id)).goals[0].id, g);
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  const sub = d
+  const d = database();
+  const sub = await d
     .prepare("SELECT status FROM subscriptions WHERE tenant_id='northstar'")
     .get();
   try {
-    d.prepare(
-      "UPDATE subscriptions SET status='expired' WHERE tenant_id='northstar'",
-    ).run();
+    await d
+      .prepare(
+        "UPDATE subscriptions SET status='expired' WHERE tenant_id='northstar'",
+      )
+      .run();
     assert.equal((await c.get(ep + "task-history")).status(), 200);
     assert.equal(
       (
@@ -358,9 +357,9 @@ test("new tasks accept validated project/goal links and reports remain readable 
     );
     assert.equal((await c.get("/api/crm-agent")).status(), 200);
   } finally {
-    d.prepare(
-      "UPDATE subscriptions SET status=? WHERE tenant_id='northstar'",
-    ).run(sub.status);
-    d.close();
+    await d
+      .prepare("UPDATE subscriptions SET status=? WHERE tenant_id='northstar'")
+      .run(sub.status);
+    await d.close();
   }
 });

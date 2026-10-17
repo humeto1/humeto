@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { request } from "playwright";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 import { unlinkSync } from "node:fs";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
@@ -14,15 +14,15 @@ async function signIn(user) {
   await c.post("/api/auth/demo", { data: { userId: user } });
   return c;
 }
-after(() => {
-  const db = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  db.prepare(
-    "DELETE FROM intake WHERE tenant_id='northstar' AND person_id='amira' AND section_key='usa-health' AND data LIKE '%QA private disclosure marker%'",
-  ).run();
+after(async () => {
+  const db = database();
+  await db
+    .prepare(
+      "DELETE FROM intake WHERE tenant_id='northstar' AND person_id='amira' AND section_key='usa-health' AND data LIKE '%QA private disclosure marker%'",
+    )
+    .run();
   if (documentId) {
-    for (const f of db
+    for (const f of await db
       .prepare("SELECT stored_name FROM document_versions WHERE document_id=?")
       .all(documentId)) {
       try {
@@ -35,12 +35,12 @@ after(() => {
         );
       } catch {}
     }
-    db.prepare("DELETE FROM document_versions WHERE document_id=?").run(
-      documentId,
-    );
-    db.prepare("DELETE FROM documents WHERE id=?").run(documentId);
+    await db
+      .prepare("DELETE FROM document_versions WHERE document_id=?")
+      .run(documentId);
+    await db.prepare("DELETE FROM documents WHERE id=?").run(documentId);
   }
-  db.close();
+  await db.close();
 });
 test("private disclosure values and evidence are excluded from ordinary consultant access", async () => {
   const owner = await signIn("ayesha"),

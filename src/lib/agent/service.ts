@@ -1,3 +1,4 @@
+import { withTransaction } from "../db";
 import "server-only";
 import { db, id, audit } from "../db";
 import { tasks } from "../repository";
@@ -17,7 +18,6 @@ import type {
   Intent,
   TaskSummary,
 } from "./contracts";
-
 export class AgentError extends Error {
   constructor(
     message: string,
@@ -26,8 +26,8 @@ export class AgentError extends Error {
     super(message);
   }
 }
-export function ownedThread(a: Actor, threadId: string) {
-  const thread = db()
+export async function ownedThread(a: Actor, threadId: string) {
+  const thread = await db()
     .prepare(
       "SELECT * FROM agent_threads WHERE id=? AND tenant_id=? AND user_id=?",
     )
@@ -44,58 +44,63 @@ function actionCard(row: Record<string, unknown>) {
     expiresAt: Number(row.expires_at),
   };
 }
-export function agentState(
+export async function agentState(
   a: Actor,
   threadId: string | null,
   timezone: string,
   summaryOnly = false,
-): AgentState {
+): Promise<AgentState> {
   validTimezone(timezone);
   const threads = summaryOnly
     ? []
-    : (db()
+    : ((await db()
         .prepare(
-          "SELECT id,title,updated_at FROM agent_threads WHERE tenant_id=? AND user_id=? ORDER BY updated_at DESC,rowid DESC LIMIT 50",
+          "SELECT id,title,updated_at FROM agent_threads WHERE tenant_id=? AND user_id=? ORDER BY updated_at DESC,_rowid DESC LIMIT 50",
         )
-        .all(a.tenantId, a.id) as unknown as AgentState["threads"]);
+        .all(a.tenantId, a.id)) as unknown as AgentState["threads"]);
   const selected = summaryOnly ? null : threadId || threads[0]?.id || null;
-  if (selected) ownedThread(a, selected);
+  if (selected) await ownedThread(a, selected);
   const messages = selected
-    ? (db()
-        .prepare(
-          "SELECT id,role,content,result,created_at FROM agent_messages WHERE thread_id=? AND tenant_id=? ORDER BY rowid DESC LIMIT 200",
+    ? ((await Promise.all(
+        (
+          await db()
+            .prepare(
+              "SELECT id,role,content,result,created_at FROM agent_messages WHERE thread_id=? AND tenant_id=? ORDER BY _rowid DESC LIMIT 200",
+            )
+            .all(selected, a.tenantId)
         )
-        .all(selected, a.tenantId)
-        .reverse()
-        .map((row) => {
-          const result = JSON.parse(String(row.result));
-          if (result.action) {
-            const action = db()
-              .prepare(
-                "SELECT * FROM agent_actions WHERE id=? AND tenant_id=? AND user_id=?",
-              )
-              .get(result.action.id, a.tenantId, a.id);
-            if (action) result.action = actionCard(action);
-            else delete result.action;
-          }
-          return { ...row, result };
-        }) as unknown as AgentMessage[])
+          .reverse()
+          .map(async (row) => {
+            const result = JSON.parse(String(row.result));
+            if (result.action) {
+              const action = await db()
+                .prepare(
+                  "SELECT * FROM agent_actions WHERE id=? AND tenant_id=? AND user_id=?",
+                )
+                .get(result.action.id, a.tenantId, a.id);
+              if (action) result.action = actionCard(action);
+              else delete result.action;
+            }
+            return { ...row, result };
+          }),
+      )) as unknown as AgentMessage[])
     : [];
-  const own = tasks(a).filter(
+  const own = (await tasks(a)).filter(
     (t) => t.assignee === a.name && t.stage !== "Done",
   );
   const quadrants = [0, 0, 0, 0];
   for (const task of own)
     quadrants[task.important ? (task.urgent ? 0 : 1) : task.urgent ? 2 : 3]++;
-  const reminders = db()
-    .prepare(
-      "SELECT r.id,r.task_id,t.title,r.remind_at,r.timezone FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND t.stage!='Done' ORDER BY r.remind_at LIMIT 100",
-    )
-    .all(a.tenantId, a.id)
-    .map((r) => ({
-      ...r,
-      due: Date.parse(String(r.remind_at)) <= Date.now(),
-    })) as unknown as AgentState["reminders"];
+  const reminders = (
+    await db()
+      .prepare(
+        "SELECT r.id,r.task_id,t.title,r.remind_at,r.timezone FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND t.stage!='Done' ORDER BY r.remind_at LIMIT 100",
+      )
+      .all(a.tenantId, a.id)
+  ).map((r) => ({
+    ...r,
+    due: Date.parse(String(r.remind_at)) <= Date.now(),
+  })) as unknown as AgentState["reminders"];
   return {
     threads,
     threadId: selected,
@@ -110,7 +115,7 @@ export function agentState(
     ...modelStatus(),
   };
 }
-function writeMessage(
+async function writeMessage(
   a: Actor,
   threadId: string,
   role: string,
@@ -119,7 +124,7 @@ function writeMessage(
   clientKey: string | null = null,
 ) {
   const mid = id();
-  db()
+  await db()
     .prepare(
       "INSERT INTO agent_messages(id,tenant_id,thread_id,role,content,result,client_key) VALUES(?,?,?,?,?,?,?)",
     )
@@ -132,16 +137,16 @@ function writeMessage(
       JSON.stringify(result),
       clientKey,
     );
-  db()
+  await db()
     .prepare(
-      "UPDATE agent_threads SET updated_at=CURRENT_TIMESTAMP WHERE id=? AND tenant_id=? AND user_id=?",
+      "UPDATE agent_threads SET updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE id=? AND tenant_id=? AND user_id=?",
     )
     .run(threadId, a.tenantId, a.id);
   return mid;
 }
-function selectedTasks(a: Actor, intent: Intent, timezone: string) {
+async function selectedTasks(a: Actor, intent: Intent, timezone: string) {
   const today = dayKey(new Date(), timezone);
-  return tasks(a).filter(
+  return (await tasks(a)).filter(
     (t) =>
       (intent.scope === "team" || t.assignee === a.name) &&
       (intent.important === null || !!t.important === intent.important) &&
@@ -160,7 +165,7 @@ function selectedTasks(a: Actor, intent: Intent, timezone: string) {
                 : true),
   );
 }
-function plan(
+async function plan(
   a: Actor,
   intent: Intent,
   timezone: string,
@@ -175,7 +180,7 @@ function plan(
       result: {},
     };
   if (intent.kind === "list") {
-    const list = selectedTasks(a, intent, timezone);
+    const list = await selectedTasks(a, intent, timezone);
     const priority = [
       intent.important === null
         ? ""
@@ -211,7 +216,7 @@ function plan(
   }
   let task: TaskSummary | undefined;
   if (intent.kind === "update") {
-    const all = tasks(a);
+    const all = await tasks(a);
     const target = (intent.target || "").trim().toLowerCase();
     let matches = target
       ? all.filter((t) => t.id === target || t.title.toLowerCase() === target)
@@ -315,7 +320,7 @@ function plan(
     );
   const aid = id(),
     expiresAt = Date.now() + 3600000;
-  db()
+  await db()
     .prepare(
       "INSERT INTO agent_actions(id,tenant_id,user_id,thread_id,payload,expires_at) VALUES(?,?,?,?,?,?)",
     )
@@ -342,185 +347,207 @@ export async function sendMessage(
   validTimezone(timezone);
   let threadId = input.threadId;
   if (threadId) {
-    ownedThread(a, threadId);
-    const previous = db()
+    await ownedThread(a, threadId);
+    const previous = await db()
       .prepare(
         "SELECT id FROM agent_messages WHERE thread_id=? AND tenant_id=? AND client_key=?",
       )
       .get(threadId, a.tenantId, clientKey);
-    if (previous) return agentState(a, threadId, timezone);
+    if (previous) return await agentState(a, threadId, timezone);
   }
-  const recent = db()
+  const recent = (await db()
     .prepare(
-      "SELECT COUNT(*) AS n FROM agent_messages m JOIN agent_threads t ON t.id=m.thread_id WHERE t.tenant_id=? AND t.user_id=? AND m.role='user' AND m.created_at>datetime('now','-1 minute')",
+      "SELECT COUNT(*) AS n FROM agent_messages m JOIN agent_threads t ON t.id=m.thread_id WHERE t.tenant_id=? AND t.user_id=? AND m.role='user' AND m.created_at>to_char(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 minute', 'YYYY-MM-DD HH24:MI:SS')",
     )
-    .get(a.tenantId, a.id) as { n: number };
+    .get(a.tenantId, a.id)) as {
+    n: number;
+  };
   if (recent.n >= 20)
     throw new AgentError(
       "Please pause for a moment before sending more messages.",
       429,
     );
-  const history = threadId ? agentState(a, threadId, timezone).messages : [];
+  const history = threadId
+    ? (await agentState(a, threadId, timezone)).messages
+    : [];
   const intent = await interpret(message, {
     timezone,
     now: new Date().toISOString(),
-    tasks: tasks(a),
+    tasks: await tasks(a),
     history: history.map((m) => ({ role: m.role, content: m.content })),
   });
   const d = db();
-  d.exec("BEGIN IMMEDIATE");
+  const requestedThreadId = threadId;
   try {
-    if (!threadId) {
-      // A retried first message reuses the same thread rather than creating duplicate proposals.
-      const previous = d
-        .prepare(
-          "SELECT m.thread_id FROM agent_messages m JOIN agent_threads t ON t.id=m.thread_id WHERE m.client_key=? AND t.tenant_id=? AND t.user_id=?",
-        )
-        .get(clientKey, a.tenantId, a.id);
-      if (previous) {
-        d.exec("COMMIT");
-        return agentState(a, String(previous.thread_id), timezone);
+    const transactionResult = await withTransaction(async () => {
+      threadId = requestedThreadId;
+      if (!threadId) {
+        // A retried first message reuses the same thread rather than creating duplicate proposals.
+        const previous = await d
+          .prepare(
+            "SELECT m.thread_id FROM agent_messages m JOIN agent_threads t ON t.id=m.thread_id WHERE m.client_key=? AND t.tenant_id=? AND t.user_id=?",
+          )
+          .get(clientKey, a.tenantId, a.id);
+        if (previous) {
+          return await agentState(a, String(previous.thread_id), timezone);
+        }
+        threadId = id();
+        await d
+          .prepare(
+            "INSERT INTO agent_threads(id,tenant_id,user_id,title) VALUES(?,?,?,?)",
+          )
+          .run(threadId, a.tenantId, a.id, message.slice(0, 65));
+      } else if (
+        await d
+          .prepare(
+            "SELECT id FROM agent_messages WHERE thread_id=? AND client_key=?",
+          )
+          .get(threadId, clientKey)
+      ) {
+        return await agentState(a, threadId, timezone);
       }
-      threadId = id();
-      d.prepare(
-        "INSERT INTO agent_threads(id,tenant_id,user_id,title) VALUES(?,?,?,?)",
-      ).run(threadId, a.tenantId, a.id, message.slice(0, 65));
-    } else if (
-      d
-        .prepare(
-          "SELECT id FROM agent_messages WHERE thread_id=? AND client_key=?",
-        )
-        .get(threadId, clientKey)
-    ) {
-      d.exec("COMMIT");
-      return agentState(a, threadId, timezone);
-    }
-    const outcome = plan(a, intent, timezone, message, threadId, history);
-    writeMessage(a, threadId, "user", message, {}, clientKey);
-    writeMessage(a, threadId, "assistant", outcome.content, {
-      ...outcome.result,
-      engine: modelStatus().engine,
+      const outcome = await plan(
+        a,
+        intent,
+        timezone,
+        message,
+        threadId,
+        history,
+      );
+      await writeMessage(a, threadId, "user", message, {}, clientKey);
+      await writeMessage(a, threadId, "assistant", outcome.content, {
+        ...outcome.result,
+        engine: modelStatus().engine,
+      });
     });
-    d.exec("COMMIT");
+    if (transactionResult !== undefined) return transactionResult;
   } catch (e) {
-    d.exec("ROLLBACK");
     throw e;
   }
-  return agentState(a, threadId, timezone);
+  return await agentState(a, threadId || null, timezone);
 }
-export function decide(
+export async function decide(
   a: Actor,
   actionId: string,
   decision: "apply" | "cancel",
   timezone: string,
 ) {
   const d = db();
-  d.exec("BEGIN IMMEDIATE");
   let threadId = "";
   try {
-    const row = d
-      .prepare(
-        "SELECT * FROM agent_actions WHERE id=? AND tenant_id=? AND user_id=?",
-      )
-      .get(actionId, a.tenantId, a.id);
-    if (!row) throw new AgentError("Action not found.", 404);
-    threadId = String(row.thread_id);
-    ownedThread(a, threadId);
-    if (row.status !== "pending") {
-      d.exec("COMMIT");
-      return agentState(a, threadId, timezone);
-    }
-    if (Number(row.expires_at) < Date.now())
-      throw new AgentError(
-        "This review expired. Please ask again for a fresh task proposal.",
-        409,
-      );
-    const p = JSON.parse(String(row.payload)) as ActionPayload;
-    let taskId = p.taskId;
-    if (decision === "apply") {
-      if (p.kind === "create") {
-        taskId = id();
-        d.prepare(
-          "INSERT INTO tasks(id,tenant_id,title,stage,important,urgent,due_date,assignee,last_actor_id) VALUES(?,?,?,?,?,?,?,?,?)",
-        ).run(
-          taskId,
+    const transactionResult = await withTransaction(async () => {
+      const row = await d
+        .prepare(
+          "SELECT * FROM agent_actions WHERE id=? AND tenant_id=? AND user_id=?",
+        )
+        .get(actionId, a.tenantId, a.id);
+      if (!row) throw new AgentError("Action not found.", 404);
+      threadId = String(row.thread_id);
+      await ownedThread(a, threadId);
+      if (row.status !== "pending") {
+        return await agentState(a, threadId, timezone);
+      }
+      if (Number(row.expires_at) < Date.now())
+        throw new AgentError(
+          "This review expired. Please ask again for a fresh task proposal.",
+          409,
+        );
+      const p = JSON.parse(String(row.payload)) as ActionPayload;
+      let taskId = p.taskId;
+      if (decision === "apply") {
+        if (p.kind === "create") {
+          taskId = id();
+          await d
+            .prepare(
+              "INSERT INTO tasks(id,tenant_id,title,stage,important,urgent,due_date,assignee,last_actor_id) VALUES(?,?,?,?,?,?,?,?,?)",
+            )
+            .run(
+              taskId,
+              a.tenantId,
+              p.title,
+              p.stage,
+              Number(p.important),
+              Number(p.urgent),
+              p.dueDate,
+              p.assignee,
+              a.id,
+            );
+        } else {
+          const result = await d
+            .prepare(
+              "UPDATE tasks SET stage=?,important=?,urgent=?,due_date=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+            )
+            .run(
+              p.stage,
+              Number(p.important),
+              Number(p.urgent),
+              p.dueDate,
+              a.id,
+              p.taskId,
+              a.tenantId,
+              p.revision,
+            );
+          if (result.changes !== 1)
+            throw new AgentError(
+              "The task changed since this proposal. Ask again to review the latest version.",
+              409,
+            );
+        }
+        if (p.reminderAt && p.stage !== "Done") {
+          await d
+            .prepare(
+              "UPDATE task_reminders SET status='replaced' WHERE tenant_id=? AND user_id=? AND task_id=? AND status='scheduled'",
+            )
+            .run(a.tenantId, a.id, taskId);
+          await d
+            .prepare(
+              "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone) VALUES(?,?,?,?,?,?)",
+            )
+            .run(id(), a.tenantId, a.id, taskId, p.reminderAt, p.timezone);
+        }
+        await audit(
           a.tenantId,
-          p.title,
-          p.stage,
-          Number(p.important),
-          Number(p.urgent),
-          p.dueDate,
-          p.assignee,
+          a.id,
+          p.kind === "create" ? "created" : "updated",
+          "task",
+          taskId!,
+          "Applied assistant task action",
+        );
+      }
+      await d
+        .prepare(
+          "UPDATE agent_actions SET status=?,task_id=? WHERE id=? AND tenant_id=? AND user_id=?",
+        )
+        .run(
+          decision === "apply" ? "applied" : "cancelled",
+          taskId,
+          actionId,
+          a.tenantId,
           a.id,
         );
-      } else {
-        const result = d
-          .prepare(
-            "UPDATE tasks SET stage=?,important=?,urgent=?,due_date=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
-          )
-          .run(
-            p.stage,
-            Number(p.important),
-            Number(p.urgent),
-            p.dueDate,
-            a.id,
-            p.taskId,
-            a.tenantId,
-            p.revision,
-          );
-        if (result.changes !== 1)
-          throw new AgentError(
-            "The task changed since this proposal. Ask again to review the latest version.",
-            409,
-          );
-      }
-      if (p.reminderAt && p.stage !== "Done") {
-        d.prepare(
-          "UPDATE task_reminders SET status='replaced' WHERE tenant_id=? AND user_id=? AND task_id=? AND status='scheduled'",
-        ).run(a.tenantId, a.id, taskId);
-        d.prepare(
-          "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone) VALUES(?,?,?,?,?,?)",
-        ).run(id(), a.tenantId, a.id, taskId, p.reminderAt, p.timezone);
-      }
-      audit(
-        a.tenantId,
-        a.id,
-        p.kind === "create" ? "created" : "updated",
-        "task",
-        taskId!,
-        "Applied assistant task action",
+      await writeMessage(
+        a,
+        threadId,
+        "assistant",
+        decision === "cancel"
+          ? "Cancelled. No task was changed."
+          : `${p.kind === "create" ? "Created" : "Updated"}: ${p.title}.${p.reminderAt ? " Your in-app reminder is scheduled. It will appear here and in the reminder inbox when due; external notifications are not connected." : ""}`,
+        {
+          tasks:
+            decision === "apply"
+              ? (await tasks(a)).filter((t) => t.id === taskId)
+              : [],
+        },
       );
-    }
-    d.prepare(
-      "UPDATE agent_actions SET status=?,task_id=? WHERE id=? AND tenant_id=? AND user_id=?",
-    ).run(
-      decision === "apply" ? "applied" : "cancelled",
-      taskId,
-      actionId,
-      a.tenantId,
-      a.id,
-    );
-    writeMessage(
-      a,
-      threadId,
-      "assistant",
-      decision === "cancel"
-        ? "Cancelled. No task was changed."
-        : `${p.kind === "create" ? "Created" : "Updated"}: ${p.title}.${p.reminderAt ? " Your in-app reminder is scheduled. It will appear here and in the reminder inbox when due; external notifications are not connected." : ""}`,
-      {
-        tasks:
-          decision === "apply" ? tasks(a).filter((t) => t.id === taskId) : [],
-      },
-    );
-    d.exec("COMMIT");
+    });
+    if (transactionResult !== undefined) return transactionResult;
   } catch (e) {
-    d.exec("ROLLBACK");
     throw e;
   }
-  return agentState(a, threadId, timezone);
+  return await agentState(a, threadId || null, timezone);
 }
-export function dismissReminder(a: Actor, reminderId: string) {
-  const result = db()
+export async function dismissReminder(a: Actor, reminderId: string) {
+  const result = await db()
     .prepare(
       "UPDATE task_reminders SET status='dismissed' WHERE id=? AND tenant_id=? AND user_id=?",
     )

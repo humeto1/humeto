@@ -8,20 +8,24 @@ export default async function Page({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{ section?: string }>;
+  params: Promise<{
+    id: string;
+  }>;
+  searchParams: Promise<{
+    section?: string;
+  }>;
 }) {
   const a = await requireActor(),
     { id } = await params,
     { section } = await searchParams,
-    p = person(a, id);
+    p = await person(a, id);
   if (!p) notFound();
   if (
     sections.find((s) => s.key === section)?.restricted &&
     !["owner", "student"].includes(a.role)
   )
     notFound();
-  const data = intake(a, id).filter(
+  const data = (await intake(a, id)).filter(
     (s) =>
       !sections.find((def) => def.key === s.section_key)?.restricted ||
       ["owner", "student"].includes(a.role),
@@ -31,7 +35,7 @@ export default async function Page({
       key={id + section}
       initialSection={section}
       actor={a}
-      initial={JSON.parse(JSON.stringify(bootstrap(a)))}
+      initial={JSON.parse(JSON.stringify(await bootstrap(a)))}
       view="profile"
       initialPerson={p}
       initialIntake={data}

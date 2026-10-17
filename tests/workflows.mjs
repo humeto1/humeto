@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { request } from "playwright";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 import { unlinkSync } from "node:fs";
 const createdDocIds = [];
@@ -23,18 +23,18 @@ async function ctx(user) {
 const endpoint = "/api/workspace/";
 after(async () => {
   for (const c of contexts) await c.dispose();
-  const db = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
+  const db = database();
   for (const id of createdDocIds) {
-    const files = db
+    const files = await db
       .prepare("SELECT stored_name FROM document_versions WHERE document_id=?")
       .all(id);
-    db.prepare("DELETE FROM document_versions WHERE document_id=?").run(id);
-    db.prepare("DELETE FROM documents WHERE id=?").run(id);
-    db.prepare(
-      "DELETE FROM audit WHERE entity_type='document' AND entity_id=?",
-    ).run(id);
+    await db
+      .prepare("DELETE FROM document_versions WHERE document_id=?")
+      .run(id);
+    await db.prepare("DELETE FROM documents WHERE id=?").run(id);
+    await db
+      .prepare("DELETE FROM audit WHERE entity_type='document' AND entity_id=?")
+      .run(id);
     for (const f of files) {
       try {
         unlinkSync(
@@ -47,7 +47,7 @@ after(async () => {
       } catch {}
     }
   }
-  db.close();
+  await db.close();
 });
 test("unauthenticated and cross-origin requests are rejected", async () => {
   const c = await ctx();
@@ -275,7 +275,6 @@ test("logout revokes the server session", async () => {
   assert.equal((await c.post("/api/auth/logout", { data: {} })).status(), 200);
   assert.equal((await c.get(endpoint + "bootstrap")).status(), 401);
 });
-
 test("fact search is scoped and provides canonical DOB matches", async () => {
   const c = await ctx("amira");
   const r = await c.get(endpoint + "search?q=DOB");

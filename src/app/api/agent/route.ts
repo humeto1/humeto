@@ -46,7 +46,7 @@ async function route(req: Request) {
     if (req.method === "GET") {
       const params = new URL(req.url).searchParams;
       return NextResponse.json(
-        agentState(
+        await agentState(
           a,
           params.get("threadId"),
           timezone.parse(params.get("timezone") || "Asia/Karachi"),
@@ -56,7 +56,7 @@ async function route(req: Request) {
       );
     }
     ensureOrigin(req);
-    if (!canMutate(a))
+    if (!(await canMutate(a)))
       return NextResponse.json(
         { error: "This workspace is read-only." },
         { status: 403 },
@@ -71,10 +71,10 @@ async function route(req: Request) {
       return NextResponse.json(await sendMessage(a, data));
     if (data.operation === "action")
       return NextResponse.json(
-        decide(a, data.actionId, data.decision, data.timezone),
+        await decide(a, data.actionId, data.decision, data.timezone),
       );
-    dismissReminder(a, data.reminderId);
-    return NextResponse.json(agentState(a, null, data.timezone));
+    await dismissReminder(a, data.reminderId);
+    return NextResponse.json(await agentState(a, null, data.timezone));
   } catch (e) {
     if (e instanceof AgentError)
       return NextResponse.json({ error: e.message }, { status: e.status });

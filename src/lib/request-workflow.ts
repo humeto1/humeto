@@ -52,15 +52,15 @@ export type RequestRow = {
   person_name?: string;
   created_at: string;
 };
-export function requestFor(a: Actor, rid: string) {
-  const r = db()
+export async function requestFor(a: Actor, rid: string) {
+  const r = (await db()
     .prepare(
       "SELECT r.*,p.name AS person_name FROM requests r JOIN people p ON p.id=r.person_id AND p.tenant_id=r.tenant_id WHERE r.id=? AND r.tenant_id=?",
     )
-    .get(rid, a.tenantId) as unknown as RequestRow | undefined;
+    .get(rid, a.tenantId)) as unknown as RequestRow | undefined;
   if (
     !r ||
-    !canSeePerson(a, r.person_id) ||
+    !(await canSeePerson(a, r.person_id)) ||
     (sections.find((s) => s.key === r.section_key)?.restricted &&
       !["owner", "student"].includes(a.role))
   )
@@ -74,7 +74,7 @@ function revision(r: RequestRow, expected: number) {
       409,
     );
 }
-function record(
+async function record(
   a: Actor,
   r: RequestRow,
   event: string,
@@ -82,12 +82,12 @@ function record(
   docId = r.document_id,
   version = r.document_version,
 ) {
-  db()
+  await db()
     .prepare(
       "INSERT INTO request_events(id,tenant_id,request_id,actor_id,event,note,document_id,document_version) VALUES(?,?,?,?,?,?,?,?)",
     )
     .run(id(), a.tenantId, r.id, a.id, event, note, docId, version);
-  audit(
+  await audit(
     a.tenantId,
     a.id,
     event,
@@ -96,21 +96,26 @@ function record(
     "Updated request conversation / follow-up",
   );
 }
-function stopFollowup(a: Actor, r: RequestRow) {
+async function stopFollowup(a: Actor, r: RequestRow) {
   if (!r.follow_up_task_id) return;
-  db()
+  await db()
     .prepare(
       "UPDATE task_reminders SET status='completed' WHERE tenant_id=? AND task_id=? AND status='scheduled'",
     )
     .run(a.tenantId, r.follow_up_task_id);
-  db()
+  await db()
     .prepare(
       "UPDATE tasks SET stage='Done',last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND stage!='Done'",
     )
     .run(a.id, r.follow_up_task_id, a.tenantId);
 }
-function evidence(a: Actor, r: RequestRow, docId: string, version?: number) {
-  const d = db()
+async function evidence(
+  a: Actor,
+  r: RequestRow,
+  docId: string,
+  version?: number,
+) {
+  const d = await db()
     .prepare(
       "SELECT * FROM documents WHERE id=? AND tenant_id=? AND person_id=?",
     )
@@ -131,20 +136,21 @@ function evidence(a: Actor, r: RequestRow, docId: string, version?: number) {
     );
   return d;
 }
-export function requestRead(parts: string[], a: Actor) {
+export async function requestRead(parts: string[], a: Actor) {
   if (parts[0] !== "requests" || !parts[1]) return null;
-  const r = requestFor(a, parts[1]);
+  const r = await requestFor(a, parts[1]);
   return NextResponse.json({
     request: r,
-    replies: db()
+    replies: (
+      await db()
+        .prepare(
+          "SELECT r.*,u.name AS actor_name FROM request_replies r JOIN users u ON u.id=r.actor_id WHERE r.tenant_id=? AND r.request_id=? ORDER BY r.created_at,r._rowid",
+        )
+        .all(a.tenantId, r.id)
+    ).map((x) => ({ ...x, proposal: JSON.parse(String(x.proposal)) })),
+    events: await db()
       .prepare(
-        "SELECT r.*,u.name AS actor_name FROM request_replies r JOIN users u ON u.id=r.actor_id WHERE r.tenant_id=? AND r.request_id=? ORDER BY r.created_at,r.rowid",
-      )
-      .all(a.tenantId, r.id)
-      .map((x) => ({ ...x, proposal: JSON.parse(String(x.proposal)) })),
-    events: db()
-      .prepare(
-        "SELECT e.*,u.name AS actor_name FROM request_events e JOIN users u ON u.id=e.actor_id WHERE e.tenant_id=? AND e.request_id=? ORDER BY e.created_at DESC,e.rowid DESC",
+        "SELECT e.*,u.name AS actor_name FROM request_events e JOIN users u ON u.id=e.actor_id WHERE e.tenant_id=? AND e.request_id=? ORDER BY e.created_at DESC,e._rowid DESC",
       )
       .all(a.tenantId, r.id),
   });
@@ -163,8 +169,8 @@ const replySchema = z
 function digest(value: unknown) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
-function existingReply(a: Actor, rid: string, key: string, hash: string) {
-  const row = db()
+async function existingReply(a: Actor, rid: string, key: string, hash: string) {
+  const row = await db()
     .prepare(
       "SELECT * FROM request_replies WHERE tenant_id=? AND actor_id=? AND client_key=?",
     )
@@ -176,7 +182,7 @@ function existingReply(a: Actor, rid: string, key: string, hash: string) {
     );
   return row;
 }
-export function saveReply(
+export async function saveReply(
   a: Actor,
   r: RequestRow,
   v: {
@@ -188,12 +194,12 @@ export function saveReply(
     payloadHash: string;
   },
 ) {
-  if (existingReply(a, r.id, v.clientKey, v.payloadHash))
+  if (await existingReply(a, r.id, v.clientKey, v.payloadHash))
     throw new RequestWorkflowError(
       "This reply was already received. Refresh the conversation.",
       409,
     );
-  const live = requestFor(a, r.id);
+  const live = await requestFor(a, r.id);
   revision(live, r.revision);
   r = live;
   if (r.status === "Resolved")
@@ -201,11 +207,11 @@ export function saveReply(
       "This request is resolved. Ask your consultant to reopen it before adding evidence.",
       409,
     );
-  const recent = db()
+  const recent = (await db()
     .prepare(
-      "SELECT count(*) n FROM request_replies WHERE tenant_id=? AND actor_id=? AND created_at>strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 minute')",
+      "SELECT count(*) n FROM request_replies WHERE tenant_id=? AND actor_id=? AND created_at>to_char(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 minute', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"')",
     )
-    .get(a.tenantId, a.id)!;
+    .get(a.tenantId, a.id))!;
   if (Number(recent.n) >= 20)
     throw new RequestWorkflowError(
       "Please wait a moment before sending more replies.",
@@ -217,7 +223,7 @@ export function saveReply(
     : proposeExpectedDate(v.message, v.timezone);
   const rid = id(),
     newRevision = r.revision + 1;
-  db()
+  await db()
     .prepare(
       "INSERT INTO request_replies(id,tenant_id,request_id,actor_id,channel,message,client_key,payload_hash,timezone,proposal,proposal_state,request_revision,document_id,document_version) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     )
@@ -242,13 +248,13 @@ export function saveReply(
       v.documentVersion,
     );
   if (v.documentId) {
-    stopFollowup(a, r);
-    db()
+    await stopFollowup(a, r);
+    await db()
       .prepare(
         "UPDATE requests SET status='File received',document_id=?,document_version=?,follow_up_at='',follow_up_timezone='',review_note='',revision=? WHERE id=? AND tenant_id=?",
       )
       .run(v.documentId, v.documentVersion, newRevision, r.id, a.tenantId);
-    record(
+    await record(
       a,
       r,
       "file received",
@@ -257,17 +263,17 @@ export function saveReply(
       v.documentVersion,
     );
   } else {
-    db()
+    await db()
       .prepare(
         "UPDATE requests SET status=CASE WHEN status='Open' THEN 'Responded' ELSE status END,revision=? WHERE id=? AND tenant_id=?",
       )
       .run(newRevision, r.id, a.tenantId);
-    record(a, r, "reply received");
+    await record(a, r, "reply received");
   }
   return { replyId: rid, proposal, revision: newRevision };
 }
 // This hook runs inside the existing document-upload transaction after a file version is saved.
-export function prepareRequestUpload(
+export async function prepareRequestUpload(
   a: Actor,
   form: FormData,
   pid: string,
@@ -289,7 +295,7 @@ export function prepareRequestUpload(
       clientKey: form.get("replyClientKey"),
     });
   timezone(data.timezone);
-  const r = requestFor(a, rid);
+  const r = await requestFor(a, rid);
   if (
     r.person_id !== pid ||
     r.section_key !== String(form.get("sectionKey") || "")
@@ -298,7 +304,7 @@ export function prepareRequestUpload(
       "Upload does not match the selected request.",
     );
   const hash = digest([data.message, sha, data.timezone]);
-  const replay = existingReply(a, rid, data.clientKey, hash);
+  const replay = await existingReply(a, rid, data.clientKey, hash);
   if (replay) return { r, data, hash, replay };
   revision(r, data.revision);
   if (r.status === "Resolved")
@@ -308,24 +314,24 @@ export function prepareRequestUpload(
     );
   return { r, data, hash, replay: null };
 }
-export function requestDocumentChanged(
+export async function requestDocumentChanged(
   a: Actor,
   docId: string,
   newVersion: number,
 ) {
-  const rows = db()
+  const rows = (await db()
     .prepare(
       "SELECT * FROM requests WHERE tenant_id=? AND document_id=? AND document_version<>?",
     )
-    .all(a.tenantId, docId, newVersion) as unknown as RequestRow[];
+    .all(a.tenantId, docId, newVersion)) as unknown as RequestRow[];
   for (const r of rows) {
-    stopFollowup(a, r);
-    db()
+    await stopFollowup(a, r);
+    await db()
       .prepare(
         "UPDATE requests SET status='File received',document_version=?,follow_up_at='',follow_up_timezone='',review_note='',revision=revision+1 WHERE id=? AND tenant_id=?",
       )
       .run(newVersion, r.id, a.tenantId);
-    record(
+    await record(
       a,
       r,
       "new file version",
@@ -335,20 +341,20 @@ export function requestDocumentChanged(
     );
   }
 }
-export function requestDocumentReviewChanged(
+export async function requestDocumentReviewChanged(
   a: Actor,
   docId: string,
   status: string,
   skipRequestId = "",
 ) {
   if (status === "Reviewed") return;
-  const rows = db()
+  const rows = (await db()
     .prepare(
       "SELECT * FROM requests WHERE tenant_id=? AND document_id=? AND status='Resolved' AND id!=?",
     )
-    .all(a.tenantId, docId, skipRequestId) as unknown as RequestRow[];
+    .all(a.tenantId, docId, skipRequestId)) as unknown as RequestRow[];
   for (const r of rows) {
-    db()
+    await db()
       .prepare(
         "UPDATE requests SET status=?,review_note=?,revision=revision+1 WHERE id=? AND tenant_id=?",
       )
@@ -358,10 +364,10 @@ export function requestDocumentReviewChanged(
         r.id,
         a.tenantId,
       );
-    record(a, r, "review reopened", "Document review changed.");
+    await record(a, r, "review reopened", "Document review changed.");
   }
 }
-export function requestMutation(
+export async function requestMutation(
   req: Request,
   parts: string[],
   a: Actor,
@@ -375,21 +381,21 @@ export function requestMutation(
   if (action === "reply" && req.method === "POST") {
     const v = replySchema.parse(body);
     timezone(v.timezone);
-    const r = requestFor(a, rid),
+    const r = await requestFor(a, rid),
       hash = digest([v.message, v.documentId, v.timezone]);
-    const replay = existingReply(a, rid, v.clientKey, hash);
+    const replay = await existingReply(a, rid, v.clientKey, hash);
     if (replay)
       return NextResponse.json({ replyId: replay.id, replayed: true });
-    return transaction(() => {
-      const duplicate = existingReply(a, rid, v.clientKey, hash);
+    return await transaction(async () => {
+      const duplicate = await existingReply(a, rid, v.clientKey, hash);
       if (duplicate)
         return NextResponse.json({ replyId: duplicate.id, replayed: true });
-      revision(requestFor(a, rid), v.revision);
+      revision(await requestFor(a, rid), v.revision);
       let version = 0;
       if (v.documentId)
-        version = Number(evidence(a, r, v.documentId).current_version);
+        version = Number((await evidence(a, r, v.documentId)).current_version);
       return NextResponse.json(
-        saveReply(a, r, {
+        await saveReply(a, r, {
           message: v.message,
           documentId: v.documentId,
           documentVersion: version,
@@ -414,14 +420,14 @@ export function requestMutation(
         timezone: z.string().max(100).default("Asia/Karachi"),
       })
       .parse(body);
-    return transaction(() => {
-      const r = requestFor(a, rid);
+    return await transaction(async () => {
+      const r = await requestFor(a, rid);
       if (
         v.replyId &&
         r.status === "Waiting for document" &&
         r.revision === v.revision + 1
       ) {
-        const applied = db()
+        const applied = await db()
           .prepare(
             "SELECT proposal FROM request_replies WHERE id=? AND tenant_id=? AND request_id=? AND proposal_state='Applied'",
           )
@@ -446,7 +452,7 @@ export function requestMutation(
         zone = v.timezone,
         day = v.day;
       if (v.replyId) {
-        const reply = db()
+        const reply = await db()
           .prepare(
             "SELECT * FROM request_replies WHERE id=? AND tenant_id=? AND request_id=? AND proposal_state='Pending'",
           )
@@ -465,7 +471,7 @@ export function requestMutation(
       }
       if (Date.parse(at) <= Date.now())
         throw new RequestWorkflowError("Choose a future follow-up date.");
-      const owner = db()
+      const owner = await db()
         .prepare(
           "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant')",
         )
@@ -477,14 +483,14 @@ export function requestMutation(
       let taskId = r.follow_up_task_id;
       if (
         taskId &&
-        !db()
+        !(await db()
           .prepare("SELECT id FROM tasks WHERE id=? AND tenant_id=?")
-          .get(taskId, a.tenantId)
+          .get(taskId, a.tenantId))
       )
         taskId = "";
       if (!taskId) {
         taskId = id();
-        db()
+        await db()
           .prepare(
             "INSERT INTO tasks(id,tenant_id,person_id,title,assignee,important,due_date,last_actor_id) VALUES(?,?,?,?,?,1,?,?)",
           )
@@ -500,33 +506,33 @@ export function requestMutation(
             a.id,
           );
       } else
-        db()
+        await db()
           .prepare(
             "UPDATE tasks SET stage='To do',due_date=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=?",
           )
           .run(day, a.id, taskId, a.tenantId);
-      db()
+      await db()
         .prepare(
           "UPDATE task_reminders SET status='replaced' WHERE tenant_id=? AND task_id=? AND status='scheduled'",
         )
         .run(a.tenantId, taskId);
-      db()
+      await db()
         .prepare(
           "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone) VALUES(?,?,?,?,?,?)",
         )
         .run(id(), a.tenantId, owner.id, taskId, at, zone);
-      db()
+      await db()
         .prepare(
           "UPDATE requests SET status='Waiting for document',follow_up_at=?,follow_up_timezone=?,follow_up_task_id=?,revision=revision+1 WHERE id=? AND tenant_id=?",
         )
         .run(at, zone, taskId, rid, a.tenantId);
       if (v.replyId)
-        db()
+        await db()
           .prepare(
             "UPDATE request_replies SET proposal_state='Applied' WHERE id=? AND tenant_id=?",
           )
           .run(v.replyId, a.tenantId);
-      record(a, r, "follow-up scheduled", at + " · " + zone);
+      await record(a, r, "follow-up scheduled", at + " · " + zone);
       return NextResponse.json({ ok: true, at, taskId });
     });
   }
@@ -539,8 +545,8 @@ export function requestMutation(
         acceptFile: z.boolean().default(false),
       })
       .parse(body);
-    return transaction(() => {
-      const r = requestFor(a, rid);
+    return await transaction(async () => {
+      const r = await requestFor(a, rid);
       revision(r, v.revision);
       if (v.status === "Resolved") {
         if (r.requires_document && !r.document_id)
@@ -552,28 +558,28 @@ export function requestMutation(
             throw new RequestWorkflowError(
               "Review and accept the linked file before resolving.",
             );
-          const d = evidence(a, r, r.document_id, r.document_version);
+          const d = await evidence(a, r, r.document_id, r.document_version);
           if (r.status !== "File received")
             throw new RequestWorkflowError(
               "The latest file must be in the review queue before it is accepted.",
             );
-          db()
+          await db()
             .prepare(
               "UPDATE documents SET status='Reviewed' WHERE id=? AND tenant_id=? AND current_version=?",
             )
             .run(d.id, a.tenantId, r.document_version);
         }
-        stopFollowup(a, r);
+        await stopFollowup(a, r);
       } else {
-        stopFollowup(a, r);
+        await stopFollowup(a, r);
         if (v.status === "Changes requested" && r.document_id) {
-          const d = evidence(a, r, r.document_id, r.document_version);
-          db()
+          const d = await evidence(a, r, r.document_id, r.document_version);
+          await db()
             .prepare(
               "UPDATE documents SET status='Changes requested' WHERE id=? AND tenant_id=?",
             )
             .run(d.id, a.tenantId);
-          requestDocumentReviewChanged(
+          await requestDocumentReviewChanged(
             a,
             r.document_id,
             "Changes requested",
@@ -581,13 +587,13 @@ export function requestMutation(
           );
         }
       }
-      const current = requestFor(a, rid);
-      db()
+      const current = await requestFor(a, rid);
+      await db()
         .prepare(
           "UPDATE requests SET status=?,review_note=?,follow_up_at='',follow_up_timezone='',document_id=CASE WHEN ?='Open' THEN '' ELSE document_id END,document_version=CASE WHEN ?='Open' THEN 0 ELSE document_version END,revision=revision+1 WHERE id=? AND tenant_id=?",
         )
         .run(v.status, v.note, v.status, v.status, rid, a.tenantId);
-      record(
+      await record(
         a,
         current,
         v.status === "Resolved"

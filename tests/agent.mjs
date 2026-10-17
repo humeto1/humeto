@@ -2,7 +2,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { request } from "playwright";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
 const zone = "Asia/Karachi",
@@ -53,24 +53,22 @@ async function action(c, card, decision = "apply") {
 }
 after(async () => {
   for (const c of contexts) await c.dispose();
-  const db = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
+  const db = database();
   for (const t of threads) {
-    db.prepare("DELETE FROM agent_actions WHERE thread_id=?").run(t);
-    db.prepare("DELETE FROM agent_messages WHERE thread_id=?").run(t);
-    db.prepare("DELETE FROM agent_threads WHERE id=?").run(t);
+    await db.prepare("DELETE FROM agent_actions WHERE thread_id=?").run(t);
+    await db.prepare("DELETE FROM agent_messages WHERE thread_id=?").run(t);
+    await db.prepare("DELETE FROM agent_threads WHERE id=?").run(t);
   }
   for (const t of taskIds) {
-    db.prepare("DELETE FROM task_reminders WHERE task_id=?").run(t);
-    db.prepare(
-      "DELETE FROM audit WHERE entity_type='task' AND entity_id=?",
-    ).run(t);
-    db.prepare("DELETE FROM task_goals WHERE task_id=?").run(t);
-    db.prepare("DELETE FROM task_events WHERE task_id=?").run(t);
-    db.prepare("DELETE FROM tasks WHERE id=?").run(t);
+    await db.prepare("DELETE FROM task_reminders WHERE task_id=?").run(t);
+    await db
+      .prepare("DELETE FROM audit WHERE entity_type='task' AND entity_id=?")
+      .run(t);
+    await db.prepare("DELETE FROM task_goals WHERE task_id=?").run(t);
+    await db.prepare("DELETE FROM task_events WHERE task_id=?").run(t);
+    await db.prepare("DELETE FROM tasks WHERE id=?").run(t);
   }
-  db.close();
+  await db.close();
 });
 test("assistant creates a reviewed task/reminder once and answers saved priority counts", async () => {
   const c = await context("ayesha");
@@ -245,14 +243,11 @@ test("due reminders survive reload, remain user-scoped and can be dismissed", as
   );
   const applied = await action(c, lastAction(d));
   const tid = lastAction(applied.d).taskId;
-  const db = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  db.prepare("UPDATE task_reminders SET remind_at=? WHERE task_id=?").run(
-    new Date(Date.now() - 60000).toISOString(),
-    tid,
-  );
-  db.close();
+  const db = database();
+  await db
+    .prepare("UPDATE task_reminders SET remind_at=? WHERE task_id=?")
+    .run(new Date(Date.now() - 60000).toISOString(), tid);
+  await db.close();
   d = await (await c.get("/api/agent?timezone=" + zone)).json();
   const reminder = d.reminders.find((r) => r.task_id === tid);
   assert(reminder.due);
@@ -262,7 +257,6 @@ test("due reminders survive reload, remain user-scoped and can be dismissed", as
   assert.equal(r.status(), 200);
   assert(!(await r.json()).reminders.some((x) => x.id === reminder.id));
 });
-
 test("quadrant queries keep urgency independent and summary polling omits private history", async () => {
   const c = await context("ayesha");
   const all = (await (await c.get("/api/workspace/bootstrap")).json()).tasks;
@@ -289,22 +283,20 @@ test("quadrant queries keep urgency independent and summary polling omits privat
     ).length,
   );
 });
-
 test("read-only subscriptions preserve assistant summaries but block messages and action application", async () => {
   const c = await context("ayesha");
   const state = await message(c, "Create a task to QA read only assistant");
   const card = lastAction(state);
-  const db = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  const previous = db
-    .prepare("SELECT status FROM subscriptions WHERE tenant_id=?")
-    .get("northstar").status;
+  const db = database();
+  const previous = (
+    await db
+      .prepare("SELECT status FROM subscriptions WHERE tenant_id=?")
+      .get("northstar")
+  ).status;
   try {
-    db.prepare("UPDATE subscriptions SET status=? WHERE tenant_id=?").run(
-      "read-only",
-      "northstar",
-    );
+    await db
+      .prepare("UPDATE subscriptions SET status=? WHERE tenant_id=?")
+      .run("read-only", "northstar");
     assert.equal((await c.get("/api/agent?summary=1")).status(), 200);
     assert.equal((await action(c, card)).r.status(), 403);
     const r = await c.post("/api/agent", {
@@ -317,10 +309,9 @@ test("read-only subscriptions preserve assistant summaries but block messages an
     });
     assert.equal(r.status(), 403);
   } finally {
-    db.prepare("UPDATE subscriptions SET status=? WHERE tenant_id=?").run(
-      previous,
-      "northstar",
-    );
-    db.close();
+    await db
+      .prepare("UPDATE subscriptions SET status=? WHERE tenant_id=?")
+      .run(previous, "northstar");
+    await db.close();
   }
 });

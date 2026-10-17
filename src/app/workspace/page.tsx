@@ -7,7 +7,7 @@ export default async function Page() {
   return (
     <Workspace
       actor={a}
-      initial={JSON.parse(JSON.stringify(bootstrap(a)))}
+      initial={JSON.parse(JSON.stringify(await bootstrap(a)))}
       view={a.role === "platform_admin" ? "platform" : "overview"}
     />
   );

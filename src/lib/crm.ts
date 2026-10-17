@@ -42,21 +42,11 @@ const leadSchema = z
 function error(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
-export function transaction<T>(fn: () => T): T {
-  const d = db();
-  d.exec("BEGIN IMMEDIATE");
-  try {
-    const result = fn();
-    d.exec("COMMIT");
-    return result;
-  } catch (e) {
-    d.exec("ROLLBACK");
-    throw e;
-  }
-}
-function insertLead(a: Actor, input: z.infer<typeof leadSchema>) {
+export { withTransaction as transaction } from "./db";
+import { withTransaction as transaction } from "./db";
+async function insertLead(a: Actor, input: z.infer<typeof leadSchema>) {
   const lid = id();
-  db()
+  await db()
     .prepare(
       "INSERT INTO leads(id,tenant_id,name,email,phone,source,destination,course,notes,follow_up,timeline,expected_fee,upfront_fee,incentive,extras) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
     )
@@ -77,7 +67,7 @@ function insertLead(a: Actor, input: z.infer<typeof leadSchema>) {
       input.incentive,
       JSON.stringify(input.extras),
     );
-  audit(
+  await audit(
     a.tenantId,
     a.id,
     "created",
@@ -87,7 +77,7 @@ function insertLead(a: Actor, input: z.infer<typeof leadSchema>) {
   );
   return lid;
 }
-export function crmMutation(
+export async function crmMutation(
   req: Request,
   parts: string[],
   a: Actor,
@@ -100,13 +90,14 @@ export function crmMutation(
     )
   )
     return null;
-  if (!canMutate(a)) return error("CRM management is not permitted.", 403);
+  if (!(await canMutate(a)))
+    return error("CRM management is not permitted.", 403);
   if (resource === "inquiry-links" && req.method === "POST") {
     if (rid === "revoke") {
-      db()
+      await db()
         .prepare("UPDATE inquiry_links SET revoked=1 WHERE tenant_id=?")
         .run(a.tenantId);
-      audit(
+      await audit(
         a.tenantId,
         a.id,
         "revoked",
@@ -119,7 +110,7 @@ export function crmMutation(
     const token = randomBytes(32).toString("base64url");
     const lid = id();
     const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
-    db()
+    await db()
       .prepare(
         "INSERT INTO inquiry_links(id,tenant_id,token_hash,created_by,expires_at) VALUES(?,?,?,?,?)",
       )
@@ -130,7 +121,7 @@ export function crmMutation(
         a.id,
         expiresAt,
       );
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "created",
@@ -147,9 +138,9 @@ export function crmMutation(
         revision: z.number().int().positive(),
       })
       .parse(body);
-    const result = db()
+    const result = await db()
       .prepare(
-        "UPDATE people SET journey_stage=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE id=? AND tenant_id=? AND revision=?",
+        "UPDATE people SET journey_stage=?,revision=revision+1,updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE id=? AND tenant_id=? AND revision=?",
       )
       .run(input.stage, rid, a.tenantId, input.revision);
     if (result.changes !== 1)
@@ -157,7 +148,7 @@ export function crmMutation(
         "Applicant changed elsewhere or is unavailable. Refresh before moving.",
         409,
       );
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "stage changed",
@@ -169,9 +160,9 @@ export function crmMutation(
   }
   if (resource === "case-finance") {
     if (
-      !db()
+      !(await db()
         .prepare("SELECT id FROM people WHERE id=? AND tenant_id=?")
-        .get(rid, a.tenantId)
+        .get(rid, a.tenantId))
     )
       return error("Applicant not found.", 404);
     if (action === "payment" && req.method === "POST") {
@@ -182,28 +173,27 @@ export function crmMutation(
           clientKey: z.uuid(),
         })
         .parse(body);
-      const exists = db()
-        .prepare(
-          "SELECT person_id,amount,reference FROM payments WHERE tenant_id=? AND client_key=?",
-        )
-        .get(a.tenantId, input.clientKey);
-      if (exists) {
-        if (
-          exists.person_id !== rid ||
-          exists.amount !== input.amount ||
-          exists.reference !== input.reference
-        )
-          return error("Receipt key already used for different data.", 409);
-        return NextResponse.json({ ok: true, replayed: true });
-      }
-      const pid = id();
-      transaction(() => {
-        db()
+      return await transaction(async () => {
+        const exists = await db()
           .prepare(
-            "INSERT INTO payments(id,tenant_id,person_id,amount,reference,client_key,created_by) VALUES(?,?,?,?,?,?,?)",
+            "SELECT person_id,amount,reference FROM payments WHERE tenant_id=? AND client_key=?",
+          )
+          .get(a.tenantId, input.clientKey);
+        if (exists) {
+          if (
+            exists.person_id !== rid ||
+            exists.amount !== input.amount ||
+            exists.reference !== input.reference
+          )
+            return error("Receipt key already used for different data.", 409);
+          return NextResponse.json({ ok: true, replayed: true });
+        }
+        const inserted = await db()
+          .prepare(
+            "INSERT INTO payments(id,tenant_id,person_id,amount,reference,client_key,created_by) VALUES(?,?,?,?,?,?,?) ON CONFLICT (tenant_id,client_key) DO NOTHING",
           )
           .run(
-            pid,
+            id(),
             a.tenantId,
             rid,
             input.amount,
@@ -211,7 +201,22 @@ export function crmMutation(
             input.clientKey,
             a.id,
           );
-        audit(
+        if (inserted.changes === 0) {
+          const previous = await db()
+            .prepare(
+              "SELECT person_id,amount,reference FROM payments WHERE tenant_id=? AND client_key=?",
+            )
+            .get(a.tenantId, input.clientKey);
+          if (
+            !previous ||
+            previous.person_id !== rid ||
+            previous.amount !== input.amount ||
+            previous.reference !== input.reference
+          )
+            return error("Receipt key already used for different data.", 409);
+          return NextResponse.json({ ok: true, replayed: true });
+        }
+        await audit(
           a.tenantId,
           a.id,
           "payment recorded",
@@ -219,9 +224,10 @@ export function crmMutation(
           rid,
           `Recorded PKR ${input.amount} · ${input.reference}`,
         );
+        return NextResponse.json({ ok: true });
       });
-      return NextResponse.json({ ok: true });
     }
+
     if (req.method === "PATCH") {
       const input = z
         .object({
@@ -236,25 +242,28 @@ export function crmMutation(
         })
         .parse(body);
       const d = db();
-      const current = d
-        .prepare(
-          "SELECT revision FROM case_finance WHERE person_id=? AND tenant_id=?",
-        )
-        .get(rid, a.tenantId);
-      if (Number(current?.revision || 0) !== input.revision)
-        return error("Fees changed elsewhere. Refresh first.", 409);
-      transaction(() => {
-        d.prepare(
-          "INSERT INTO case_finance(person_id,tenant_id,expected_fee,upfront_fee,incentive,timeline,revision) VALUES(?,?,?,?,?,?,1) ON CONFLICT(person_id) DO UPDATE SET expected_fee=excluded.expected_fee,upfront_fee=excluded.upfront_fee,incentive=excluded.incentive,timeline=excluded.timeline,revision=case_finance.revision+1",
-        ).run(
-          rid,
-          a.tenantId,
-          input.expected_fee,
-          input.upfront_fee,
-          input.incentive,
-          input.timeline,
-        );
-        audit(
+      return await transaction(async () => {
+        const current = await d
+          .prepare(
+            "SELECT revision FROM case_finance WHERE person_id=? AND tenant_id=?",
+          )
+          .get(rid, a.tenantId);
+        if (Number(current?.revision || 0) !== input.revision)
+          return error("Fees changed elsewhere. Refresh first.", 409);
+
+        await d
+          .prepare(
+            "INSERT INTO case_finance(person_id,tenant_id,expected_fee,upfront_fee,incentive,timeline,revision) VALUES(?,?,?,?,?,?,1) ON CONFLICT(person_id) DO UPDATE SET expected_fee=excluded.expected_fee,upfront_fee=excluded.upfront_fee,incentive=excluded.incentive,timeline=excluded.timeline,revision=case_finance.revision+1",
+          )
+          .run(
+            rid,
+            a.tenantId,
+            input.expected_fee,
+            input.upfront_fee,
+            input.incentive,
+            input.timeline,
+          );
+        await audit(
           a.tenantId,
           a.id,
           "fees updated",
@@ -262,8 +271,8 @@ export function crmMutation(
           rid,
           "Updated agreed fee, upfront target and contingent incentive",
         );
+        return NextResponse.json({ ok: true });
       });
-      return NextResponse.json({ ok: true });
     }
   }
   if (resource === "leads") {
@@ -271,8 +280,8 @@ export function crmMutation(
       const { revision } = z
         .object({ revision: z.number().int().positive() })
         .parse(body);
-      return transaction(() => {
-        const l = db()
+      return await transaction(async () => {
+        const l = await db()
           .prepare("SELECT * FROM leads WHERE id=? AND tenant_id=?")
           .get(rid, a.tenantId);
         if (!l) return error("Lead not found.", 404);
@@ -284,7 +293,7 @@ export function crmMutation(
           );
         if (!l.follow_up)
           return error("Set a follow-up date on the lead first.");
-        const existing = db()
+        const existing = await db()
           .prepare(
             "SELECT f.task_id FROM lead_followups f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id WHERE f.tenant_id=? AND f.lead_id=? AND f.follow_up=?",
           )
@@ -295,7 +304,7 @@ export function crmMutation(
             replayed: true,
           });
         const tid = id();
-        db()
+        await db()
           .prepare(
             "INSERT INTO tasks(id,tenant_id,title,due_date,assignee,important,last_actor_id) VALUES(?,?,?,?,?,1,?)",
           )
@@ -307,12 +316,12 @@ export function crmMutation(
             a.name,
             a.id,
           );
-        db()
+        await db()
           .prepare(
             "INSERT INTO lead_followups(tenant_id,lead_id,follow_up,task_id) VALUES(?,?,?,?)",
           )
           .run(a.tenantId, rid, l.follow_up, tid);
-        audit(
+        await audit(
           a.tenantId,
           a.id,
           "follow-up scheduled",
@@ -325,26 +334,27 @@ export function crmMutation(
         return NextResponse.json({ taskId: tid });
       });
     }
-
     if (req.method === "POST" && !rid) {
       const input = leadSchema.parse(body);
       if (
-        db()
+        (await db()
           .prepare(
-            "SELECT id FROM leads WHERE tenant_id=? AND email=? COLLATE NOCASE",
+            "SELECT id FROM leads WHERE tenant_id=? AND lower(email)=lower(?)",
           )
-          .get(a.tenantId, input.email) ||
-        db()
+          .get(a.tenantId, input.email)) ||
+        (await db()
           .prepare(
-            "SELECT id FROM people WHERE tenant_id=? AND email=? COLLATE NOCASE",
+            "SELECT id FROM people WHERE tenant_id=? AND lower(email)=lower(?)",
           )
-          .get(a.tenantId, input.email)
+          .get(a.tenantId, input.email))
       )
         return error(
           "This email already belongs to a lead or applicant in this workspace.",
           409,
         );
-      return NextResponse.json({ id: transaction(() => insertLead(a, input)) });
+      return NextResponse.json({
+        id: await transaction(async () => await insertLead(a, input)),
+      });
     }
     if (rid === "bulk" && req.method === "POST") {
       const { rows, preview } = z
@@ -355,30 +365,34 @@ export function crmMutation(
         .parse(body);
       const seen = new Set<string>();
       const duplicates: number[] = [];
-      const accepted = rows.filter((r, i) => {
+      const accepted: typeof rows = [];
+      for (const [i, r] of rows.entries()) {
         const found =
           seen.has(r.email) ||
-          !!db()
+          !!(await db()
             .prepare(
-              "SELECT id FROM leads WHERE tenant_id=? AND email=? COLLATE NOCASE",
+              "SELECT id FROM leads WHERE tenant_id=? AND lower(email)=lower(?)",
             )
-            .get(a.tenantId, r.email) ||
-          !!db()
+            .get(a.tenantId, r.email)) ||
+          !!(await db()
             .prepare(
-              "SELECT id FROM people WHERE tenant_id=? AND email=? COLLATE NOCASE",
+              "SELECT id FROM people WHERE tenant_id=? AND lower(email)=lower(?)",
             )
-            .get(a.tenantId, r.email);
+            .get(a.tenantId, r.email));
         seen.add(r.email);
         if (found) duplicates.push(i + 2);
-        return !found;
-      });
+        if (!found) accepted.push(r);
+      }
       if (preview)
         return NextResponse.json({
           accepted: accepted.length,
           duplicates,
           total: rows.length,
         });
-      const ids = transaction(() => accepted.map((r) => insertLead(a, r)));
+      const ids = await transaction(
+        async () =>
+          await Promise.all(accepted.map(async (r) => await insertLead(a, r))),
+      );
       return NextResponse.json({ created: ids.length, duplicates });
     }
     if (req.method === "PATCH") {
@@ -389,7 +403,7 @@ export function crmMutation(
           details: leadSchema.optional(),
         })
         .parse(body);
-      const lead = db()
+      const lead = await db()
         .prepare("SELECT * FROM leads WHERE id=? AND tenant_id=?")
         .get(rid, a.tenantId);
       if (!lead) return error("Lead not found.", 404);
@@ -402,8 +416,8 @@ export function crmMutation(
         return error(
           "Email changes require an identity review; keep the current address for now.",
         );
-      const result = transaction(() => {
-        const changes = db()
+      const result = await transaction(async () => {
+        const changes = await db()
           .prepare(
             "UPDATE leads SET stage=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
           )
@@ -411,7 +425,7 @@ export function crmMutation(
         if (changes.changes === 1) {
           if (input.details) {
             const v = input.details;
-            db()
+            await db()
               .prepare(
                 "UPDATE leads SET name=?,phone=?,destination=?,course=?,notes=?,follow_up=?,timeline=?,expected_fee=?,upfront_fee=?,incentive=?,extras=? WHERE id=? AND tenant_id=?",
               )
@@ -431,7 +445,7 @@ export function crmMutation(
                 a.tenantId,
               );
           }
-          audit(
+          await audit(
             a.tenantId,
             a.id,
             "updated",
@@ -450,8 +464,8 @@ export function crmMutation(
       const { revision } = z
         .object({ revision: z.number().int().positive() })
         .parse(body);
-      return transaction(() => {
-        const lead = db()
+      return await transaction(async () => {
+        const lead = await db()
           .prepare("SELECT * FROM leads WHERE id=? AND tenant_id=?")
           .get(rid, a.tenantId);
         if (!lead) return error("Lead not found.", 404);
@@ -465,9 +479,9 @@ export function crmMutation(
             "Lead changed elsewhere. Refresh before registration.",
             409,
           );
-        const existing = db()
+        const existing = await db()
           .prepare(
-            "SELECT id FROM people WHERE tenant_id=? AND email=? COLLATE NOCASE",
+            "SELECT id FROM people WHERE tenant_id=? AND lower(email)=lower(?)",
           )
           .all(a.tenantId, String(lead.email));
         if (existing.length)
@@ -475,16 +489,16 @@ export function crmMutation(
             "An applicant with this email exists. Resolve the identity before registration.",
             409,
           );
-        const sub = db()
+        const sub = (await db()
           .prepare("SELECT case_limit FROM subscriptions WHERE tenant_id=?")
-          .get(a.tenantId)!;
-        const count = db()
+          .get(a.tenantId))!;
+        const count = (await db()
           .prepare("SELECT count(*) n FROM people WHERE tenant_id=?")
-          .get(a.tenantId)!;
+          .get(a.tenantId))!;
         if (Number(count.n) >= Number(sub.case_limit))
           return error("Applicant allowance reached.", 403);
         const pid = id();
-        db()
+        await db()
           .prepare(
             "INSERT INTO people(id,tenant_id,name,email,destination,course,initials) VALUES(?,?,?,?,?,?,?)",
           )
@@ -501,7 +515,7 @@ export function crmMutation(
               .join("")
               .slice(0, 2),
           );
-        db()
+        await db()
           .prepare(
             "INSERT INTO case_finance(person_id,tenant_id,expected_fee,upfront_fee,incentive,timeline) VALUES(?,?,?,?,?,?)",
           )
@@ -513,12 +527,12 @@ export function crmMutation(
             lead.incentive,
             lead.timeline,
           );
-        db()
+        await db()
           .prepare(
             "UPDATE leads SET stage='Registered',person_id=?,revision=revision+1 WHERE id=? AND tenant_id=?",
           )
           .run(pid, rid, a.tenantId);
-        audit(
+        await audit(
           a.tenantId,
           a.id,
           "registered",

@@ -14,9 +14,9 @@ const digest = (s: string) => createHash("sha256").update(s).digest("hex");
 export async function actor(): Promise<Actor | null> {
   const token = (await cookies()).get(cookieName)?.value;
   if (!token) return null;
-  const row = db()
+  const row = await db()
     .prepare(
-      `SELECT u.id,u.name,u.email,m.tenant_id AS tenantId,t.name AS tenantName,t.type AS workspaceType,m.role,m.person_id AS personId FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id AND m.tenant_id=s.tenant_id JOIN tenants t ON t.id=m.tenant_id WHERE s.token_hash=? AND s.expires_at>?`,
+      'SELECT u.id,u.name,u.email,m.tenant_id AS "tenantId",t.name AS "tenantName",t.type AS "workspaceType",m.role,m.person_id AS "personId" FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id AND m.tenant_id=s.tenant_id JOIN tenants t ON t.id=m.tenant_id WHERE s.token_hash=? AND s.expires_at>?',
     )
     .get(digest(token), Date.now());
   return row ? ({ ...row } as Actor) : null;
@@ -28,8 +28,8 @@ export async function requireActor() {
 }
 export async function newSession(userId: string, tenantId: string) {
   const token = randomBytes(32).toString("base64url");
-  db().prepare("DELETE FROM sessions WHERE expires_at<?").run(Date.now());
-  db()
+  await db().prepare("DELETE FROM sessions WHERE expires_at<?").run(Date.now());
+  await db()
     .prepare(
       "INSERT INTO sessions(token_hash,user_id,tenant_id,expires_at) VALUES(?,?,?,?)",
     )
@@ -46,7 +46,9 @@ export async function endSession() {
   const jar = await cookies(),
     token = jar.get(cookieName)?.value;
   if (token)
-    db().prepare("DELETE FROM sessions WHERE token_hash=?").run(digest(token));
+    await db()
+      .prepare("DELETE FROM sessions WHERE token_hash=?")
+      .run(digest(token));
   jar.delete(cookieName);
 }
 export function verifyPassword(password: string, stored: string) {
@@ -71,18 +73,23 @@ export async function demoAllowed() {
 export function isStaff(a: Actor) {
   return ["owner", "consultant"].includes(a.role);
 }
-export function canSeePerson(a: Actor, personId: string) {
+export async function canSeePerson(a: Actor, personId: string) {
   if (a.role === "platform_admin") return false;
   if (a.role === "student" && a.personId !== personId) return false;
-  return !!db()
+  return !!(await db()
     .prepare("SELECT id FROM people WHERE id=? AND tenant_id=?")
-    .get(personId, a.tenantId);
+    .get(personId, a.tenantId));
 }
-export function canMutate(a: Actor) {
+export async function canMutate(a: Actor) {
   if (!isStaff(a)) return false;
-  const s = db()
+  const s = (await db()
     .prepare("SELECT status,expires_at FROM subscriptions WHERE tenant_id=?")
-    .get(a.tenantId) as { status: string; expires_at: string } | undefined;
+    .get(a.tenantId)) as
+    | {
+        status: string;
+        expires_at: string;
+      }
+    | undefined;
   return (
     !!s &&
     ["active", "trial", "grace"].includes(s.status) &&

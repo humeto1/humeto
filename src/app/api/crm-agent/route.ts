@@ -28,9 +28,9 @@ async function route(req: Request) {
         { error: "CRM chat access is not permitted." },
         { status: 403 },
       );
-    if (req.method === "GET") return NextResponse.json(crmState(a));
+    if (req.method === "GET") return NextResponse.json(await crmState(a));
     ensureOrigin(req);
-    if (!canMutate(a))
+    if (!(await canMutate(a)))
       return NextResponse.json(
         { error: "This workspace is read-only." },
         { status: 403 },
@@ -43,8 +43,8 @@ async function route(req: Request) {
     const v = input.parse(await req.json());
     return NextResponse.json(
       v.operation === "message"
-        ? crmMessage(a, v.message, v.clientKey)
-        : crmDecide(a, v.actionId, v.decision),
+        ? await crmMessage(a, v.message, v.clientKey)
+        : await crmDecide(a, v.actionId, v.decision),
     );
   } catch (e) {
     if (e instanceof CrmError)

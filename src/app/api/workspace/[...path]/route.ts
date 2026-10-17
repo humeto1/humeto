@@ -1,3 +1,4 @@
+import { withTransaction } from "@/lib/db";
 import {
   requestRead,
   requestMutation,
@@ -36,29 +37,34 @@ import type { Actor } from "@/lib/types";
 export const runtime = "nodejs";
 const fail = (error: string, status = 400) =>
   NextResponse.json({ error }, { status });
-function writable(a: Actor) {
-  const s = db()
+async function writable(a: Actor) {
+  const s = (await db()
     .prepare("SELECT status,expires_at FROM subscriptions WHERE tenant_id=?")
-    .get(a.tenantId) as { status: string; expires_at: string } | undefined;
+    .get(a.tenantId)) as
+    | {
+        status: string;
+        expires_at: string;
+      }
+    | undefined;
   return (
     !!s &&
     ["trial", "active", "grace"].includes(s.status) &&
     (!s.expires_at || s.expires_at >= new Date().toISOString().slice(0, 10))
   );
 }
-function staff(a: Actor) {
-  return isStaff(a) && canMutate(a);
+async function staff(a: Actor) {
+  return isStaff(a) && (await canMutate(a));
 }
 const string = z.string().trim().max(500),
   optionalString = string.default("");
 async function handle(req: Request, parts: string[], a: Actor) {
   const [resource, rid, action] = parts;
   if (req.method === "GET") {
-    const conversation = requestRead(parts, a);
+    const conversation = await requestRead(parts, a);
     if (conversation) return conversation;
-    const progress = progressRead(req, parts, a);
+    const progress = await progressRead(req, parts, a);
     if (progress) return progress;
-    if (resource === "bootstrap") return NextResponse.json(bootstrap(a));
+    if (resource === "bootstrap") return NextResponse.json(await bootstrap(a));
     if (resource === "search") {
       const q = (new URL(req.url).searchParams.get("q") || "")
         .trim()
@@ -68,13 +74,13 @@ async function handle(req: Request, parts: string[], a: Actor) {
       const hits: Record<string, unknown>[] = [];
       if (a.role === "platform_admin")
         return NextResponse.json({ results: [] });
-      const rows = db()
+      const rows = await db()
         .prepare(
           "SELECT i.*,p.name AS person_name FROM intake i JOIN people p ON p.id=i.person_id AND p.tenant_id=i.tenant_id WHERE i.tenant_id=?",
         )
         .all(a.tenantId);
       for (const row of rows) {
-        if (!canSeePerson(a, String(row.person_id))) continue;
+        if (!(await canSeePerson(a, String(row.person_id)))) continue;
         const section = sections.find((s) => s.key === row.section_key);
         if (!section || section.restricted) continue;
         const data = JSON.parse(String(row.data));
@@ -124,7 +130,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       if (a.role === "platform_admin") return fail("Not permitted.", 403);
       const clauses = a.role === "student" ? " AND person_id=?" : "";
       return NextResponse.json({
-        tokens: db()
+        tokens: await db()
           .prepare(
             "SELECT id,person_id,section_keys,expires_at,revoked,created_at FROM assist_tokens WHERE tenant_id=? AND user_id=?" +
               clauses +
@@ -138,15 +144,19 @@ async function handle(req: Request, parts: string[], a: Actor) {
       });
     }
     if (resource === "imports" && rid) {
-      const run = db()
+      const run = (await db()
         .prepare("SELECT person_id FROM import_runs WHERE id=? AND tenant_id=?")
-        .get(rid, a.tenantId) as { person_id: string } | undefined;
-      if (!run || !canSeePerson(a, run.person_id))
+        .get(rid, a.tenantId)) as
+        | {
+            person_id: string;
+          }
+        | undefined;
+      if (!run || !(await canSeePerson(a, run.person_id)))
         return fail("Import not found.", 404);
       return NextResponse.json({
-        items: db()
+        items: await db()
           .prepare(
-            "SELECT source_path,status,document_id FROM import_items WHERE run_id=? AND tenant_id=? ORDER BY rowid",
+            "SELECT source_path,status,document_id FROM import_items WHERE run_id=? AND tenant_id=? ORDER BY _rowid",
           )
           .all(rid, a.tenantId),
       });
@@ -159,7 +169,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
             ? " AND 0=1"
             : "";
       return NextResponse.json({
-        runs: db()
+        runs: await db()
           .prepare(
             "SELECT r.*,(SELECT count(*) FROM import_items i WHERE i.run_id=r.id) AS processed_count FROM import_runs r WHERE tenant_id=?" +
               s +
@@ -169,25 +179,29 @@ async function handle(req: Request, parts: string[], a: Actor) {
       });
     }
     if (resource === "applications" && rid) {
-      const app = db()
+      const app = (await db()
         .prepare(
           "SELECT person_id FROM applications WHERE id=? AND tenant_id=?",
         )
-        .get(rid, a.tenantId) as { person_id: string } | undefined;
-      if (!app || !canSeePerson(a, app.person_id))
+        .get(rid, a.tenantId)) as
+        | {
+            person_id: string;
+          }
+        | undefined;
+      if (!app || !(await canSeePerson(a, app.person_id)))
         return fail("Application not found.", 404);
       return NextResponse.json({
-        events: db()
+        events: await db()
           .prepare(
-            "SELECT * FROM application_events WHERE tenant_id=? AND application_id=? ORDER BY rowid DESC LIMIT 30",
+            "SELECT * FROM application_events WHERE tenant_id=? AND application_id=? ORDER BY _rowid DESC LIMIT 30",
           )
           .all(a.tenantId, rid),
-        requirements: db()
+        requirements: await db()
           .prepare(
             "SELECT * FROM requirements WHERE tenant_id=? AND application_id=? ORDER BY created_at,id",
           )
           .all(a.tenantId, rid),
-        snapshots: db()
+        snapshots: await db()
           .prepare(
             "SELECT id,created_at,created_by FROM application_snapshots WHERE tenant_id=? AND application_id=? ORDER BY created_at DESC",
           )
@@ -197,7 +211,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
     if (resource === "team") {
       if (!isStaff(a)) return fail("Team access is not permitted.", 403);
       return NextResponse.json({
-        members: db()
+        members: await db()
           .prepare(
             "SELECT u.id,u.name,u.email,m.role,m.person_id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role!=? ORDER BY u.name",
           )
@@ -205,33 +219,37 @@ async function handle(req: Request, parts: string[], a: Actor) {
       });
     }
     if (resource === "documents" && rid && action === "versions") {
-      const doc = db()
+      const doc = (await db()
         .prepare(
           "SELECT person_id,section_key FROM documents WHERE id=? AND tenant_id=?",
         )
-        .get(rid, a.tenantId) as
-        { person_id: string; section_key: string } | undefined;
+        .get(rid, a.tenantId)) as
+        | {
+            person_id: string;
+            section_key: string;
+          }
+        | undefined;
       if (
         !doc ||
-        !canSeePerson(a, doc.person_id) ||
+        !(await canSeePerson(a, doc.person_id)) ||
         (sections.find((s) => s.key === doc.section_key)?.restricted &&
           !["owner", "student"].includes(a.role))
       )
         return fail("Document not found.", 404);
       return NextResponse.json({
-        versions: db()
+        versions: await db()
           .prepare(
             "SELECT version,original_name,mime_type,byte_size,created_at FROM document_versions WHERE tenant_id=? AND document_id=? ORDER BY version DESC",
           )
           .all(a.tenantId, rid),
       });
     }
-
     if (resource === "students" && rid) {
-      if (!canSeePerson(a, rid)) return fail("Applicant not found.", 404);
+      if (!(await canSeePerson(a, rid)))
+        return fail("Applicant not found.", 404);
       return NextResponse.json({
-        person: person(a, rid),
-        sections: intake(a, rid).filter(
+        person: await person(a, rid),
+        sections: (await intake(a, rid)).filter(
           (s) =>
             !sections.find((def) => def.key === s.section_key)?.restricted ||
             a.role === "owner" ||
@@ -242,11 +260,11 @@ async function handle(req: Request, parts: string[], a: Actor) {
     if (resource === "documents" && rid && action === "download") {
       const requested =
         Number(new URL(req.url).searchParams.get("version")) || null;
-      const row = db()
+      const row = (await db()
         .prepare(
           "SELECT d.person_id,d.section_key,v.* FROM documents d JOIN document_versions v ON v.document_id=d.id AND v.version=coalesce(?,d.current_version) AND v.tenant_id=d.tenant_id WHERE d.id=? AND d.tenant_id=?",
         )
-        .get(requested, rid, a.tenantId) as
+        .get(requested, rid, a.tenantId)) as
         | {
             person_id: string;
             section_key: string;
@@ -257,7 +275,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         | undefined;
       if (
         !row ||
-        !canSeePerson(a, row.person_id) ||
+        !(await canSeePerson(a, row.person_id)) ||
         (sections.find((s) => s.key === row.section_key)?.restricted &&
           !["owner", "student"].includes(a.role))
       )
@@ -276,14 +294,14 @@ async function handle(req: Request, parts: string[], a: Actor) {
     }
     if (resource === "platform" && a.role === "platform_admin")
       return NextResponse.json({
-        tenants: db()
+        tenants: await db()
           .prepare(
             "SELECT t.*,s.plan,s.status,s.seats,s.case_limit,s.storage_mb,s.expires_at,(SELECT count(*) FROM people p WHERE p.tenant_id=t.id) AS case_count FROM tenants t JOIN subscriptions s ON s.tenant_id=t.id ORDER BY t.created_at DESC",
           )
           .all(),
-        activity: db()
+        activity: await db()
           .prepare(
-            "SELECT * FROM audit WHERE entity_type IN ('workspace','subscription') ORDER BY rowid DESC LIMIT 20",
+            "SELECT * FROM audit WHERE entity_type IN ('workspace','subscription') ORDER BY _rowid DESC LIMIT 20",
           )
           .all(),
       });
@@ -295,7 +313,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
     req.method === "POST" &&
     (!rid || action === "version")
   ) {
-    if (a.role === "platform_admin" || !writable(a))
+    if (a.role === "platform_admin" || !(await writable(a)))
       return fail("Workspace is read-only.", 403);
     const length = Number(req.headers.get("content-length") || 0);
     if (length > 16 * 1024 * 1024)
@@ -303,7 +321,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
     const form = await req.formData(),
       file = form.get("file"),
       pid = String(form.get("personId") || "");
-    if (!canSeePerson(a, pid)) return fail("Applicant not found.", 404);
+    if (!(await canSeePerson(a, pid))) return fail("Applicant not found.", 404);
     const sectionKey = String(form.get("sectionKey") || "");
     if (
       sections.find((s) => s.key === sectionKey)?.restricted &&
@@ -329,25 +347,33 @@ async function handle(req: Request, parts: string[], a: Actor) {
       mime = "image/jpeg";
     if (!mime)
       return fail("Only PDF, PNG and JPEG file contents are supported.");
-    const quota = db()
+    const quota = (await db()
       .prepare("SELECT storage_mb FROM subscriptions WHERE tenant_id=?")
-      .get(a.tenantId) as { storage_mb: number };
-    const usage = db()
+      .get(a.tenantId)) as {
+      storage_mb: number;
+    };
+    const usage = (await db()
       .prepare(
         "SELECT coalesce(sum(byte_size),0) AS total FROM document_versions WHERE tenant_id=?",
       )
-      .get(a.tenantId) as { total: number };
+      .get(a.tenantId)) as {
+      total: number;
+    };
     if (usage.total + file.size > quota.storage_mb * 1024 * 1024)
       return fail("Workspace storage allowance reached.", 403);
     let docId = rid || id(),
       version = 1;
     if (rid) {
-      const existing = db()
+      const existing = (await db()
         .prepare(
           "SELECT person_id,section_key,current_version FROM documents WHERE id=? AND tenant_id=?",
         )
-        .get(rid, a.tenantId) as
-        | { person_id: string; section_key: string; current_version: number }
+        .get(rid, a.tenantId)) as
+        | {
+            person_id: string;
+            section_key: string;
+            current_version: number;
+          }
         | undefined;
       if (
         !existing ||
@@ -363,7 +389,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         .replace(/[\r\n]/g, "")
         .slice(0, 1000);
     const sha = createHash("sha256").update(bytes).digest("hex");
-    const requestUpload = prepareRequestUpload(a, form, pid, sha);
+    const requestUpload = await prepareRequestUpload(a, form, pid, sha);
     if (requestUpload && rid)
       return fail(
         "Upload a new response document here; existing file versions update their linked requests separately.",
@@ -380,20 +406,28 @@ async function handle(req: Request, parts: string[], a: Actor) {
         replayed: true,
       });
     if (runId) {
-      const run = db()
+      const run = (await db()
         .prepare("SELECT person_id FROM import_runs WHERE id=? AND tenant_id=?")
-        .get(runId, a.tenantId) as { person_id: string } | undefined;
+        .get(runId, a.tenantId)) as
+        | {
+            person_id: string;
+          }
+        | undefined;
       if (!run || run.person_id !== pid)
         return fail("Import does not match selected applicant.");
-      const duplicate = db()
+      const duplicate = (await db()
         .prepare(
           "SELECT d.id FROM document_versions v JOIN documents d ON d.id=v.document_id AND d.tenant_id=v.tenant_id WHERE v.sha256=? AND v.tenant_id=? AND d.person_id=? LIMIT 1",
         )
-        .get(sha, a.tenantId, pid) as { id: string } | undefined;
+        .get(sha, a.tenantId, pid)) as
+        | {
+            id: string;
+          }
+        | undefined;
       if (duplicate) {
-        db()
+        await db()
           .prepare(
-            "INSERT OR REPLACE INTO import_items(id,tenant_id,run_id,source_path,document_id,status) VALUES(?,?,?,?,?,?)",
+            "INSERT INTO import_items(id,tenant_id,run_id,source_path,document_id,status) VALUES(?,?,?,?,?,?) ON CONFLICT (run_id,source_path) DO UPDATE SET document_id=EXCLUDED.document_id,status=EXCLUDED.status",
           )
           .run(
             id(),
@@ -409,88 +443,94 @@ async function handle(req: Request, parts: string[], a: Actor) {
     const stored = id();
     mkdirSync(resolve(dataDir, "uploads"), { recursive: true, mode: 0o700 });
     writeFileSync(resolve(dataDir, "uploads", stored), bytes, { mode: 0o600 });
-    db().exec("BEGIN");
     try {
-      if (!rid)
-        db()
+      const transactionResult = await withTransaction(async () => {
+        if (!rid)
+          await db()
+            .prepare(
+              "INSERT INTO documents(id,tenant_id,person_id,title,category,section_key) VALUES(?,?,?,?,?,?)",
+            )
+            .run(
+              docId,
+              a.tenantId,
+              pid,
+              String(form.get("title") || file.name).slice(0, 200),
+              String(form.get("category") || "Other").slice(0, 80),
+              String(form.get("sectionKey") || "").slice(0, 80),
+            );
+        else
+          await db()
+            .prepare(
+              "UPDATE documents SET current_version=?,status='Received' WHERE id=? AND tenant_id=?",
+            )
+            .run(version, docId, a.tenantId);
+        await db()
           .prepare(
-            "INSERT INTO documents(id,tenant_id,person_id,title,category,section_key) VALUES(?,?,?,?,?,?)",
+            "INSERT INTO document_versions(id,tenant_id,document_id,version,original_name,stored_name,mime_type,byte_size,sha256) VALUES(?,?,?,?,?,?,?,?,?)",
           )
           .run(
-            docId,
+            id(),
             a.tenantId,
-            pid,
-            String(form.get("title") || file.name).slice(0, 200),
-            String(form.get("category") || "Other").slice(0, 80),
-            String(form.get("sectionKey") || "").slice(0, 80),
+            docId,
+            version,
+            file.name.replace(/[\r\n]/g, "").slice(0, 220),
+            stored,
+            mime,
+            file.size,
+            createHash("sha256").update(bytes).digest("hex"),
           );
-      else
-        db()
+        await db()
           .prepare(
-            "UPDATE documents SET current_version=?,status='Received' WHERE id=? AND tenant_id=?",
+            "UPDATE document_versions SET source_path=? WHERE document_id=? AND version=? AND tenant_id=?",
           )
-          .run(version, docId, a.tenantId);
-      db()
-        .prepare(
-          "INSERT INTO document_versions(id,tenant_id,document_id,version,original_name,stored_name,mime_type,byte_size,sha256) VALUES(?,?,?,?,?,?,?,?,?)",
-        )
-        .run(
-          id(),
+          .run(sourcePath, docId, version, a.tenantId);
+        if (runId)
+          await db()
+            .prepare(
+              "INSERT INTO import_items(id,tenant_id,run_id,source_path,document_id,status) VALUES(?,?,?,?,?,?) ON CONFLICT (run_id,source_path) DO UPDATE SET document_id=EXCLUDED.document_id,status=EXCLUDED.status",
+            )
+            .run(id(), a.tenantId, runId, sourcePath, docId, "Imported");
+        await audit(
           a.tenantId,
+          a.id,
+          "uploaded",
+          "document",
           docId,
-          version,
-          file.name.replace(/[\r\n]/g, "").slice(0, 220),
-          stored,
-          mime,
-          file.size,
-          createHash("sha256").update(bytes).digest("hex"),
+          `Uploaded document version ${version}`,
         );
-      db()
-        .prepare(
-          "UPDATE document_versions SET source_path=? WHERE document_id=? AND version=? AND tenant_id=?",
-        )
-        .run(sourcePath, docId, version, a.tenantId);
-      if (runId)
-        db()
-          .prepare(
-            "INSERT OR REPLACE INTO import_items(id,tenant_id,run_id,source_path,document_id,status) VALUES(?,?,?,?,?,?)",
-          )
-          .run(id(), a.tenantId, runId, sourcePath, docId, "Imported");
-      audit(
-        a.tenantId,
-        a.id,
-        "uploaded",
-        "document",
-        docId,
-        `Uploaded document version ${version}`,
-      );
-      if (rid) requestDocumentChanged(a, docId, version);
-      if (requestUpload)
-        saveReply(a, requestUpload.r, {
-          message: requestUpload.data.message,
-          documentId: docId,
-          documentVersion: version,
-          timezone: requestUpload.data.timezone,
-          clientKey: requestUpload.data.clientKey,
-          payloadHash: requestUpload.hash,
-        });
-      db().exec("COMMIT");
+        if (rid) await requestDocumentChanged(a, docId, version);
+        if (requestUpload)
+          await saveReply(a, requestUpload.r, {
+            message: requestUpload.data.message,
+            documentId: docId,
+            documentVersion: version,
+            timezone: requestUpload.data.timezone,
+            clientKey: requestUpload.data.clientKey,
+            payloadHash: requestUpload.hash,
+          });
+      });
+      if (transactionResult !== undefined) return transactionResult;
     } catch (e) {
-      db().exec("ROLLBACK");
       unlinkSync(resolve(dataDir, "uploads", stored));
       throw e;
     }
     return NextResponse.json({ id: docId, version });
   }
   const body = await req.json();
-  const requestChange = requestMutation(req, parts, a, body, writable(a));
+  const requestChange = await requestMutation(
+    req,
+    parts,
+    a,
+    body,
+    await writable(a),
+  );
   if (requestChange) return requestChange;
-  const progress = progressMutation(req, parts, a, body);
+  const progress = await progressMutation(req, parts, a, body);
   if (progress) return progress;
-  const crm = crmMutation(req, parts, a, body);
+  const crm = await crmMutation(req, parts, a, body);
   if (crm) return crm;
   if (resource === "imports" && req.method === "POST" && !rid) {
-    if (a.role === "platform_admin" || !writable(a))
+    if (a.role === "platform_admin" || !(await writable(a)))
       return fail("Workspace is read-only.", 403);
     const input = z
       .object({
@@ -499,10 +539,10 @@ async function handle(req: Request, parts: string[], a: Actor) {
         count: z.number().int().min(1).max(100),
       })
       .parse(body);
-    if (!canSeePerson(a, input.personId))
+    if (!(await canSeePerson(a, input.personId)))
       return fail("Applicant not found.", 404);
     const runId = id();
-    db()
+    await db()
       .prepare(
         "INSERT INTO import_runs(id,tenant_id,person_id,name,expected_count,created_by) VALUES(?,?,?,?,?,?)",
       )
@@ -510,18 +550,22 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ id: runId });
   }
   if (resource === "imports" && rid && req.method === "PATCH") {
-    const run = db()
+    const run = (await db()
       .prepare("SELECT person_id FROM import_runs WHERE id=? AND tenant_id=?")
-      .get(rid, a.tenantId) as { person_id: string } | undefined;
-    if (!run || !canSeePerson(a, run.person_id))
+      .get(rid, a.tenantId)) as
+      | {
+          person_id: string;
+        }
+      | undefined;
+    if (!run || !(await canSeePerson(a, run.person_id)))
       return fail("Import not found.", 404);
     const input = z
       .object({ status: z.enum(["Complete", "Needs attention"]) })
       .parse(body);
-    db()
+    await db()
       .prepare("UPDATE import_runs SET status=? WHERE id=? AND tenant_id=?")
       .run(input.status, rid, a.tenantId);
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "imported",
@@ -532,7 +576,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ ok: true });
   }
   if (resource === "requirements" && req.method === "POST" && !rid) {
-    if (!staff(a)) return fail("Checklist management is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Checklist management is not permitted.", 403);
     const input = z
       .object({
         applicationId: z.string(),
@@ -541,12 +586,12 @@ async function handle(req: Request, parts: string[], a: Actor) {
         required: z.boolean(),
       })
       .parse(body);
-    const app = db()
+    const app = await db()
       .prepare("SELECT person_id FROM applications WHERE id=? AND tenant_id=?")
       .get(input.applicationId, a.tenantId);
     if (!app) return fail("Application not found.", 404);
     const rId = id();
-    db()
+    await db()
       .prepare(
         "INSERT INTO requirements(id,tenant_id,application_id,label,section_key,required) VALUES(?,?,?,?,?,?)",
       )
@@ -561,30 +606,34 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ id: rId });
   }
   if (resource === "requirements" && rid && req.method === "PATCH") {
-    if (!writable(a)) return fail("Workspace is read-only.", 403);
+    if (!(await writable(a))) return fail("Workspace is read-only.", 403);
     const input = z
       .object({
         status: z.enum(["Pending", "Provided", "Reviewed", "Waived"]),
         note: z.string().max(2000).default(""),
       })
       .parse(body);
-    const r = db()
+    const r = (await db()
       .prepare(
         "SELECT a.person_id FROM requirements r JOIN applications a ON a.id=r.application_id AND a.tenant_id=r.tenant_id WHERE r.id=? AND r.tenant_id=?",
       )
-      .get(rid, a.tenantId) as { person_id: string } | undefined;
-    if (!r || !canSeePerson(a, r.person_id))
+      .get(rid, a.tenantId)) as
+      | {
+          person_id: string;
+        }
+      | undefined;
+    if (!r || !(await canSeePerson(a, r.person_id)))
       return fail("Requirement not found.", 404);
     if (!isStaff(a) && !["Pending", "Provided"].includes(input.status))
       return fail("Only staff can review or waive an item.", 403);
     if (input.status === "Waived" && !input.note.trim())
       return fail("Give a reason before waiving this item.");
-    db()
+    await db()
       .prepare(
         "UPDATE requirements SET status=?,note=? WHERE id=? AND tenant_id=?",
       )
       .run(input.status, input.note, rid, a.tenantId);
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "reviewed",
@@ -594,9 +643,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     );
     return NextResponse.json({ ok: true });
   }
-
   if (resource === "assist-tokens" && req.method === "POST" && !rid) {
-    if (!writable(a) || a.role === "platform_admin")
+    if (!(await writable(a)) || a.role === "platform_admin")
       return fail("Not permitted.", 403);
     const input = z
       .object({
@@ -604,7 +652,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         sectionKeys: z.array(z.string()).min(1).max(10),
       })
       .parse(body);
-    if (!canSeePerson(a, input.personId))
+    if (!(await canSeePerson(a, input.personId)))
       return fail("Applicant not found.", 404);
     const allowed = sections
       .filter(
@@ -619,7 +667,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
     const token = randomBytes(32).toString("base64url"),
       tid = id(),
       expires = Date.now() + 3600000;
-    db()
+    await db()
       .prepare(
         "INSERT INTO assist_tokens(id,token_hash,tenant_id,user_id,person_id,section_keys,expires_at) VALUES(?,?,?,?,?,?,?)",
       )
@@ -632,7 +680,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         JSON.stringify(input.sectionKeys),
         expires,
       );
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "paired",
@@ -643,7 +691,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ id: tid, token, expiresAt: expires });
   }
   if (resource === "assist-tokens" && rid && req.method === "PATCH") {
-    const result = db()
+    const result = await db()
       .prepare(
         "UPDATE assist_tokens SET revoked=1 WHERE id=? AND tenant_id=? AND user_id=?",
       )
@@ -651,9 +699,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     if (!result.changes) return fail("Pairing not found.", 404);
     return NextResponse.json({ ok: true });
   }
-
   if (resource === "team" && req.method === "POST" && !rid) {
-    if (a.role !== "owner" || !writable(a))
+    if (a.role !== "owner" || !(await writable(a)))
       return fail("Only the active workspace owner can add members.", 403);
     const input = z
       .object({
@@ -666,66 +713,71 @@ async function handle(req: Request, parts: string[], a: Actor) {
       .parse(body);
     if (
       input.role === "student" &&
-      (!input.personId || !canSeePerson(a, input.personId))
+      (!input.personId || !(await canSeePerson(a, input.personId)))
     )
       return fail("Choose a valid applicant for student access.");
     if (
-      db()
+      await db()
         .prepare("SELECT id FROM users WHERE email=?")
         .get(input.email.toLowerCase())
     )
       return fail("This email is already registered.", 409);
-    const sub = db()
-      .prepare("SELECT seats FROM subscriptions WHERE tenant_id=?")
-      .get(a.tenantId) as { seats: number };
-    const used = db()
-      .prepare(
-        "SELECT count(*) AS n FROM memberships WHERE tenant_id=? AND role IN ('owner','consultant')",
-      )
-      .get(a.tenantId) as { n: number };
-    if (input.role === "consultant" && used.n >= sub.seats)
-      return fail("Staff seat allowance reached.", 403);
     const uid = id();
-    db().exec("BEGIN");
     try {
-      db()
-        .prepare(
-          "INSERT INTO users(id,name,email,password_hash) VALUES(?,?,?,?)",
-        )
-        .run(
-          uid,
-          input.name,
-          input.email.toLowerCase(),
-          hashPassword(input.password),
-        );
-      db()
-        .prepare(
-          "INSERT INTO memberships(user_id,tenant_id,role,person_id) VALUES(?,?,?,?)",
-        )
-        .run(
-          uid,
+      const transactionResult = await withTransaction(async () => {
+        const sub = (await db()
+          .prepare("SELECT seats FROM subscriptions WHERE tenant_id=?")
+          .get(a.tenantId)) as {
+          seats: number;
+        };
+        const used = (await db()
+          .prepare(
+            "SELECT count(*) AS n FROM memberships WHERE tenant_id=? AND role IN ('owner','consultant')",
+          )
+          .get(a.tenantId)) as {
+          n: number;
+        };
+        if (input.role === "consultant" && used.n >= sub.seats)
+          return fail("Staff seat allowance reached.", 403);
+
+        await db()
+          .prepare(
+            "INSERT INTO users(id,name,email,password_hash) VALUES(?,?,?,?)",
+          )
+          .run(
+            uid,
+            input.name,
+            input.email.toLowerCase(),
+            hashPassword(input.password),
+          );
+        await db()
+          .prepare(
+            "INSERT INTO memberships(user_id,tenant_id,role,person_id) VALUES(?,?,?,?)",
+          )
+          .run(
+            uid,
+            a.tenantId,
+            input.role,
+            input.role === "student" ? input.personId : null,
+          );
+        await audit(
           a.tenantId,
-          input.role,
-          input.role === "student" ? input.personId : null,
+          a.id,
+          "created",
+          "membership",
+          uid,
+          "Added a workspace member",
         );
-      audit(
-        a.tenantId,
-        a.id,
-        "created",
-        "membership",
-        uid,
-        "Added a workspace member",
-      );
-      db().exec("COMMIT");
+      });
+      if (transactionResult !== undefined) return transactionResult;
     } catch (e) {
-      db().exec("ROLLBACK");
       throw e;
     }
     return NextResponse.json({ id: uid });
   }
-
   if (resource === "students" && !rid && req.method === "POST") {
-    if (!staff(a)) return fail("Creating applicants is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Creating applicants is not permitted.", 403);
     const input = z
       .object({
         name: string.min(2).max(100),
@@ -736,17 +788,17 @@ async function handle(req: Request, parts: string[], a: Actor) {
       .parse(body);
     const email = input.email.toLowerCase();
     if (
-      db()
+      await db()
         .prepare(
-          "SELECT id FROM people WHERE tenant_id=? AND email=? COLLATE NOCASE",
+          "SELECT id FROM people WHERE tenant_id=? AND lower(email)=lower(?)",
         )
         .get(a.tenantId, email)
     )
       return fail("This email already belongs to an applicant.", 409);
     if (
-      db()
+      await db()
         .prepare(
-          "SELECT id FROM leads WHERE tenant_id=? AND email=? COLLATE NOCASE",
+          "SELECT id FROM leads WHERE tenant_id=? AND lower(email)=lower(?)",
         )
         .get(a.tenantId, email)
     )
@@ -755,16 +807,20 @@ async function handle(req: Request, parts: string[], a: Actor) {
         409,
       );
     input.email = email;
-    const sub = db()
+    const sub = (await db()
       .prepare("SELECT case_limit FROM subscriptions WHERE tenant_id=?")
-      .get(a.tenantId) as { case_limit: number };
-    const count = db()
+      .get(a.tenantId)) as {
+      case_limit: number;
+    };
+    const count = (await db()
       .prepare("SELECT count(*) AS n FROM people WHERE tenant_id=?")
-      .get(a.tenantId) as { n: number };
+      .get(a.tenantId)) as {
+      n: number;
+    };
     if (count.n >= sub.case_limit)
       return fail("Your active case allowance has been reached.", 403);
     const pid = id();
-    db()
+    await db()
       .prepare(
         "INSERT INTO people(id,tenant_id,name,email,destination,course,initials) VALUES(?,?,?,?,?,?,?)",
       )
@@ -781,7 +837,14 @@ async function handle(req: Request, parts: string[], a: Actor) {
           .join("")
           .slice(0, 2),
       );
-    audit(a.tenantId, a.id, "created", "person", pid, "Created an applicant");
+    await audit(
+      a.tenantId,
+      a.id,
+      "created",
+      "person",
+      pid,
+      "Created an applicant",
+    );
     return NextResponse.json({ id: pid });
   }
   if (
@@ -790,8 +853,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     action === "intake" &&
     req.method === "PUT"
   ) {
-    if (!canSeePerson(a, rid)) return fail("Applicant not found.", 404);
-    if (!writable(a)) return fail("Workspace is read-only.", 403);
+    if (!(await canSeePerson(a, rid))) return fail("Applicant not found.", 404);
+    if (!(await writable(a))) return fail("Workspace is read-only.", 403);
     const input = z
       .object({
         sectionKey: z.string(),
@@ -824,12 +887,15 @@ async function handle(req: Request, parts: string[], a: Actor) {
         return fail("Invalid repeated record data.");
     } else if (!validateRecord(input.data))
       return fail("Invalid section data.");
-    const current = db()
+    const current = (await db()
       .prepare(
         "SELECT revision FROM intake WHERE tenant_id=? AND person_id=? AND section_key=?",
       )
-      .get(a.tenantId, rid, input.sectionKey) as
-      { revision: number } | undefined;
+      .get(a.tenantId, rid, input.sectionKey)) as
+      | {
+          revision: number;
+        }
+      | undefined;
     const rev = current?.revision || 0;
     if (rev !== input.revision)
       return fail(
@@ -837,9 +903,9 @@ async function handle(req: Request, parts: string[], a: Actor) {
         409,
       );
     if (current) {
-      const result = db()
+      const result = await db()
         .prepare(
-          "UPDATE intake SET data=?,state=?,revision=revision+1,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=? AND person_id=? AND section_key=? AND revision=?",
+          "UPDATE intake SET data=?,state=?,revision=revision+1,updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE tenant_id=? AND person_id=? AND section_key=? AND revision=?",
         )
         .run(
           JSON.stringify(input.data),
@@ -852,7 +918,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       if (result.changes !== 1)
         return fail("Another edit arrived. Reload before saving.", 409);
     } else {
-      db()
+      await db()
         .prepare(
           "INSERT INTO intake(tenant_id,person_id,section_key,data,state) VALUES(?,?,?,?,?)",
         )
@@ -864,7 +930,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           input.state,
         );
     }
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "saved",
@@ -878,7 +944,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     });
   }
   if (resource === "tasks" && req.method === "POST" && !rid) {
-    if (!staff(a)) return fail("Task management is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Task management is not permitted.", 403);
     const input = z
       .object({
         title: string.min(2).max(200),
@@ -891,26 +958,26 @@ async function handle(req: Request, parts: string[], a: Actor) {
         goalIds: z.array(z.string().max(100)).max(20).default([]),
       })
       .parse(body);
-    if (input.personId && !canSeePerson(a, input.personId))
+    if (input.personId && !(await canSeePerson(a, input.personId)))
       return fail("Applicant not found.", 404);
     if (
       input.projectId &&
-      !db()
+      !(await db()
         .prepare("SELECT id FROM projects WHERE id=? AND tenant_id=?")
-        .get(input.projectId, a.tenantId)
+        .get(input.projectId, a.tenantId))
     )
       return fail("Project not found in this workspace.", 404);
     const goalIds = [...new Set(input.goalIds)];
     for (const gid of goalIds)
       if (
-        !db()
+        !(await db()
           .prepare("SELECT id FROM goals WHERE id=? AND tenant_id=?")
-          .get(gid, a.tenantId)
+          .get(gid, a.tenantId))
       )
         return fail("Goal not found in this workspace.", 404);
-    return transaction(() => {
+    return await transaction(async () => {
       const tid = id();
-      db()
+      await db()
         .prepare(
           "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
         )
@@ -927,17 +994,18 @@ async function handle(req: Request, parts: string[], a: Actor) {
           input.projectId,
         );
       for (const gid of goalIds)
-        db()
+        await db()
           .prepare(
             "INSERT INTO task_goals(tenant_id,task_id,goal_id) VALUES(?,?,?)",
           )
           .run(a.tenantId, tid, gid);
-      audit(a.tenantId, a.id, "created", "task", tid, "Created a task");
+      await audit(a.tenantId, a.id, "created", "task", tid, "Created a task");
       return NextResponse.json({ id: tid });
     });
   }
   if (resource === "tasks" && rid && req.method === "PATCH") {
-    if (!staff(a)) return fail("Task management is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Task management is not permitted.", 403);
     const input = z
       .object({
         stage: z.enum(["To do", "In progress", "Waiting", "Review", "Done"]),
@@ -946,12 +1014,16 @@ async function handle(req: Request, parts: string[], a: Actor) {
         urgent: z.boolean().optional(),
       })
       .parse(body);
-    const task = db()
+    const task = (await db()
       .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=?")
-      .get(rid, a.tenantId) as
-      { important: number; urgent: number } | undefined;
+      .get(rid, a.tenantId)) as
+      | {
+          important: number;
+          urgent: number;
+        }
+      | undefined;
     if (!task) return fail("Task not found.", 404);
-    const result = db()
+    const result = await db()
       .prepare(
         "UPDATE tasks SET stage=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
       )
@@ -968,7 +1040,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       );
     if (result.changes !== 1)
       return fail("Task changed elsewhere. Refresh and retry.", 409);
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "updated",
@@ -979,7 +1051,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ ok: true });
   }
   if (resource === "applications" && !rid && req.method === "POST") {
-    if (!staff(a)) return fail("Application management is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Application management is not permitted.", 403);
     const input = z
       .object({
         personId: string.min(1),
@@ -996,10 +1069,10 @@ async function handle(req: Request, parts: string[], a: Actor) {
         intake: optionalString,
       })
       .parse(body);
-    if (!canSeePerson(a, input.personId))
+    if (!(await canSeePerson(a, input.personId)))
       return fail("Applicant not found.", 404);
     const aid = id();
-    db()
+    await db()
       .prepare(
         "INSERT INTO applications(id,tenant_id,person_id,kind,country,institution,program,intake) VALUES(?,?,?,?,?,?,?,?)",
       )
@@ -1013,8 +1086,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
         input.program,
         input.intake,
       );
-    createChecklist(aid, a.tenantId, input.kind);
-    audit(
+    await createChecklist(aid, a.tenantId, input.kind);
+    await audit(
       a.tenantId,
       a.id,
       "created",
@@ -1030,7 +1103,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     action === "details" &&
     req.method === "PATCH"
   ) {
-    if (!staff(a)) return fail("Application management is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Application management is not permitted.", 403);
     const v = z
       .object({
         institution: optionalString,
@@ -1039,8 +1113,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
         revision: z.number().int().positive(),
       })
       .parse(body);
-    return transaction(() => {
-      const app = db()
+    return await transaction(async () => {
+      const app = await db()
         .prepare("SELECT * FROM applications WHERE id=? AND tenant_id=?")
         .get(rid, a.tenantId);
       if (!app) return fail("Application not found.", 404);
@@ -1054,7 +1128,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           409,
         );
       const status = app.status === "Ready" ? "Review" : String(app.status);
-      db()
+      await db()
         .prepare(
           "UPDATE applications SET institution=?,program=?,intake=?,status=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
         )
@@ -1068,7 +1142,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           v.revision,
         );
       if (status !== app.status)
-        db()
+        await db()
           .prepare(
             "INSERT INTO application_events(id,tenant_id,application_id,from_status,to_status,note,created_by) VALUES(?,?,?,?,?,?,?)",
           )
@@ -1081,7 +1155,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
             "Tracking details changed; readiness review required again.",
             a.id,
           );
-      audit(
+      await audit(
         a.tenantId,
         a.id,
         "details updated",
@@ -1093,7 +1167,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     });
   }
   if (resource === "applications" && rid && req.method === "PATCH") {
-    if (!staff(a)) return fail("Application management is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Application management is not permitted.", 403);
     const input = z
       .object({
         status: z.enum(applicationStages),
@@ -1116,14 +1191,18 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail(
         "Add the actual portal submission reference before recording submission.",
       );
-    const app = db()
+    const app = (await db()
       .prepare("SELECT * FROM applications WHERE id=? AND tenant_id=?")
-      .get(rid, a.tenantId) as
-      { person_id: string; status: string } | undefined;
+      .get(rid, a.tenantId)) as
+      | {
+          person_id: string;
+          status: string;
+        }
+      | undefined;
     if (!app) return fail("Application not found.", 404);
     let evidenceVersion = 0;
     if (input.documentId) {
-      const doc = db()
+      const doc = await db()
         .prepare(
           "SELECT current_version FROM documents WHERE id=? AND tenant_id=? AND person_id=?",
         )
@@ -1132,20 +1211,22 @@ async function handle(req: Request, parts: string[], a: Actor) {
       evidenceVersion = Number(doc.current_version);
     }
     if (input.status === "Ready") {
-      const missing = db()
+      const missing = (await db()
         .prepare(
           "SELECT count(*) AS n FROM requirements WHERE application_id=? AND tenant_id=? AND required=1 AND status NOT IN ('Reviewed','Waived')",
         )
-        .get(rid, a.tenantId) as { n: number };
+        .get(rid, a.tenantId)) as {
+        n: number;
+      };
       if (missing.n > 0)
         return fail(
           "Review or explicitly waive all mandatory working-checklist items before marking Ready.",
         );
     }
-    return transaction(() => {
-      const result = db()
+    return await transaction(async () => {
+      const result = await db()
         .prepare(
-          "UPDATE applications SET status=?,submission_reference=CASE WHEN ?!='' THEN ? ELSE submission_reference END,submitted_at=CASE WHEN ?='Submitted' THEN CURRENT_TIMESTAMP ELSE submitted_at END,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+          "UPDATE applications SET status=?,submission_reference=CASE WHEN ?!='' THEN ? ELSE submission_reference END,submitted_at=CASE WHEN ?='Submitted' THEN to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') ELSE submitted_at END,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
         )
         .run(
           input.status,
@@ -1158,7 +1239,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         );
       if (result.changes !== 1)
         return fail("Application changed elsewhere.", 409);
-      db()
+      await db()
         .prepare(
           "INSERT INTO application_events(id,tenant_id,application_id,from_status,to_status,note,source_url,document_id,document_version,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)",
         )
@@ -1174,7 +1255,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           evidenceVersion,
           a.id,
         );
-      audit(
+      await audit(
         a.tenantId,
         a.id,
         "updated",
@@ -1191,19 +1272,24 @@ async function handle(req: Request, parts: string[], a: Actor) {
     action === "snapshot" &&
     req.method === "POST"
   ) {
-    if (!staff(a)) return fail("Snapshot creation is not permitted.", 403);
-    const app = db()
+    if (!(await staff(a)))
+      return fail("Snapshot creation is not permitted.", 403);
+    const app = (await db()
       .prepare("SELECT * FROM applications WHERE id=? AND tenant_id=?")
-      .get(rid, a.tenantId) as { person_id: string } | undefined;
+      .get(rid, a.tenantId)) as
+      | {
+          person_id: string;
+        }
+      | undefined;
     if (!app) return fail("Application not found.", 404);
     const snapshotId = id();
     const payload = {
       application: app,
-      person: person(a, app.person_id),
-      sections: intake(a, app.person_id).filter(
+      person: await person(a, app.person_id),
+      sections: (await intake(a, app.person_id)).filter(
         (s) => !sections.find((def) => def.key === s.section_key)?.restricted,
       ),
-      documents: documents(a)
+      documents: (await documents(a))
         .filter((d) => d.person_id === app.person_id)
         .map((d) => ({
           id: d.id,
@@ -1213,12 +1299,12 @@ async function handle(req: Request, parts: string[], a: Actor) {
         })),
       note: "Preparation snapshot, not proof of submission or verified legal readiness.",
     };
-    db()
+    await db()
       .prepare(
         "INSERT INTO application_snapshots(id,tenant_id,application_id,payload,created_by) VALUES(?,?,?,?,?)",
       )
       .run(snapshotId, a.tenantId, rid, JSON.stringify(payload), a.id);
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "snapshotted",
@@ -1229,7 +1315,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ id: snapshotId, payload });
   }
   if (resource === "documents" && rid && req.method === "PATCH") {
-    if (!staff(a)) return fail("Document review is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Document review is not permitted.", 403);
     const input = z
       .object({
         status: z.enum([
@@ -1243,9 +1330,13 @@ async function handle(req: Request, parts: string[], a: Actor) {
         sectionKey: optionalString,
       })
       .parse(body);
-    const prior = db()
+    const prior = (await db()
       .prepare("SELECT section_key FROM documents WHERE id=? AND tenant_id=?")
-      .get(rid, a.tenantId) as { section_key: string } | undefined;
+      .get(rid, a.tenantId)) as
+      | {
+          section_key: string;
+        }
+      | undefined;
     if (!prior) return fail("Document not found.", 404);
     if (
       (sections.find((s) => s.key === prior.section_key)?.restricted ||
@@ -1253,8 +1344,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
       a.role !== "owner"
     )
       return fail("Restricted evidence section.", 403);
-    return transaction(() => {
-      const result = db()
+    return await transaction(async () => {
+      const result = await db()
         .prepare(
           "UPDATE documents SET status=?,title=?,category=?,section_key=? WHERE id=? AND tenant_id=?",
         )
@@ -1267,8 +1358,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
           a.tenantId,
         );
       if (!result.changes) return fail("Document not found.", 404);
-      requestDocumentReviewChanged(a, rid, input.status);
-      audit(
+      await requestDocumentReviewChanged(a, rid, input.status);
+      await audit(
         a.tenantId,
         a.id,
         "reviewed",
@@ -1280,7 +1371,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     });
   }
   if (resource === "requests" && !rid && req.method === "POST") {
-    if (!staff(a)) return fail("Creating requests is not permitted.", 403);
+    if (!(await staff(a)))
+      return fail("Creating requests is not permitted.", 403);
     const input = z
       .object({
         personId: string.min(1),
@@ -1290,7 +1382,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         requiresDocument: z.boolean().default(false),
       })
       .parse(body);
-    if (!canSeePerson(a, input.personId))
+    if (!(await canSeePerson(a, input.personId)))
       return fail("Applicant not found.", 404);
     const section = sections.find((s) => s.key === input.sectionKey);
     if (input.sectionKey && !section)
@@ -1298,7 +1390,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
     if (section?.restricted && a.role !== "owner")
       return fail("Restricted information request.", 403);
     const requestId = id();
-    db()
+    await db()
       .prepare(
         "INSERT INTO requests(id,tenant_id,person_id,section_key,title,message,created_by,requires_document) VALUES(?,?,?,?,?,?,?,?)",
       )
@@ -1312,7 +1404,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         a.id,
         Number(input.requiresDocument),
       );
-    audit(
+    await audit(
       a.tenantId,
       a.id,
       "requested",
@@ -1336,53 +1428,53 @@ async function handle(req: Request, parts: string[], a: Actor) {
         })
         .parse(body);
       if (
-        db()
+        await db()
           .prepare("SELECT id FROM users WHERE email=?")
           .get(input.ownerEmail.toLowerCase())
       )
         return fail("Owner email already registered.", 409);
       const tid = id(),
         uid = id();
-      db().exec("BEGIN");
       try {
-        db()
-          .prepare("INSERT INTO tenants(id,name,type) VALUES(?,?,?)")
-          .run(
+        const transactionResult = await withTransaction(async () => {
+          await db()
+            .prepare("INSERT INTO tenants(id,name,type) VALUES(?,?,?)")
+            .run(
+              tid,
+              input.name,
+              input.plan === "Individual" ? "individual" : "institute",
+            );
+          await db()
+            .prepare(
+              "INSERT INTO users(id,name,email,password_hash) VALUES(?,?,?,?)",
+            )
+            .run(
+              uid,
+              input.ownerName,
+              input.ownerEmail.toLowerCase(),
+              hashPassword(input.password),
+            );
+          await db()
+            .prepare(
+              "INSERT INTO memberships(user_id,tenant_id,role) VALUES(?,?,?)",
+            )
+            .run(uid, tid, "owner");
+          await db()
+            .prepare(
+              "INSERT INTO subscriptions(tenant_id,plan,status,seats,case_limit) VALUES(?,?,?,?,?)",
+            )
+            .run(tid, input.plan, "trial", input.seats, input.caseLimit);
+          await audit(
             tid,
-            input.name,
-            input.plan === "Individual" ? "individual" : "institute",
+            a.id,
+            "created",
+            "workspace",
+            tid,
+            "Created a workspace and owner",
           );
-        db()
-          .prepare(
-            "INSERT INTO users(id,name,email,password_hash) VALUES(?,?,?,?)",
-          )
-          .run(
-            uid,
-            input.ownerName,
-            input.ownerEmail.toLowerCase(),
-            hashPassword(input.password),
-          );
-        db()
-          .prepare(
-            "INSERT INTO memberships(user_id,tenant_id,role) VALUES(?,?,?)",
-          )
-          .run(uid, tid, "owner");
-        db()
-          .prepare(
-            "INSERT INTO subscriptions(tenant_id,plan,status,seats,case_limit) VALUES(?,?,?,?,?)",
-          )
-          .run(tid, input.plan, "trial", input.seats, input.caseLimit);
-        audit(
-          tid,
-          a.id,
-          "created",
-          "workspace",
-          tid,
-          "Created a workspace and owner",
-        );
-        db().exec("COMMIT");
+        });
+        if (transactionResult !== undefined) return transactionResult;
       } catch (e) {
-        db().exec("ROLLBACK");
         throw e;
       }
       return NextResponse.json({ id: tid });
@@ -1404,9 +1496,9 @@ async function handle(req: Request, parts: string[], a: Actor) {
           expiresAt: z.string().max(10),
         })
         .parse(body);
-      const result = db()
+      const result = await db()
         .prepare(
-          "UPDATE subscriptions SET plan=?,status=?,seats=?,case_limit=?,storage_mb=?,expires_at=?,updated_at=CURRENT_TIMESTAMP WHERE tenant_id=?",
+          "UPDATE subscriptions SET plan=?,status=?,seats=?,case_limit=?,storage_mb=?,expires_at=?,updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE tenant_id=?",
         )
         .run(
           input.plan,
@@ -1418,7 +1510,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           rid,
         );
       if (!result.changes) return fail("Workspace not found.", 404);
-      audit(
+      await audit(
         rid,
         a.id,
         "updated",
@@ -1433,7 +1525,11 @@ async function handle(req: Request, parts: string[], a: Actor) {
 }
 async function route(
   req: Request,
-  ctx: { params: Promise<{ path: string[] }> },
+  ctx: {
+    params: Promise<{
+      path: string[];
+    }>;
+  },
 ) {
   try {
     const a = await actor();

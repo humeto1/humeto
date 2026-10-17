@@ -20,10 +20,10 @@ async function route(req: Request) {
         .min(0)
         .max(100000)
         .parse(query.get("offset") || 0);
-      return response(readInbox(a, query.get("id") || undefined, offset));
+      return response(await readInbox(a, query.get("id") || undefined, offset));
     }
     ensureOrigin(req);
-    return response(mutateInbox(a, await req.json()));
+    return response(await mutateInbox(a, await req.json()));
   } catch (e) {
     if (e instanceof InboxError)
       return response({ error: e.message }, e.status);

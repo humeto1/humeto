@@ -74,8 +74,8 @@ export type InboxRow = {
   applied_at: string;
   created_at: string;
 };
-function own(a: Actor, messageId: string) {
-  const r = db()
+async function own(a: Actor, messageId: string) {
+  const r = await db()
     .prepare(
       "SELECT * FROM update_inbox WHERE id=? AND tenant_id=? AND user_id=?",
     )
@@ -100,7 +100,7 @@ function editable(r: InboxRow) {
 function parsedAt(at: string) {
   return Date.parse(at.includes("T") ? at : at.replace(" ", "T") + "Z");
 }
-export function inboxAnalysis(a: Actor, r: InboxRow) {
+export async function inboxAnalysis(a: Actor, r: InboxRow) {
   const text = r.subject + "\n" + r.body;
   const emails = [
     ...new Set(
@@ -112,15 +112,15 @@ export function inboxAnalysis(a: Actor, r: InboxRow) {
     ),
   ];
   const candidates = (
-    db()
+    (await db()
       .prepare("SELECT * FROM people WHERE tenant_id=?")
-      .all(a.tenantId) as unknown as Person[]
+      .all(a.tenantId)) as unknown as Person[]
   ).filter((p) => emails.includes(p.email.toLowerCase()));
-  const apps = db()
+  const apps = (await db()
     .prepare(
       "SELECT a.*,p.name AS person_name FROM applications a JOIN people p ON p.id=a.person_id AND p.tenant_id=a.tenant_id WHERE a.tenant_id=? ORDER BY a.created_at DESC",
     )
-    .all(a.tenantId) as unknown as Application[];
+    .all(a.tenantId)) as unknown as Application[];
   const referenceMatches = apps
     .filter((app) =>
       [app.id, app.submission_reference || ""].some(
@@ -178,38 +178,38 @@ export function inboxAnalysis(a: Actor, r: InboxRow) {
     applications: apps,
   };
 }
-export function readInbox(a: Actor, messageId?: string, offset = 0) {
+export async function readInbox(a: Actor, messageId?: string, offset = 0) {
   if (!isStaff(a)) throw new InboxError("Inbox access is not permitted.", 403);
   if (messageId) {
-    const message = own(a, messageId);
-    return { message, analysis: inboxAnalysis(a, message) };
+    const message = await own(a, messageId);
+    return { message, analysis: await inboxAnalysis(a, message) };
   }
   return {
-    messages: db()
+    messages: await db()
       .prepare(
-        "SELECT id,sender,subject,source_at,status,revision,created_at FROM update_inbox WHERE tenant_id=? AND user_id=? ORDER BY created_at DESC,rowid DESC LIMIT 100 OFFSET ?",
+        "SELECT id,sender,subject,source_at,status,revision,created_at FROM update_inbox WHERE tenant_id=? AND user_id=? ORDER BY created_at DESC,_rowid DESC LIMIT 100 OFFSET ?",
       )
       .all(a.tenantId, a.id, offset),
     total: Number(
-      db()
+      (await db()
         .prepare(
           "SELECT count(*) n FROM update_inbox WHERE tenant_id=? AND user_id=?",
         )
-        .get(a.tenantId, a.id)!.n,
+        .get(a.tenantId, a.id))!.n,
     ),
   };
 }
-function validateTarget(
+async function validateTarget(
   a: Actor,
   r: InboxRow,
   applicationId: string,
   applicationRevision: number,
   toStatus: string,
 ) {
-  const app = db()
+  const app = (await db()
     .prepare("SELECT * FROM applications WHERE id=? AND tenant_id=?")
-    .get(applicationId, a.tenantId) as unknown as Application | undefined;
-  if (!app || !canSeePerson(a, app.person_id))
+    .get(applicationId, a.tenantId)) as unknown as Application | undefined;
+  if (!app || !(await canSeePerson(a, app.person_id)))
     throw new InboxError("Application not found.", 404);
   if (app.revision !== applicationRevision)
     throw new InboxError(
@@ -234,9 +234,9 @@ function validateTarget(
     throw new InboxError(
       "Choose an admission or scholarship application for this outcome.",
     );
-  const latest = db()
+  const latest = await db()
     .prepare(
-      "SELECT created_at FROM application_events WHERE tenant_id=? AND application_id=? ORDER BY rowid DESC LIMIT 1",
+      "SELECT created_at FROM application_events WHERE tenant_id=? AND application_id=? ORDER BY _rowid DESC LIMIT 1",
     )
     .get(a.tenantId, app.id);
   if (latest && parsedAt(r.source_at) < parsedAt(String(latest.created_at)))
@@ -246,8 +246,8 @@ function validateTarget(
     );
   return app;
 }
-export function mutateInbox(a: Actor, input: unknown) {
-  if (!isStaff(a) || !canMutate(a))
+export async function mutateInbox(a: Actor, input: unknown) {
+  if (!isStaff(a) || !(await canMutate(a)))
     throw new InboxError(
       "This workspace is read-only or inbox access is not permitted.",
       403,
@@ -278,8 +278,8 @@ export function mutateInbox(a: Actor, input: unknown) {
           v.subject.replace(/\s+/g, " ").toLowerCase(),
           v.body.replace(/\s+/g, " ").toLowerCase(),
         ]);
-    return transaction(() => {
-      const replay = db()
+    return await transaction(async () => {
+      const replay = await db()
         .prepare(
           "SELECT id,payload_hash FROM update_inbox WHERE tenant_id=? AND user_id=? AND client_key=?",
         )
@@ -292,21 +292,21 @@ export function mutateInbox(a: Actor, input: unknown) {
           );
         return { id: replay.id, replayed: true };
       }
-      const duplicate = db()
+      const duplicate = await db()
         .prepare(
           "SELECT id FROM update_inbox WHERE tenant_id=? AND user_id=? AND fingerprint=?",
         )
         .get(a.tenantId, a.id, fingerprint);
       if (duplicate) return { id: duplicate.id, duplicate: true };
-      const recent = db()
+      const recent = (await db()
         .prepare(
-          "SELECT count(*) n FROM update_inbox WHERE tenant_id=? AND user_id=? AND created_at>strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 minute')",
+          "SELECT count(*) n FROM update_inbox WHERE tenant_id=? AND user_id=? AND created_at>to_char(clock_timestamp() AT TIME ZONE 'UTC' - INTERVAL '1 minute', 'YYYY-MM-DD\"T\"HH24:MI:SS.MS\"Z\"')",
         )
-        .get(a.tenantId, a.id)!;
+        .get(a.tenantId, a.id))!;
       if (Number(recent.n) >= 20)
         throw new InboxError("Please wait before adding more messages.", 429);
       const mid = id();
-      db()
+      await db()
         .prepare(
           "INSERT INTO update_inbox(id,tenant_id,user_id,sender,subject,body,source_at,source_message_id,source_url,fingerprint,client_key,payload_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         )
@@ -324,7 +324,7 @@ export function mutateInbox(a: Actor, input: unknown) {
           v.clientKey,
           payloadHash,
         );
-      audit(
+      await audit(
         a.tenantId,
         a.id,
         "captured",
@@ -341,8 +341,8 @@ export function mutateInbox(a: Actor, input: unknown) {
       revision: z.number().int().positive(),
     })
     .parse(input);
-  return transaction(() => {
-    const r = own(a, v.messageId);
+  return await transaction(async () => {
+    const r = await own(a, v.messageId);
     if (
       op === "apply" &&
       r.status === "Applied" &&
@@ -361,17 +361,17 @@ export function mutateInbox(a: Actor, input: unknown) {
           matchNote: z.string().trim().max(2000).default(""),
         })
         .parse(input);
-      const app = validateTarget(
+      const app = await validateTarget(
         a,
         r,
         p.applicationId,
         p.applicationRevision,
         p.status,
       );
-      const person = db()
+      const person = (await db()
         .prepare("SELECT * FROM people WHERE id=? AND tenant_id=?")
-        .get(app.person_id, a.tenantId) as unknown as Person;
-      const analysis = inboxAnalysis(a, r);
+        .get(app.person_id, a.tenantId)) as unknown as Person;
+      const analysis = await inboxAnalysis(a, r);
       if (
         (analysis.candidates.length !== 1 ||
           analysis.candidates[0].id !== person.id) &&
@@ -396,7 +396,7 @@ export function mutateInbox(a: Actor, input: unknown) {
         note: p.note,
         matchNote: p.matchNote,
       };
-      db()
+      await db()
         .prepare(
           "UPDATE update_inbox SET status='Review',review=?,review_expires_at=?,revision=revision+1 WHERE id=? AND tenant_id=? AND user_id=?",
         )
@@ -416,14 +416,14 @@ export function mutateInbox(a: Actor, input: unknown) {
           409,
         );
       const p = r.review as InboxReview;
-      const app = validateTarget(
+      const app = await validateTarget(
         a,
         r,
         p.applicationId,
         p.applicationRevision,
         p.toStatus,
       );
-      const person = db()
+      const person = await db()
         .prepare("SELECT revision,email FROM people WHERE id=? AND tenant_id=?")
         .get(p.personId, a.tenantId);
       if (
@@ -436,12 +436,12 @@ export function mutateInbox(a: Actor, input: unknown) {
           "Applicant identity changed. Prepare a fresh review.",
           409,
         );
-      db()
+      await db()
         .prepare(
           "UPDATE applications SET status=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
         )
         .run(p.toStatus, app.id, a.tenantId, p.applicationRevision);
-      db()
+      await db()
         .prepare(
           "INSERT INTO application_events(id,tenant_id,application_id,from_status,to_status,note,source_url,created_by) VALUES(?,?,?,?,?,?,?,?)",
         )
@@ -455,12 +455,12 @@ export function mutateInbox(a: Actor, input: unknown) {
           r.source_url,
           a.id,
         );
-      db()
+      await db()
         .prepare(
           "UPDATE update_inbox SET status='Applied',applied_at=?,revision=revision+1 WHERE id=? AND tenant_id=? AND user_id=?",
         )
         .run(new Date().toISOString(), r.id, a.tenantId, a.id);
-      audit(
+      await audit(
         a.tenantId,
         a.id,
         "updated",
@@ -475,7 +475,7 @@ export function mutateInbox(a: Actor, input: unknown) {
       const p = z
         .object({ note: z.string().trim().min(2).max(2000) })
         .parse(input);
-      db()
+      await db()
         .prepare(
           "UPDATE update_inbox SET status='Ignored',decision_note=?,review='{}',review_expires_at=0,revision=revision+1 WHERE id=? AND tenant_id=? AND user_id=?",
         )
@@ -486,7 +486,7 @@ export function mutateInbox(a: Actor, input: unknown) {
       if (r.status !== "Ignored")
         throw new InboxError("Only ignored messages can be reopened.", 409);
     } else if (op === "clear") editable(r);
-    db()
+    await db()
       .prepare(
         "UPDATE update_inbox SET status='Pending',review='{}',review_expires_at=0,revision=revision+1 WHERE id=? AND tenant_id=? AND user_id=?",
       )

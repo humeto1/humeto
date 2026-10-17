@@ -10,11 +10,13 @@ export const metadata = {
 export default async function Page({
   params,
 }: {
-  params: Promise<{ token: string }>;
+  params: Promise<{
+    token: string;
+  }>;
 }) {
   const { token } = await params;
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) notFound();
-  const link = db()
+  const link = await db()
     .prepare(
       "SELECT t.name FROM inquiry_links l JOIN tenants t ON t.id=l.tenant_id WHERE l.token_hash=? AND l.revoked=0 AND l.expires_at>?",
     )

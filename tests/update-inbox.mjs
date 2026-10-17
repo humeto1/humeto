@@ -2,7 +2,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { request } from "playwright";
 import { randomUUID } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174",
   contexts = [],
@@ -82,21 +82,19 @@ async function prepare(c, mid, aid, extra = {}) {
   });
 }
 function inspect() {
-  return new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
+  return database();
 }
 after(async () => {
   for (const c of contexts) await c.dispose();
   const d = inspect();
   for (const mid of mids) {
-    d.prepare("DELETE FROM update_inbox WHERE id=?").run(mid);
-    d.prepare(
-      "DELETE FROM audit WHERE entity_type='inbox' AND entity_id=?",
-    ).run(mid);
+    await d.prepare("DELETE FROM update_inbox WHERE id=?").run(mid);
+    await d
+      .prepare("DELETE FROM audit WHERE entity_type='inbox' AND entity_id=?")
+      .run(mid);
   }
   for (const pid of pids) {
-    for (const a of d
+    for (const a of await d
       .prepare("SELECT id FROM applications WHERE person_id=?")
       .all(pid)) {
       for (const table of [
@@ -104,23 +102,25 @@ after(async () => {
         "application_events",
         "application_snapshots",
       ]) {
-        const exists = d
+        const exists = await d
           .prepare(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+            "SELECT table_name AS name FROM information_schema.tables WHERE table_schema='public' AND table_name=?",
           )
           .get(table);
         if (exists)
-          d.prepare(`DELETE FROM ${table} WHERE application_id=?`).run(a.id);
+          await d
+            .prepare(`DELETE FROM ${table} WHERE application_id=?`)
+            .run(a.id);
       }
-      d.prepare("DELETE FROM audit WHERE entity_id=?").run(a.id);
+      await d.prepare("DELETE FROM audit WHERE entity_id=?").run(a.id);
     }
-    d.prepare("DELETE FROM applications WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM case_finance WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM intake WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM people WHERE id=?").run(pid);
-    d.prepare("DELETE FROM audit WHERE entity_id=?").run(pid);
+    await d.prepare("DELETE FROM applications WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM case_finance WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM intake WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM people WHERE id=?").run(pid);
+    await d.prepare("DELETE FROM audit WHERE entity_id=?").run(pid);
   }
-  d.close();
+  await d.close();
 });
 test("email capture is private, idempotent, and matches exact registered email and case reference", async () => {
   const owner = await ctx("ayesha"),
@@ -207,7 +207,8 @@ test("preview changes no case; apply changes one application, preserves siblings
   await json(await prepare(c, m.id, a.id));
   const d = inspect();
   assert.equal(
-    d.prepare("SELECT status FROM applications WHERE id=?").get(a.id).status,
+    (await d.prepare("SELECT status FROM applications WHERE id=?").get(a.id))
+      .status,
     "Draft",
   );
   assert.equal((await detail(c, m.id)).message.status, "Review");
@@ -218,27 +219,31 @@ test("preview changes no case; apply changes one application, preserves siblings
     true,
   );
   assert.equal(
-    d.prepare("SELECT status FROM applications WHERE id=?").get(a.id).status,
+    (await d.prepare("SELECT status FROM applications WHERE id=?").get(a.id))
+      .status,
     "Conditional offer",
   );
   assert.equal(
-    d.prepare("SELECT status FROM applications WHERE id=?").get(sibling.id)
-      .status,
+    (
+      await d
+        .prepare("SELECT status FROM applications WHERE id=?")
+        .get(sibling.id)
+    ).status,
     "Draft",
   );
   assert.equal(
-    d.prepare("SELECT journey_stage FROM people WHERE id=?").get(p.id)
+    (await d.prepare("SELECT journey_stage FROM people WHERE id=?").get(p.id))
       .journey_stage,
     "Planning",
   );
-  const events = d
+  const events = await d
     .prepare("SELECT * FROM application_events WHERE application_id=?")
     .all(a.id);
   assert.equal(events.length, 1);
   assert.match(events[0].note, new RegExp(m.id));
   assert.equal(events[0].created_by, "ayesha");
   assert.equal((await detail(c, m.id)).message.review.email, p.email);
-  d.close();
+  await d.close();
 });
 test("ambiguous forwarded identity needs a written match check and inbox cannot bypass submission gates", async () => {
   const c = await ctx("ayesha"),
@@ -297,7 +302,9 @@ test("stale application/identity, expired reviews, terminal outcomes and older m
     m = await capture(c, p.email);
   await json(await prepare(c, m.id, a.id));
   const d = inspect();
-  d.prepare("UPDATE applications SET revision=revision+1 WHERE id=?").run(a.id);
+  await d
+    .prepare("UPDATE applications SET revision=revision+1 WHERE id=?")
+    .run(a.id);
   assert.equal(
     (
       await c.post(endpoint, {
@@ -314,7 +321,7 @@ test("stale application/identity, expired reviews, terminal outcomes and older m
   await json(
     await prepare(c, m.id, a.id, { revision: 3, applicationRevision: 2 }),
   );
-  d.prepare("UPDATE people SET revision=revision+1 WHERE id=?").run(p.id);
+  await d.prepare("UPDATE people SET revision=revision+1 WHERE id=?").run(p.id);
   assert.equal(
     (
       await c.post(endpoint, {
@@ -323,7 +330,9 @@ test("stale application/identity, expired reviews, terminal outcomes and older m
     ).status(),
     409,
   );
-  d.prepare("UPDATE update_inbox SET review_expires_at=0 WHERE id=?").run(m.id);
+  await d
+    .prepare("UPDATE update_inbox SET review_expires_at=0 WHERE id=?")
+    .run(m.id);
   assert.equal(
     (
       await c.post(endpoint, {
@@ -333,23 +342,30 @@ test("stale application/identity, expired reviews, terminal outcomes and older m
     409,
   );
   const final = await app(c, p.id);
-  d.prepare("UPDATE applications SET status='Failed' WHERE id=?").run(final.id);
+  await d
+    .prepare("UPDATE applications SET status='Failed' WHERE id=?")
+    .run(final.id);
   const f = await capture(c, p.email);
   assert.equal((await prepare(c, f.id, final.id)).status(), 409);
   const newer = await app(c, p.id);
-  d.prepare(
-    "INSERT INTO application_events(id,tenant_id,application_id,from_status,to_status,note,created_by) VALUES(?,'northstar',?,'Draft','Review','A newer update','ayesha')",
-  ).run(randomUUID(), newer.id);
+  await d
+    .prepare(
+      "INSERT INTO application_events(id,tenant_id,application_id,from_status,to_status,note,created_by) VALUES(?,'northstar',?,'Draft','Review','A newer update','ayesha')",
+    )
+    .run(randomUUID(), newer.id);
   const old = await capture(c, p.email, {
     sourceAt: "2025-01-01T10:00:00.000Z",
   });
   assert.equal((await prepare(c, old.id, newer.id)).status(), 409);
   assert.equal(
-    d.prepare("SELECT status FROM applications WHERE id=?").get(newer.id)
-      .status,
+    (
+      await d
+        .prepare("SELECT status FROM applications WHERE id=?")
+        .get(newer.id)
+    ).status,
     "Draft",
   );
-  d.close();
+  await d.close();
 });
 test("ignore/reopen retains evidence and negated/uncertain subjects produce no outcome hint", async () => {
   const c = await ctx("ayesha"),

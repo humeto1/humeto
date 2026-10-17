@@ -2,7 +2,7 @@ import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { request } from "playwright";
 import { randomUUID } from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
+import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174",
   contexts = [],
@@ -67,32 +67,32 @@ async function boot(c) {
 }
 after(async () => {
   for (const c of contexts) await c.dispose();
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
+  const d = database();
   for (const mid of messageIds)
-    d.prepare("DELETE FROM crm_messages WHERE id=?").run(mid);
+    await d.prepare("DELETE FROM crm_messages WHERE id=?").run(mid);
   for (const aid of actionIds)
-    d.prepare("DELETE FROM crm_actions WHERE id=?").run(aid);
+    await d.prepare("DELETE FROM crm_actions WHERE id=?").run(aid);
   for (const pid of personIds) {
-    d.prepare("DELETE FROM email_drafts WHERE person_id=?").run(pid);
-    for (const a of d
+    await d.prepare("DELETE FROM email_drafts WHERE person_id=?").run(pid);
+    for (const a of await d
       .prepare("SELECT id FROM applications WHERE person_id=?")
       .all(pid)) {
-      d.prepare("DELETE FROM requirements WHERE application_id=?").run(a.id);
-      d.prepare("DELETE FROM application_events WHERE application_id=?").run(
-        a.id,
-      );
-      d.prepare("DELETE FROM audit WHERE entity_id=?").run(a.id);
+      await d
+        .prepare("DELETE FROM requirements WHERE application_id=?")
+        .run(a.id);
+      await d
+        .prepare("DELETE FROM application_events WHERE application_id=?")
+        .run(a.id);
+      await d.prepare("DELETE FROM audit WHERE entity_id=?").run(a.id);
     }
-    d.prepare("DELETE FROM applications WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM payments WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM case_finance WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM requests WHERE person_id=?").run(pid);
-    d.prepare("DELETE FROM people WHERE id=?").run(pid);
-    d.prepare("DELETE FROM audit WHERE entity_id=?").run(pid);
+    await d.prepare("DELETE FROM applications WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM payments WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM case_finance WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM requests WHERE person_id=?").run(pid);
+    await d.prepare("DELETE FROM people WHERE id=?").run(pid);
+    await d.prepare("DELETE FROM audit WHERE entity_id=?").run(pid);
   }
-  d.close();
+  await d.close();
 });
 test("CRM commands propose before applying and create a replay-safe external tracking case", async () => {
   const c = await ctx("ayesha"),
@@ -139,7 +139,6 @@ test("CRM commands propose before applying and create a replay-safe external tra
     (await boot(c)).applications.find((x) => x.id === a.targetId).institution,
     "QA Example University",
   );
-
   const info = await (
     await c.get("/api/workspace/applications/" + a.targetId)
   ).json();
@@ -198,11 +197,9 @@ test("CRM reviews enforce ownership, stale revisions, cancellation and expiry", 
   );
   s = await message(c, `Close applicant ${p.email}`);
   a = action(s);
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  d.prepare("UPDATE crm_actions SET expires_at=0 WHERE id=?").run(a.id);
-  d.close();
+  const d = database();
+  await d.prepare("UPDATE crm_actions SET expires_at=0 WHERE id=?").run(a.id);
+  await d.close();
   assert.equal((await decide(c, a.id)).status(), 409);
   s = await message(c, `Close applicant ${p.email}`);
   a = action(s);
@@ -247,22 +244,20 @@ test("CRM email reminders remain local drafts and refuse stale fee data", async 
     (await state(c)).drafts.filter((d) => d.person_id === p.id).length,
     1,
   );
-  const d = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  d.prepare(
-    "INSERT INTO requests(id,tenant_id,person_id,section_key,title,message,created_by) VALUES(?,'northstar',?,'passports','Share your passport','Please upload your passport','ayesha')",
-  ).run(randomUUID(), p.id);
-  d.close();
+  const d = database();
+  await d
+    .prepare(
+      "INSERT INTO requests(id,tenant_id,person_id,section_key,title,message,created_by) VALUES(?,'northstar',?,'passports','Share your passport','Please upload your passport','ayesha')",
+    )
+    .run(randomUUID(), p.id);
+  await d.close();
   s = await message(c, `Draft document reminder for ${p.email}`);
   a = action(s);
   assert.match(a.payload.body, /Share your passport/);
   assert.equal((await decide(c, a.id)).status(), 200);
   // A confirmed future date or a received file must suppress repeat upload drafts.
-  const fixture = new DatabaseSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "humeto.sqlite"),
-  );
-  fixture
+  const fixture = database();
+  await fixture
     .prepare(
       "UPDATE requests SET status='Waiting for document',follow_up_at='2099-01-01T04:00:00.000Z' WHERE person_id=?",
     )
@@ -272,19 +267,19 @@ test("CRM email reminders remain local drafts and refuse stale fee data", async 
     s.messages.at(-1).content,
     /No information\/document requests need an upload reminder/,
   );
-  fixture
+  await fixture
     .prepare(
       "UPDATE requests SET status='File received',follow_up_at='' WHERE person_id=?",
     )
     .run(p.id);
   s = await message(c, `Draft document reminder for ${p.email}`);
   assert.match(s.messages.at(-1).content, /files waiting for review/);
-  fixture
+  await fixture
     .prepare("UPDATE requests SET status='Changes requested' WHERE person_id=?")
     .run(p.id);
   s = await message(c, `Draft document reminder for ${p.email}`);
   assert.match(action(s).payload.body, /Share your passport/);
-  fixture.close();
+  await fixture.close();
 });
 test("CRM access rejects students/platform/cross-origin and does not expose another tenant", async () => {
   const owner = await ctx("ayesha"),

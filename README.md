@@ -6,6 +6,7 @@ A local Next.js application combining an education/immigration CRM, Tasks to-do 
 
 - [App guide](docs/APP_GUIDE.md): login, roles, screens, workflows and current limits.
 - [Tech stack](docs/TECH_STACK.md): installed technologies, architecture, commands and planned changes.
+- [PostgreSQL operation](docs/POSTGRESQL.md): database setup, migration, backup/restore and verification.
 - Local product plan: [planning/APP_PLAN.md](planning/APP_PLAN.md).
 - Local pending checklist: [planning/PENDING_FEATURES.md](planning/PENDING_FEATURES.md).
 - Local requirement audit and delivery history: `planning/REQUIREMENTS_COVERAGE_AUDIT.md` and `planning/BUILD_DELIVERABLES.md`.
@@ -18,6 +19,9 @@ Requires Node.js 22.13+; the current development machine uses Node 25.9.0. Insta
 
 | Command                          | Purpose                                                                              |
 | -------------------------------- | ------------------------------------------------------------------------------------ |
+| `npm run db:start`               | Start the private local PostgreSQL server                                            |
+| `npm run db:migrate`             | Apply versioned database migrations                                                  |
+| `npm run db:backup`              | Back up PostgreSQL and uploaded files                                                |
 | `npm run dev`                    | Webpack development preview at http://localhost:4174                                 |
 | `npm run build` then `npm start` | Compiled release at http://localhost:4173                                            |
 | `npm run typecheck`              | TypeScript checks                                                                    |
@@ -25,6 +29,8 @@ Requires Node.js 22.13+; the current development machine uses Node 25.9.0. Insta
 | `npm test`                       | Test against an existing development server; may write test fixtures to its database |
 | `npm run package:extension`      | Repackage the local Chrome extension                                                 |
 | `npm run seed:assets`            | Create labelled fictional document images after initializing the demo database       |
+
+PostgreSQL must be running and `DATABASE_URL` configured before authenticated app use. On this machine local credentials are already saved in ignored `.env.local`. See the PostgreSQL guide for a fresh checkout.
 
 Install the matching test browser with `npx playwright install chromium` if needed. Both servers bind to loopback `127.0.0.1`. They do not publish the app to the internet.
 
@@ -36,7 +42,7 @@ Use `.env.example` for supported configuration names. Current development enable
 
 ## Current stack
 
-Next.js 16.4.2 App Router, React 19.3.1 and TypeScript 5.9.3; Node.js API routes; SQLite WAL through `node:sqlite`; private local file storage; custom CSS/Lucide icons; Zod validation; QRCode; Chrome Manifest V3 extension; Node tests and Playwright. Current AI behavior is **local command testing**. A server-side OpenAI task-intent adapter exists but is inactive and not live-tested. See [full stack details](docs/TECH_STACK.md).
+Next.js 16.4.2 App Router, React 19.3.1 and TypeScript 5.9.3; Node.js API routes; PostgreSQL 18.6 through pooled asynchronous `pg` queries; private local file storage; custom CSS/Lucide icons; Zod validation; QRCode; Chrome Manifest V3 extension; Node tests and Playwright. Current AI behavior is **local command testing**. A server-side OpenAI task-intent adapter exists but is inactive and not live-tested. See [full stack details](docs/TECH_STACK.md).
 
 ## Working local features
 
@@ -61,6 +67,6 @@ Uploads do not extract or authenticate documents today. Stored drafts are not se
 
 ## Persistence and verification
 
-`.data/humeto.sqlite` stores records; `.data/uploads/` stores private original binaries. Both are excluded from Git. Rebuilding/restarting preserves them. Back up the database and uploads together before relying on records; production restore/security/retention procedures still need validation. The current pilot should use fictional data.
+PostgreSQL stores live records; `.data/uploads/` stores private original binaries. The local cluster and backups are inside ignored `.data/`, and credentials are in ignored `.env.local`. The retained SQLite file is a historical rollback source, not live storage. Rebuilding/restarting preserves data. Use `npm run db:backup` with app writes paused to back up records and uploads; production restore/security/retention procedures still need validation. The current pilot should use fictional data.
 
-Last app release (`8834cdc`): optimized build, **55 passing automated checks** and documented browser checks. `npm run test:release` uses a separate loopback server/disposable database and a temporary extension fixture port, preserving distributed extension permissions. Documentation-only edits do not imply a new release test run.
+PostgreSQL migration (18 October 2026): 41 tables / 907 source rows and five original files reconciled; PostgreSQL dump/restore verified across 42 tables including migration history. The optimized build passes **61 automated checks**. `npm run test:release` uses a separate loopback server/disposable PostgreSQL database and a temporary extension fixture port, preserving distributed extension permissions.
