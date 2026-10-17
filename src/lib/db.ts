@@ -1,3 +1,4 @@
+import { initializeUpdateInbox, seedUpdateInbox } from "./update-inbox-schema";
 import {
   initializeRequestWorkflow,
   seedRequestWorkflow,
@@ -79,12 +80,14 @@ CREATE TABLE IF NOT EXISTS payments(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,
   initializeTaskProgress(d);
   initializeCrmAgent(d);
   initializeRequestWorkflow(d);
+  initializeUpdateInbox(d);
   globalDb.humetoDb = d;
   if (process.env.HUMETO_LOCAL_DEMO === "true") {
     seed(d);
     seedCRM(d);
     seedTaskProgress(d);
     seedRequestWorkflow(d);
+    seedUpdateInbox(d);
   }
   initializeChecklists(d);
   return d;

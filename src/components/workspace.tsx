@@ -1,7 +1,9 @@
 "use client";
+import UpdateInbox from "./update-inbox";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Mail,
   LayoutDashboard,
   Users,
   GraduationCap,
@@ -145,6 +147,7 @@ const navItems = [
   ["leads", "Leads", AtSign],
   ["students", "Applicants", Users],
   ["applications", "Applications", GraduationCap],
+  ["updates", "Update inbox", Mail],
   ["documents", "Documents", FolderOpen],
   ["assistant", "Humeto assistant", Sparkles],
   ["requests", "Requests", MessageSquare],
@@ -867,6 +870,7 @@ export default function Workspace({
                     isStudent &&
                     [
                       "activity",
+                      "updates",
                       "tasks",
                       "assistant",
                       "leads",
@@ -960,13 +964,15 @@ export default function Workspace({
                 ? "Projects & goals"
                 : view === "crm-ai"
                   ? "CRM AI"
-                  : view === "tasks"
-                    ? "Tasks to-do"
-                    : view === "profile"
-                      ? p?.name
-                      : view === "platform"
-                        ? "Institutes & subscriptions"
-                        : view[0].toUpperCase() + view.slice(1)}
+                  : view === "updates"
+                    ? "Update inbox"
+                    : view === "tasks"
+                      ? "Tasks to-do"
+                      : view === "profile"
+                        ? p?.name
+                        : view === "platform"
+                          ? "Institutes & subscriptions"
+                          : view[0].toUpperCase() + view.slice(1)}
             </strong>
           </div>
           <div className="topbar-right">
@@ -1926,6 +1932,14 @@ export default function Workspace({
                 search={search}
               />
             </>
+          )}
+          {view === "updates" && staff && (
+            <UpdateInbox
+              search={search}
+              people={data.people}
+              writable={writable}
+              refresh={refresh}
+            />
           )}
           {view === "activity" && (
             <>

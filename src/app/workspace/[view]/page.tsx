@@ -19,6 +19,7 @@ export default async function Page({
       "progress",
       "assistant",
       "crm-ai",
+      "updates",
       "requests",
       "activity",
       "settings",
@@ -29,7 +30,7 @@ export default async function Page({
   const a = await requireActor();
   if (view === "platform" && a.role !== "platform_admin") notFound();
   if (
-    ["assistant", "leads", "progress", "crm-ai"].includes(view) &&
+    ["assistant", "leads", "progress", "crm-ai", "updates"].includes(view) &&
     !["owner", "consultant"].includes(a.role)
   )
     notFound();
