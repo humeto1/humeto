@@ -1825,6 +1825,7 @@ export default function Workspace({
               )}
               {staff && (
                 <TaskFocus
+                  memberKey={`${actor.tenantId}:${actor.id}`}
                   tasks={data.tasks}
                   writable={writable}
                   onChange={refresh}

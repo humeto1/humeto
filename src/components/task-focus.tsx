@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Play,
   Pause,
@@ -10,8 +10,13 @@ import {
   Flag,
   Square,
   RotateCcw,
+  Send,
+  Bell,
+  MessageCircle,
+  Target,
 } from "lucide-react";
 import type { Task } from "@/lib/types";
+import { focusGuidance, type FocusProposal } from "@/lib/focus-coach";
 import styles from "./task-focus.module.css";
 type Session = {
   id: string;
@@ -27,11 +32,32 @@ type Session = {
   ended_at: string | null;
   project_title: string;
   note: string;
+  progress: number | null;
+  next_step: string;
+  blocker: string;
+};
+type Event = {
+  id: string;
+  session_id: string;
+  title: string;
+  event: string;
+  note: string;
+  assistant_reply: string;
+  created_at: string;
+  progress: number | null;
+  next_step: string;
 };
 type Snapshot = {
   active: Session | null;
   history: Session[];
+  events: Event[];
   serverNow: string;
+};
+type Preview = {
+  reply: string;
+  proposal: FocusProposal | null;
+  sessionId: string | null;
+  revision: number | null;
 };
 const clock = (seconds: number) => {
   const s = Math.max(0, Math.floor(seconds));
@@ -40,29 +66,50 @@ const clock = (seconds: number) => {
     .padStart(
       2,
       "0",
-    )}:${Math.floor(s / 60) % 60 < 10 ? "0" : ""}${Math.floor(s / 60) % 60}:${(s % 60).toString().padStart(2, "0")}`;
+    )}:${(Math.floor(s / 60) % 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
 };
+function reason(t: Task) {
+  return (
+    [
+      t.important ? "Important" : "",
+      t.urgent ? "Urgent" : "",
+      t.due_date ? `Due ${t.due_date}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || "A little progress counts"
+  );
+}
 export default function TaskFocus({
   tasks,
   writable,
   onChange,
   onFocusChange,
+  memberKey,
 }: {
   tasks: Task[];
   writable: boolean;
   onChange: () => void;
   onFocusChange: (focused: boolean) => void;
+  memberKey: string;
 }) {
   const [data, setData] = useState<Snapshot | null>(null),
     [received, setReceived] = useState(0),
     [now, setNow] = useState(Date.now()),
     [selected, setSelected] = useState(""),
     [minutes, setMinutes] = useState(25),
-    [note, setNote] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [showAll, setShowAll] = useState(false),
-    [history, setHistory] = useState(false);
+    [history, setHistory] = useState(false),
+    [message, setMessage] = useState(""),
+    [preview, setPreview] = useState<Preview | null>(null),
+    [progress, setProgress] = useState(""),
+    [nextStep, setNextStep] = useState(""),
+    [switching, setSwitching] = useState(false),
+    [alerts, setAlerts] = useState(false),
+    [alertStatus, setAlertStatus] = useState(""),
+    [canNotify, setCanNotify] = useState(false);
+  const sentAlert = useRef("");
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/workspace/focus", { cache: "no-store" });
@@ -70,7 +117,6 @@ export default function TaskFocus({
       if (!r.ok) throw Error(j.error || "Could not load focus.");
       setData(j);
       setReceived(Date.now());
-      setError("");
     } catch (e) {
       setError((e as Error).message);
     }
@@ -98,13 +144,33 @@ export default function TaskFocus({
     onFocusChange(!!active && !showAll);
     return () => onFocusChange(false);
   }, [active?.id, showAll, onFocusChange]);
+  useEffect(() => {
+    setProgress(active?.progress == null ? "" : String(active.progress));
+    setNextStep(active?.next_step || "");
+    setMinutes(active?.target_minutes || 25);
+    setPreview(null);
+    setMessage("");
+    setSwitching(false);
+    setShowAll(false);
+  }, [active?.id]);
+  useEffect(() => {
+    setCanNotify("Notification" in window);
+    try {
+      setAlerts(
+        localStorage.getItem("humeto-focus-alerts:" + memberKey) === "on" &&
+          "Notification" in window &&
+          Notification.permission === "granted",
+      );
+    } catch {}
+  }, [memberKey]);
   const candidates = [...tasks]
     .filter((t) => t.stage !== "Done" && t.id !== active?.task_id)
     .sort(
       (a, b) =>
         Number(b.important) - Number(a.important) ||
         Number(b.urgent) - Number(a.urgent) ||
-        (a.due_date || "9999").localeCompare(b.due_date || "9999"),
+        (a.due_date || "9999").localeCompare(b.due_date || "9999") ||
+        a.title.localeCompare(b.title),
     );
   const chosen = candidates.find((t) => t.id === selected) || candidates[0];
   const elapsed =
@@ -118,7 +184,57 @@ export default function TaskFocus({
     active.state === "running" &&
     !!active.check_in_at &&
     serverTime >= Date.parse(active.check_in_at);
-  async function act(action: string) {
+  const validMinutes =
+    Number.isInteger(minutes) && minutes >= 1 && minutes <= 720;
+  useEffect(() => {
+    if (
+      !checkDue ||
+      !active ||
+      !alerts ||
+      !canNotify ||
+      Notification.permission !== "granted"
+    )
+      return;
+    const key = `${active.id}:${active.check_in_at}`,
+      store = "humeto-focus-last-alert:" + memberKey;
+    if (sentAlert.current === key) return;
+    sentAlert.current = key;
+    try {
+      if (localStorage.getItem(store) === key) return;
+      localStorage.setItem(store, key);
+      new Notification("Humeto · Time for a check-in", {
+        body: "How is your task going? Come back to finish, continue or change your plan.",
+        tag: "humeto-focus-" + memberKey,
+      });
+    } catch {
+      setAlertStatus(
+        "Browser alerts are unavailable. Your check-in is still shown here.",
+      );
+    }
+  }, [checkDue, active?.id, active?.check_in_at, alerts, canNotify, memberKey]);
+  async function toggleAlerts() {
+    if (alerts) {
+      setAlerts(false);
+      try {
+        localStorage.setItem("humeto-focus-alerts:" + memberKey, "off");
+      } catch {}
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        setAlerts(true);
+        localStorage.setItem("humeto-focus-alerts:" + memberKey, "on");
+        setAlertStatus("Alerts enabled while Humeto remains open.");
+      } else
+        setAlertStatus(
+          "Browser alerts were not enabled. Check-ins still appear in this app.",
+        );
+    } catch {
+      setAlertStatus("Your browser does not support these alerts.");
+    }
+  }
+  async function act(action: string, extra: Record<string, unknown> = {}) {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -130,40 +246,138 @@ export default function TaskFocus({
           action,
           taskId: chosen?.id,
           taskRevision: active ? active.task_revision : chosen?.revision,
+          nextTaskRevision: chosen?.revision,
           sessionId: active?.id,
           revision: active?.revision,
           minutes,
-          note,
+          ...extra,
         }),
       });
       const j = await r.json();
       if (!r.ok) throw Error(j.error || "Could not update focus.");
-      if (action === "start") setShowAll(false);
-      setNote("");
+      setPreview(null);
+      setMessage("");
+      if (["start", "switch"].includes(action)) setShowAll(false);
       await load();
       onChange();
     } catch (e) {
-      setError((e as Error).message);
       await load();
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
+  async function interpret(text = message) {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const r = await fetch("/api/workspace/focus/interpret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw Error(j.error || "Could not prepare that update.");
+      setMessage(text);
+      setPreview(j);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const events = (data?.events || [])
+    .filter((e) => e.session_id === active?.id && (e.note || e.assistant_reply))
+    .slice(0, 8)
+    .reverse();
+  const lastFinished = data?.history[0];
+  const progressValid =
+    progress === "" ||
+    (Number.isInteger(Number(progress)) &&
+      Number(progress) >= 0 &&
+      Number(progress) <= 100);
+  const stalePreview =
+    !!preview &&
+    (preview.sessionId !== active?.id || preview.revision !== active?.revision);
+  const taskPicker = (switchTask = false) => (
+    <div className={styles.pick}>
+      <label>
+        {switchTask ? "What can you move forward instead?" : "Your first task"}
+        <select
+          aria-label={switchTask ? "Switch focus task" : "Focus task"}
+          value={chosen?.id || ""}
+          onChange={(e) => setSelected(e.target.value)}
+        >
+          {candidates.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.important ? "★ " : ""}
+              {t.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        {switchTask ? "Time for this task" : "Expected time"}
+        <input
+          aria-label={
+            switchTask ? "Switch focus minutes" : "Expected focus minutes"
+          }
+          type="number"
+          min="1"
+          max="720"
+          value={minutes}
+          onChange={(e) => setMinutes(Number(e.target.value))}
+        />
+        <small>minutes · you can change this later</small>
+      </label>
+      <button
+        className={styles.primary}
+        type="button"
+        disabled={!data || !writable || busy || !validMinutes || !chosen}
+        onClick={() => act(switchTask ? "switch" : "start")}
+      >
+        <Play size={15} />
+        {switchTask ? "Save & switch task" : "Let’s begin"}
+      </button>
+    </div>
+  );
   return (
-    <section className={styles.shell} aria-label="Task focus companion">
+    <section
+      className={`${styles.shell} ${checkDue ? styles.checkDue : ""}`}
+      aria-label="Task focus companion"
+    >
       <div className={styles.top}>
         <span>
-          <Sparkles size={16} /> Task AI · Focus companion
+          <Sparkles size={16} /> Task AI · Focus companion{" "}
+          <small className={styles.mode}>Local command mode</small>
         </span>
-        <button
-          type="button"
-          onClick={() => setHistory(!history)}
-          className={styles.textButton}
-        >
-          {history ? "Hide history" : "Time history"}
-        </button>
+        <div className={styles.topActions}>
+          {canNotify && (
+            <button
+              type="button"
+              onClick={() => void toggleAlerts()}
+              aria-pressed={alerts}
+              className={styles.textButton}
+            >
+              <Bell size={14} />
+              {alerts ? "Check-in alerts on" : "Enable check-in alerts"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setHistory(!history)}
+            className={styles.textButton}
+          >
+            {history ? "Hide history" : "Time history"}
+          </button>
+        </div>
       </div>
+      {alertStatus && (
+        <p className={styles.hint} role="status">
+          {alertStatus}
+        </p>
+      )}
       {!data && !error ? (
         <p role="status">Preparing your focus space…</p>
       ) : active ? (
@@ -174,7 +388,7 @@ export default function TaskFocus({
               <h2>{active.title}</h2>
               <p className={styles.message} role="status">
                 {active.state === "blocked"
-                  ? "What’s getting in the way? Leave a note, then take a smaller step or switch to something you can move forward."
+                  ? focusGuidance(active.blocker, active.next_step)
                   : active.state === "paused"
                     ? "Take your time. Your progress is saved. Resume when you’re ready."
                     : checkDue
@@ -182,7 +396,35 @@ export default function TaskFocus({
                       : "You’ve made space for this. Everything else can wait until your next check-in."}
               </p>
               {active.project_title && (
-                <span className={styles.pill}>{active.project_title}</span>
+                <span className={styles.pill}>
+                  <Target size={12} /> {active.project_title}
+                </span>
+              )}
+              {active.progress !== null && (
+                <div className={styles.progressTrack}>
+                  <div
+                    role="progressbar"
+                    aria-label="Reported task progress"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={active.progress}
+                  >
+                    <span style={{ width: `${active.progress}%` }} />
+                  </div>
+                  <small>
+                    {active.progress}% reported ·{" "}
+                    {active.progress === 100
+                      ? "mark Finished when you’re ready"
+                      : "the task stays open"}
+                  </small>
+                </div>
+              )}
+              {active.next_step && (
+                <p className={styles.savedNote}>
+                  <strong>Next small step</strong>
+                  <br />
+                  {active.next_step}
+                </p>
               )}
             </div>
             <div className={styles.timer}>
@@ -195,27 +437,28 @@ export default function TaskFocus({
                     ? "Blocked · timer stopped"
                     : "Paused · timer stopped"}
               </span>
-              <small>
-                Initial estimate {active.target_minutes} min
-                {active.state === "running" && active.check_in_at
-                  ? ` · Check-in ${checkDue ? "due now" : `in ${Math.max(1, Math.ceil((Date.parse(active.check_in_at) - serverTime) / 60000))} min`}`
-                  : ""}
-              </small>
+              <small>Initial estimate {active.target_minutes} min</small>
+              {active.state === "running" && active.check_in_at && (
+                <span className={checkDue ? styles.dueLabel : ""}>
+                  {checkDue
+                    ? "Check-in ready"
+                    : `Check-in in ${Math.max(1, Math.ceil((Date.parse(active.check_in_at) - serverTime) / 60000))} min`}
+                </span>
+              )}
             </div>
           </div>
-          {active.note && (
-            <p className={styles.savedNote}>Last note: {active.note}</p>
+          {checkDue && (
+            <div className={styles.checkIn} role="status">
+              <Sparkles size={20} />
+              <div>
+                <strong>How is it going?</strong>
+                <p>
+                  You don’t have to finish on the estimate. Tell me what changed
+                  and choose your next step.
+                </p>
+              </div>
+            </div>
           )}
-          <label className={styles.note}>
-            What’s happening?{" "}
-            <input
-              placeholder="Waiting for a reply, making progress, need help…"
-              value={note}
-              maxLength={2000}
-              onChange={(e) => setNote(e.target.value)}
-              disabled={!writable || busy}
-            />
-          </label>
           <div className={styles.controls}>
             <label>
               Next check-in{" "}
@@ -231,7 +474,7 @@ export default function TaskFocus({
             </label>
             <button
               type="button"
-              disabled={!writable || busy}
+              disabled={!writable || busy || !validMinutes}
               onClick={() =>
                 act(active.state === "running" ? "extend" : "resume")
               }
@@ -261,10 +504,10 @@ export default function TaskFocus({
             <button
               type="button"
               disabled={!writable || busy}
-              onClick={() => act("blocked")}
+              onClick={() => setSwitching(!switching)}
             >
-              <Flag size={14} />
-              I’m blocked
+              <ArrowRight size={14} />
+              Choose another task
             </button>
             <button
               type="button"
@@ -275,6 +518,252 @@ export default function TaskFocus({
               Stop & choose another
             </button>
           </div>
+          <div className={styles.interactiveGrid}>
+            <div className={styles.conversation}>
+              <h3>
+                <MessageCircle size={16} /> Talk through your task
+              </h3>
+              <p className={styles.hint}>
+                Tell me how it’s going. I’ll propose a small update for you to
+                review.
+              </p>
+              <div
+                className={styles.transcript}
+                aria-label="Saved focus conversation"
+              >
+                {events.length ? (
+                  events.map((e) => (
+                    <div key={e.id}>
+                      {e.note && (
+                        <div className={styles.userBubble}>
+                          <span>
+                            You ·{" "}
+                            {new Date(e.created_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          <p>{e.note}</p>
+                        </div>
+                      )}
+                      {e.assistant_reply && (
+                        <div className={styles.coachBubble}>
+                          <span>
+                            Humeto ·{" "}
+                            {e.event === "started"
+                              ? "focus started"
+                              : e.event === "progress"
+                                ? "progress saved"
+                                : e.event}
+                          </span>
+                          <p>{e.assistant_reply}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className={styles.coachBubble}>
+                    <span>Humeto</span>
+                    <p>
+                      What would help you move this task forward? You can save a
+                      note, report progress, or ask for a different pace.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className={styles.quickReplies}>
+                {[
+                  "50% done, need 15 more minutes",
+                  "I’m blocked waiting for a reply",
+                  "What should I do next?",
+                ].map((text) => (
+                  <button
+                    type="button"
+                    key={text}
+                    disabled={busy || !writable}
+                    onClick={() => void interpret(text)}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void interpret();
+                }}
+                className={styles.composer}
+              >
+                <label className={styles.srOnly} htmlFor="focus-message">
+                  Tell your task companion
+                </label>
+                <textarea
+                  id="focus-message"
+                  placeholder="e.g. 50% done, need 15 more minutes…"
+                  value={message}
+                  maxLength={2000}
+                  disabled={!writable || busy}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    setPreview(null);
+                  }}
+                />
+                <button
+                  type="submit"
+                  className={styles.primary}
+                  disabled={busy || !writable || !message.trim()}
+                >
+                  <Send size={15} />
+                  Review
+                </button>
+              </form>
+              {preview && (
+                <div
+                  className={styles.proposal}
+                  aria-label="Review focus update"
+                >
+                  <strong>Humeto suggests</strong>
+                  <p>{preview.reply}</p>
+                  {preview.proposal && (
+                    <>
+                      <small>
+                        {preview.proposal.action === "complete"
+                          ? "Marks this task Done and ends the timer."
+                          : preview.proposal.action === "progress"
+                            ? "Saves progress without changing the timer."
+                            : preview.proposal.action === "blocked" ||
+                                preview.proposal.action === "pause"
+                              ? "Stops the timer; the task stays open."
+                              : `Runs the timer and sets a check-in in ${preview.proposal.minutes || minutes} minutes.`}
+                      </small>
+                      {stalePreview && (
+                        <p role="status">
+                          Your focus changed. Review your message again before
+                          applying.
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        className={styles.primary}
+                        disabled={
+                          busy || !writable || stalePreview || !validMinutes
+                        }
+                        onClick={() => {
+                          const { action, ...fields } = preview.proposal!;
+                          void act(action, {
+                            ...fields,
+                            sessionId: preview.sessionId,
+                            revision: preview.revision,
+                          });
+                        }}
+                      >
+                        {preview.proposal.action === "complete"
+                          ? "Confirm task complete"
+                          : "Apply this update"}
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className={styles.textButton}
+                    onClick={() => setPreview(null)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className={styles.progressPanel}>
+              <h3>
+                <Target size={16} /> Make the next step smaller
+              </h3>
+              <label>
+                Progress (%)
+                <input
+                  aria-label="Task progress percent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={progress}
+                  onChange={(e) => setProgress(e.target.value)}
+                  placeholder="Optional"
+                  disabled={!writable || busy}
+                />
+              </label>
+              <label>
+                One small next step
+                <textarea
+                  aria-label="Next small step"
+                  value={nextStep}
+                  maxLength={500}
+                  onChange={(e) => setNextStep(e.target.value)}
+                  placeholder="e.g. Check the passport expiry date"
+                  disabled={!writable || busy}
+                />
+              </label>
+              <button
+                type="button"
+                disabled={
+                  !writable ||
+                  busy ||
+                  !progressValid ||
+                  (progress === "" && !nextStep.trim())
+                }
+                onClick={() =>
+                  act("progress", {
+                    progress: progress === "" ? undefined : Number(progress),
+                    nextStep: nextStep.trim(),
+                    note: nextStep.trim()
+                      ? `Next step: ${nextStep.trim()}`
+                      : `Progress: ${progress}%`,
+                  })
+                }
+              >
+                Save progress
+              </button>
+              <h3>
+                <Flag size={15} /> What’s getting in the way?
+              </h3>
+              <div className={styles.blockers}>
+                {[
+                  ["waiting", "Waiting for someone"],
+                  ["unclear", "Not sure where to start"],
+                  ["overwhelmed", "Too much at once"],
+                  ["other", "Something else"],
+                ].map(([blocker, label]) => (
+                  <button
+                    type="button"
+                    key={blocker}
+                    disabled={!writable || busy}
+                    onClick={() => act("blocked", { blocker, note: label })}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className={styles.hint}>
+                A blocker pauses your time. It never marks the task finished.
+              </p>
+            </div>
+          </div>
+          {(switching || active.state === "blocked") && (
+            <div className={styles.switchPanel}>
+              <p className={styles.eyebrow}>KEEP YOUR MOMENTUM</p>
+              <h3>Want to work on something you can move forward?</h3>
+              <p className={styles.message}>
+                Your current task, time and notes will be saved. Switching keeps
+                it open and starts one new timer.
+              </p>
+              {chosen ? (
+                taskPicker(true)
+              ) : (
+                <p>
+                  No other unfinished tasks. You can pause here or add another
+                  task.
+                </p>
+              )}
+            </div>
+          )}
           <button
             type="button"
             className={styles.textButton}
@@ -286,6 +775,22 @@ export default function TaskFocus({
         </>
       ) : (
         <>
+          {lastFinished && lastFinished.state === "completed" && (
+            <div className={styles.celebration}>
+              <Check size={20} />
+              <div>
+                <strong>One more thing moved forward.</strong>
+                <p>
+                  {lastFinished.title} · {clock(lastFinished.total_seconds)}{" "}
+                  saved
+                  {lastFinished.project_title
+                    ? ` toward ${lastFinished.project_title}`
+                    : ""}
+                  .
+                </p>
+              </div>
+            </div>
+          )}
           <p className={styles.eyebrow}>LET’S MAKE TODAY FEEL LIGHTER</p>
           <h2>What would you like to move forward first?</h2>
           <p className={styles.message}>
@@ -294,54 +799,32 @@ export default function TaskFocus({
           </p>
           {chosen ? (
             <>
-              <div className={styles.pick}>
-                <label>
-                  Your first task
-                  <select
-                    aria-label="Focus task"
-                    value={chosen.id}
-                    onChange={(e) => setSelected(e.target.value)}
+              <div className={styles.suggestions}>
+                {candidates.slice(0, 3).map((t, i) => (
+                  <button
+                    type="button"
+                    key={t.id}
+                    aria-pressed={chosen.id === t.id}
+                    onClick={() => setSelected(t.id)}
                   >
-                    {candidates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.important ? "★ " : ""}
-                        {t.title}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Expected time
-                  <input
-                    aria-label="Expected focus minutes"
-                    type="number"
-                    min="1"
-                    max="720"
-                    value={minutes}
-                    onChange={(e) => setMinutes(Number(e.target.value))}
-                  />
-                  <small>minutes · you can change this later</small>
-                </label>
-                <button
-                  className={styles.primary}
-                  type="button"
-                  disabled={
-                    !data ||
-                    !writable ||
-                    busy ||
-                    !Number.isInteger(minutes) ||
-                    minutes < 1 ||
-                    minutes > 720
-                  }
-                  onClick={() => act("start")}
-                >
-                  <Play size={15} />
-                  Let’s begin
-                </button>
+                    <span>
+                      {i === 0 ? "Suggested first" : `Another option`}{" "}
+                      <ArrowRight size={13} />
+                    </span>
+                    <strong>{t.title}</strong>
+                    <small>{reason(t)}</small>
+                    {t.project_title && (
+                      <small>
+                        <Target size={11} /> {t.project_title}
+                      </small>
+                    )}
+                  </button>
+                ))}
               </div>
+              {taskPicker()}
               <p className={styles.hint}>
-                Important tasks are suggested first. You choose what matters
-                today.
+                Suggested by importance, urgency and deadline. You choose what
+                matters today.
               </p>
             </>
           ) : (
@@ -352,7 +835,13 @@ export default function TaskFocus({
       {error && (
         <p role="alert" className={styles.error}>
           {error}{" "}
-          <button type="button" onClick={() => void load()}>
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              void load();
+            }}
+          >
             <RotateCcw size={12} />
             Retry
           </button>
@@ -360,19 +849,37 @@ export default function TaskFocus({
       )}
       {history && (
         <div className={styles.history}>
-          <h3>Recent focus sessions</h3>
+          <h3>Your recent focus journey</h3>
+          <p className={styles.hint}>
+            Your last 50 sessions. Completed tasks and time toward projects are
+            also available in Projects & progress.
+          </p>
           {data?.history.length ? (
-            data.history.slice(0, 12).map((s) => (
-              <article key={s.id}>
-                <div>
-                  <strong>{s.title}</strong>
-                  <small>
-                    {new Date(s.started_at).toLocaleString()} · {s.state}
-                    {s.note ? ` · ${s.note}` : ""}
-                  </small>
-                </div>
-                <span>{clock(s.total_seconds)}</span>
-              </article>
+            data.history.map((s) => (
+              <details key={s.id}>
+                <summary>
+                  <span>
+                    <strong>{s.title}</strong>
+                    <small>
+                      {new Date(s.started_at).toLocaleString()} · {s.state}
+                      {s.project_title ? ` · ${s.project_title}` : ""}
+                    </small>
+                  </span>
+                  <span>{clock(s.total_seconds)}</span>
+                </summary>
+                {s.note && <p>{s.note}</p>}
+                {s.next_step && <p>Next step: {s.next_step}</p>}
+                {(data.events || [])
+                  .filter((e) => e.session_id === s.id)
+                  .reverse()
+                  .map((e) => (
+                    <p key={e.id} className={styles.historyEvent}>
+                      <strong>{e.event}</strong>
+                      {e.note ? ` · ${e.note}` : ""}
+                      {e.assistant_reply && <span>{e.assistant_reply}</span>}
+                    </p>
+                  ))}
+              </details>
             ))
           ) : (
             <p>Your completed and stopped sessions will appear here.</p>
@@ -380,8 +887,9 @@ export default function TaskFocus({
         </div>
       )}
       <p className={styles.hint}>
-        Local companion · check-ins appear while this app is open. Time is saved
-        across refreshes.
+        Local companion · saved progress and conversations survive refresh.
+        Check-ins and optional browser alerts work while Humeto remains open;
+        closed-app push comes later.
       </p>
     </section>
   );

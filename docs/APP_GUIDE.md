@@ -84,3 +84,7 @@ The preceding product increment passed **73 automated checks**. The earlier 61-c
 ## Read documents into reviewed profile facts
 
 Open **Document reader** to read a file locally, inspect source pages, confirm/correct facts and save reviewed selections to draft intake. New uploads/imports can queue reading. Source replacement and manual edits flag prior links. See [the full workflow and limits](DOCUMENT_READING.md). Current release: **85 passing checks**.
+
+## Interactive Tasks to-do
+
+The focus companion now supports reviewed local conversations, progress percentages, next steps, blocker guidance, safe switching and optional open-app check-in alerts. See [the interactive task guide](INTERACTIVE_TASKS.md).

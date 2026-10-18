@@ -12,7 +12,7 @@ import {
   validStage,
 } from "@/lib/pipeline-settings";
 import { assistAllowed } from "@/lib/assist-scope";
-import { focusRead, focusMutation } from "@/lib/focus";
+import { focusRead, focusMutation, focusInterpret } from "@/lib/focus";
 import { withTransaction } from "@/lib/db";
 import {
   requestRead,
@@ -586,6 +586,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return assignmentWrite(a, body);
   if (resource === "pipelines" && req.method === "POST")
     return pipelineWrite(a, body);
+  if (resource === "focus" && rid === "interpret" && req.method === "POST")
+    return focusInterpret(a, body);
   if (resource === "focus" && req.method === "POST")
     return focusMutation(a, body);
   const requestChange = await requestMutation(

@@ -80,3 +80,7 @@ Document intelligence: [local OCR and source-linked fact review](docs/DOCUMENT_R
 ### Self-hosted company WhatsApp
 
 Company-owned QR pairing, private text inbox and reviewed outbox are available in Workspace Settings. Run the persistent worker separately from the Next.js web app. See [WhatsApp setup and current limits](docs/WHATSAPP.md). No Wasender API is used.
+
+### Interactive Tasks to-do
+
+The Task AI focus companion supports task suggestions, custom timers, reviewed local conversation, progress/next steps, blocker guidance, atomic switching, history and opt-in open-app browser alerts. See [Interactive tasks](docs/INTERACTIVE_TASKS.md) for commands, safeguards and remaining work.
