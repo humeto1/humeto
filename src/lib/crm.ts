@@ -1,3 +1,4 @@
+import { validStage } from "./pipeline-settings";
 import { randomBytes, createHash } from "node:crypto";
 import "server-only";
 import { z } from "zod";
@@ -134,10 +135,12 @@ export async function crmMutation(
   if (resource === "applicant-stage" && req.method === "PATCH") {
     const input = z
       .object({
-        stage: z.enum(applicantStages),
+        stage: z.string().min(1).max(100),
         revision: z.number().int().positive(),
       })
       .parse(body);
+    if (!(await validStage(a.tenantId, "applicants", input.stage)))
+      return error("Choose an active applicant stage.");
     const result = await db()
       .prepare(
         "UPDATE people SET journey_stage=?,revision=revision+1,updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE id=? AND tenant_id=? AND revision=?",
@@ -398,11 +401,18 @@ export async function crmMutation(
     if (req.method === "PATCH") {
       const input = z
         .object({
-          stage: z.enum(leadStages).exclude(["Registered"]),
+          stage: z.string().min(1).max(100),
           revision: z.number().int().positive(),
           details: leadSchema.optional(),
         })
         .parse(body);
+      if (
+        input.stage === "Registered" ||
+        !(await validStage(a.tenantId, "leads", input.stage))
+      )
+        return error(
+          "Choose an active lead stage; use Register to convert a lead.",
+        );
       const lead = await db()
         .prepare("SELECT * FROM leads WHERE id=? AND tenant_id=?")
         .get(rid, a.tenantId);

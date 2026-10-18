@@ -41,20 +41,20 @@ The extension uses one-hour revocable applicant-scoped pairing. It reads facts a
 - `npm run typecheck` runs TypeScript checks.
 - `npm run test:release` starts an isolated compiled server with a disposable demo database, runs the suite and removes successful-run fixtures. Build first.
 - `npm test` targets an already running development server and can write test records there. Prefer the isolated release runner for normal verification.
-- Last application release: 61 passing checks. A documentation-only change does not rerun or alter that result.
+- Last application release: 73 passing checks. A documentation-only change does not rerun or alter that result.
 
 ## Planned architecture, not connected today
 
-| Need                               | Direction                                                                                | Current boundary                                                                     |
-| ---------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| Multi-server production operations | Connection budgeting, monitoring and production load validation                          | PostgreSQL migration is complete locally; production capacity/ops remain unvalidated |
-| Production documents               | Private object storage, malware scanning, encryption/key management and retention        | Current originals live on local disk                                                 |
-| Reliable background work           | Durable jobs/outbox, retries, deduplication and delivery records                         | Current reminders are in-app; no closed-app device push                              |
-| Connected communication            | Authorized Gmail sync/outbox, then validated messaging channels                          | Pasted email review and saved drafts only; no Gmail/WhatsApp connection              |
-| Document intelligence              | Source-linked fact review, then configured OCR/vision                                    | Current uploads do not extract profile answers                                       |
-| AI across the products             | Optional configured model adapters with shared authorization/review tools                | Local command testing is the user's current selection                                |
-| Mobile / voice                     | Shared server APIs; evaluate PWA/native implementation and device push at that milestone | Responsive web app only; no selected mobile framework yet                            |
-| Live commercial SaaS               | Subscription payment integration, lifecycle and production operations                    | Manual institute subscriptions and local fee ledger only                             |
+| Need                               | Direction                                                                                | Current boundary                                                                                 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Multi-server production operations | Connection budgeting, monitoring and production load validation                          | PostgreSQL migration is complete locally; production capacity/ops remain unvalidated             |
+| Production documents               | Private object storage, malware scanning, encryption/key management and retention        | Current originals live on local disk                                                             |
+| Reliable background work           | Durable jobs/outbox, retries, deduplication and delivery records                         | Current reminders are in-app; no closed-app device push                                          |
+| Connected communication            | Authorized Gmail sync/outbox, then validated messaging channels                          | Pasted email review and saved drafts only; no Gmail/WhatsApp connection                          |
+| Document intelligence              | Source-linked fact review, then configured OCR/vision                                    | Current uploads do not extract profile answers                                                   |
+| AI across the products             | Optional configured model adapters with shared authorization/review tools                | Local command testing is the user's current selection                                            |
+| Mobile / voice                     | Shared server APIs; evaluate PWA/native implementation and device push at that milestone | Responsive web now; Capacitor selected by user for later mobile development                      |
+| Live commercial SaaS               | Subscription payment integration, lifecycle and production operations                    | Manual institute subscriptions; local invoices/receipts/P&L and employee allocations implemented |
 
 The current stack keeps local setup and service costs small. It does not establish production cost, capacity or compliance. Provider selection and provisioning are separate future decisions.
 
@@ -74,3 +74,5 @@ The current stack keeps local setup and service costs small. It does not establi
 See [the app guide](APP_GUIDE.md) for workflows and [README](../README.md) for startup.
 
 PostgreSQL cutover and verified backup/restore details: [database guide](POSTGRESQL.md). The SQLite backup is retained only for historical recovery; runtime does not use it.
+
+New local modules: `focus.ts`, `pipeline-settings.ts`, `assignments.ts`, `finance.ts`; migrations 003–007. [Behavior and integration boundaries](FEATURE_DELIVERY_2026-10-18.md).

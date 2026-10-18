@@ -1,0 +1,185 @@
+.root {
+  color: #2c4434;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 25px;
+}
+.header h1 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 36px;
+  margin: 10px 0;
+}
+.header p {
+  color: #7a8674;
+  font-size: 14px;
+}
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin: 22px 0;
+}
+.cards section {
+  background: #f1f5e9;
+  border: 1px solid #e1e8d8;
+  border-radius: 16px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.cards small {
+  color: #75816a;
+  font-size: 12px;
+}
+.cards strong {
+  font-size: 25px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.note {
+  font-size: 12px;
+  color: #7a8673;
+  line-height: 1.65;
+}
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 22px 0;
+}
+.root input,
+.root select {
+  padding: 10px 12px;
+  border: 1px solid #d9e1d2;
+  border-radius: 9px;
+  color: #314831;
+  background: #fff;
+  max-width: 100%;
+  font: inherit;
+  min-width: 0;
+}
+.root label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+.panel,
+.form {
+  padding: 25px;
+  border: 1px solid #e0e6d9;
+  background: #fff;
+  border-radius: 18px;
+  margin: 20px 0;
+}
+.panel h2,
+.form h2 {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 25px;
+  margin: 0 0 16px;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 15px;
+  margin: 20px 0;
+}
+.schedule {
+  grid-column: 1/-1;
+}
+.schedule > div {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+.schedule input {
+  flex: 1;
+  min-width: 120px;
+}
+.record {
+  padding: 18px 0;
+  border-bottom: 1px solid #e5eadf;
+}
+.record p {
+  font-size: 12px;
+  color: #6c7d62;
+  line-height: 1.7;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 9px 0;
+  font-size: 12px;
+  align-items: center;
+}
+.row b {
+  font-weight: 500;
+}
+.table {
+  overflow: auto;
+}
+.table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.table td,
+.table th {
+  padding: 13px 10px;
+  border-bottom: 1px solid #e2e8dc;
+  text-align: left;
+  white-space: nowrap;
+}
+.record p.overdue {
+  color: #a74939;
+}
+@media (max-width: 600px) {
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+  .cards section {
+    padding: 15px;
+  }
+  .cards strong {
+    font-size: 20px;
+  }
+  .panel,
+  .form {
+    padding: 17px;
+  }
+  .header h1 {
+    font-size: 30px;
+  }
+  .toolbar {
+    flex-direction: column;
+  }
+  .root nav {
+    display: flex;
+    overflow: auto;
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+  .fields {
+    grid-template-columns: 1fr;
+  }
+  .row {
+    line-height: 1.7;
+  }
+}

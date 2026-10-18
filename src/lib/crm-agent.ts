@@ -2,6 +2,7 @@ import { sections } from "./sections";
 import "server-only";
 import { db, id, audit, createChecklist } from "./db";
 import { transaction } from "./crm";
+import { pipelineSettings } from "./pipeline-settings";
 import { applicationStages } from "./pipeline";
 import type { Actor } from "./types";
 export class CrmError extends Error {
@@ -52,7 +53,7 @@ async function basis(a: Actor, pid: string, kind: "fee" | "document") {
     const paid = Number(
       (await db()
         .prepare(
-          "SELECT COALESCE(SUM(amount),0) n FROM payments WHERE tenant_id=? AND person_id=?",
+          "SELECT COALESCE(SUM(p.amount-COALESCE((SELECT SUM(a.amount) FROM finance_adjustments a WHERE a.tenant_id=p.tenant_id AND a.source_id=p.id AND a.kind='refund'),0)),0) n FROM payments p WHERE tenant_id=? AND person_id=?",
         )
         .get(a.tenantId, pid))!.n,
     );
@@ -155,11 +156,15 @@ async function interpret(
       throw new CrmError(
         "Application not found. Ask “Show cases for EMAIL” to get an exact application ID.",
       );
+    const configured = (await pipelineSettings(a.tenantId)).applications
+      .stages as { key: string; title: string }[];
     const desired = match[2]
-      ? applicationStages.find(
-          (s) => s.toLowerCase() === match![2].trim().toLowerCase(),
-        )
-      : "Withdrawn";
+      ? configured.find((s) =>
+          [s.key.toLowerCase(), s.title.toLowerCase()].includes(
+            match![2].trim().toLowerCase(),
+          ),
+        )?.key
+      : configured.find((s) => s.key === "Withdrawn")?.key;
     if (!desired)
       throw new CrmError(
         "Unknown application stage. Use a stage shown on the application board.",

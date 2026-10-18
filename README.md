@@ -70,3 +70,7 @@ Uploads do not extract or authenticate documents today. Stored drafts are not se
 PostgreSQL stores live records; `.data/uploads/` stores private original binaries. The local cluster and backups are inside ignored `.data/`, and credentials are in ignored `.env.local`. The retained SQLite file is a historical rollback source, not live storage. Rebuilding/restarting preserves data. Use `npm run db:backup` with app writes paused to back up records and uploads; production restore/security/retention procedures still need validation. The current pilot should use fictional data.
 
 PostgreSQL migration (18 October 2026): 41 tables / 907 source rows and five original files reconciled; PostgreSQL dump/restore verified across 42 tables including migration history. The optimized build passes **61 automated checks**. `npm run test:release` uses a separate loopback server/disposable PostgreSQL database and a temporary extension fixture port, preserving distributed extension permissions.
+
+Latest product increment: [focus companion, broader extension, flexible CRM pipelines, team assignments and finance](docs/FEATURE_DELIVERY_2026-10-18.md). Live Gmail/messaging and production deployment remain unconnected.
+
+Current expanded release: **73 automated checks pass**, including focus UI, finance reconciliation, configurable pipelines, team permissions and extension file authorization.

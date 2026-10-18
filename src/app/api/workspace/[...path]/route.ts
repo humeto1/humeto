@@ -1,3 +1,12 @@
+import { financeRead, financeWrite } from "@/lib/finance";
+import { assignmentRead, assignmentWrite } from "@/lib/assignments";
+import {
+  pipelineRead,
+  pipelineWrite,
+  validStage,
+} from "@/lib/pipeline-settings";
+import { assistAllowed } from "@/lib/assist-scope";
+import { focusRead, focusMutation } from "@/lib/focus";
 import { withTransaction } from "@/lib/db";
 import {
   requestRead,
@@ -60,6 +69,18 @@ const string = z.string().trim().max(500),
 async function handle(req: Request, parts: string[], a: Actor) {
   const [resource, rid, action] = parts;
   if (req.method === "GET") {
+    if (resource === "finance")
+      return financeRead(a, new URL(req.url).searchParams.get("month") || "");
+    if (resource === "assignments") {
+      const u = new URL(req.url);
+      return assignmentRead(
+        a,
+        u.searchParams.get("type") || "",
+        u.searchParams.get("id") || "",
+      );
+    }
+    if (resource === "pipelines") return pipelineRead(a);
+    if (resource === "focus") return focusRead(a);
     const conversation = await requestRead(parts, a);
     if (conversation) return conversation;
     const progress = await progressRead(req, parts, a);
@@ -517,6 +538,14 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return NextResponse.json({ id: docId, version });
   }
   const body = await req.json();
+  if (resource === "finance" && req.method === "POST")
+    return financeWrite(a, body);
+  if (resource === "assignments" && req.method === "POST")
+    return assignmentWrite(a, body);
+  if (resource === "pipelines" && req.method === "POST")
+    return pipelineWrite(a, body);
+  if (resource === "focus" && req.method === "POST")
+    return focusMutation(a, body);
   const requestChange = await requestMutation(
     req,
     parts,
@@ -649,27 +678,20 @@ async function handle(req: Request, parts: string[], a: Actor) {
     const input = z
       .object({
         personId: z.string(),
-        sectionKeys: z.array(z.string()).min(1).max(10),
+        sectionKeys: z.array(z.string()).min(1).max(12),
+        includeDocuments: z.boolean().default(false),
       })
       .parse(body);
     if (!(await canSeePerson(a, input.personId)))
       return fail("Applicant not found.", 404);
-    const allowed = sections
-      .filter(
-        (s) =>
-          !s.repeatable && s.journey === "profile" && s.key !== "declarations",
-      )
-      .map((s) => s.key);
-    if (input.sectionKeys.some((k) => !allowed.includes(k)))
-      return fail(
-        "Only basic profile sections can be paired in this first version.",
-      );
+    if (input.sectionKeys.some((k) => !assistAllowed(k)))
+      return fail("Choose only supported reusable-information sections.");
     const token = randomBytes(32).toString("base64url"),
       tid = id(),
       expires = Date.now() + 3600000;
     await db()
       .prepare(
-        "INSERT INTO assist_tokens(id,token_hash,tenant_id,user_id,person_id,section_keys,expires_at) VALUES(?,?,?,?,?,?,?)",
+        "INSERT INTO assist_tokens(id,token_hash,tenant_id,user_id,person_id,section_keys,expires_at,allow_documents) VALUES(?,?,?,?,?,?,?,?)",
       )
       .run(
         tid,
@@ -679,6 +701,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         input.personId,
         JSON.stringify(input.sectionKeys),
         expires,
+        input.includeDocuments,
       );
     await audit(
       a.tenantId,
@@ -1171,7 +1194,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail("Application management is not permitted.", 403);
     const input = z
       .object({
-        status: z.enum(applicationStages),
+        status: z.string().min(1).max(100),
         revision: z.number().int().positive(),
         submissionReference: optionalString,
         note: z.string().trim().max(2000).default(""),
@@ -1187,6 +1210,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
         documentId: optionalString,
       })
       .parse(body);
+    if (!(await validStage(a.tenantId, "applications", input.status)))
+      return fail("Choose an active application stage.");
     if (input.status === "Submitted" && !input.submissionReference)
       return fail(
         "Add the actual portal submission reference before recording submission.",

@@ -1,3 +1,4 @@
+import { answerQuestion } from "./helper.mjs";
 import { reviewFields, reviewCounts } from "./review-state.mjs";
 const $ = (s) => document.querySelector(s),
   esc = (s) =>
@@ -81,6 +82,15 @@ async function load() {
   const data = await r.json();
   if (!r.ok) throw new Error(data.error);
   profile = data;
+  const previous = $("#attach-document").value;
+  $("#attach-document").replaceChildren(
+    new Option("Choose a shared file", ""),
+    ...(data.documents || []).map(
+      (d) =>
+        new Option(`${d.title} · ${d.original_name} · v${d.version}`, d.id),
+    ),
+  );
+  $("#attach-document").value = previous;
   $("#name").textContent = data.applicant.name;
   $("#expiry").textContent =
     "Read-only pairing · expires " +
@@ -110,6 +120,11 @@ $("#disconnect").onclick = async () => {
   await chrome.storage.session.remove("humetoPair");
   token = "";
   profile = null;
+  $("#help-answer").replaceChildren();
+  $("#help-question").value = "";
+  $("#attach-document").replaceChildren();
+  $("#attach-field").replaceChildren();
+  $("#attachment-status").textContent = "";
   scan = null;
   $("#pair").hidden = false;
   $("#connected").hidden = true;
@@ -144,6 +159,13 @@ $("#scan").onclick = async () => {
       files: ["content.js"],
     });
     scan = await chrome.tabs.sendMessage(activeTab, { type: "HUMETO_SCAN" });
+    $("#attach-field").replaceChildren(
+      new Option("Choose a page upload field", ""),
+      ...(scan.fileFields || []).map(
+        (f) =>
+          new Option(`${f.label}${f.accept ? " · " + f.accept : ""}`, f.id),
+      ),
+    );
     $("#page-name").textContent =
       scan.title + " · " + new URL(scan.url).hostname;
     rows = reviewFields(scan.fields, profile.facts);
@@ -246,3 +268,91 @@ if (stored.humetoPair) {
     status(e.message);
   }
 }
+
+$("#help-form").onsubmit = (e) => {
+  e.preventDefault();
+  const result = answerQuestion($("#help-question").value, profile);
+  $("#help-answer").replaceChildren();
+  const p = document.createElement("p");
+  p.textContent = result.text;
+  $("#help-answer").append(p);
+  for (const f of result.facts) {
+    const item = document.createElement("p"),
+      value = document.createElement("strong"),
+      source = document.createElement("small");
+    value.textContent = `${f.label}: ${f.value}`;
+    source.textContent = `${f.section} · ${f.status} · updated ${new Date(f.updatedAt).toLocaleDateString()}`;
+    item.append(value, document.createElement("br"), source);
+    $("#help-answer").append(item);
+  }
+};
+async function selectedDocument() {
+  const chosen = profile?.documents?.find(
+    (d) => d.id === $("#attach-document").value,
+  );
+  if (!chosen) throw Error("Choose a document from this paired applicant.");
+  await load();
+  const current = profile.documents.find((d) => d.id === chosen.id);
+  if (!current || current.version !== chosen.version)
+    throw Error("The document changed. Select the current version again.");
+  const r = await fetch(
+    `${base}/api/assist?documentId=${encodeURIComponent(current.id)}&version=${current.version}`,
+    { headers: { Authorization: "Bearer " + token }, cache: "no-store" },
+  );
+  if (!r.ok) throw Error((await r.json()).error);
+  return { doc: current, bytes: new Uint8Array(await r.arrayBuffer()) };
+}
+$("#attach").onclick = async () => {
+  $("#attach").disabled = true;
+  try {
+    if (!scan) throw Error("Scan the application page first.");
+    const field = scan.fileFields?.find(
+      (f) => f.id === $("#attach-field").value,
+    );
+    if (!field)
+      throw Error(
+        "Choose a visible upload field. Custom upload widgets need manual attachment.",
+      );
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (tab?.id !== activeTab || tab.url !== scan.url)
+      throw Error("The page changed. Scan and review it again.");
+    const { doc, bytes } = await selectedDocument();
+    const chunks = [];
+    for (let i = 0; i < bytes.length; i += 16384)
+      chunks.push(String.fromCharCode(...bytes.subarray(i, i + 16384)));
+    const result = await chrome.tabs.sendMessage(activeTab, {
+      type: "HUMETO_ATTACH",
+      url: scan.url,
+      fieldId: field.id,
+      label: field.label,
+      name: doc.original_name,
+      mime: doc.mime_type,
+      base64: btoa(chunks.join("")),
+    });
+    if (!result.ok) throw Error(result.error);
+    $("#attachment-status").textContent =
+      `Attached ${doc.original_name}. Review the site’s upload result before continuing.`;
+  } catch (e) {
+    $("#attachment-status").textContent = e.message;
+  } finally {
+    $("#attach").disabled = false;
+  }
+};
+$("#download-document").onclick = async () => {
+  try {
+    const { doc, bytes } = await selectedDocument();
+    const url = URL.createObjectURL(new Blob([bytes], { type: doc.mime_type })),
+      a = document.createElement("a");
+    a.href = url;
+    a.download = doc.original_name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    $("#attachment-status").textContent =
+      "Download started. Choose the file manually on the application page.";
+  } catch (e) {
+    $("#attachment-status").textContent = e.message;
+  }
+};

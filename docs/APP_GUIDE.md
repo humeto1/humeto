@@ -74,3 +74,9 @@ Live records are in PostgreSQL; original files and the dedicated local cluster/b
 Last application release: optimized build with 61 passing automated checks plus recorded browser checks. Prefer `npm run build` then `npm run test:release`, which tests disposable records; ordinary `npm test` targets a running development database. The database migration preserved 41 tables / 907 rows and five original files, and a PostgreSQL dump/restore was verified. It does not enable new external integrations.
 
 Public production still needs authentication lifecycle, independent access review, secure/scanned storage, backup/restore, retention/export/deletion, durable jobs, load testing, observability and configured external services. See [tech stack](TECH_STACK.md) and the local `planning/PENDING_FEATURES.md` checklist.
+
+## New focus, pipeline, team and finance workflows
+
+See [the delivery guide](FEATURE_DELIVERY_2026-10-18.md) for task focus/timers, scoped extension attachments, configurable CRM columns, team assignment and the owner Finance tab. Gmail/WhatsApp are not connected; no external messages are sent.
+
+Current expanded release validation: **73 automated checks pass**. The earlier 61-check PostgreSQL cutover result is historical.

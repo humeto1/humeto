@@ -1,4 +1,5 @@
-import { test } from "node:test";
+import { test, after } from "node:test";
+import { database } from "../src/lib/postgres.mjs";
 import assert from "node:assert/strict";
 import { request, chromium } from "playwright";
 import {
@@ -86,6 +87,68 @@ test("assistant tokens are scoped, expire/revoke and exclude declarations", asyn
   } finally {
     await c.dispose();
     await other.dispose();
+  }
+});
+const assistDocuments = [];
+after(async () => {
+  const d = database();
+  for (const id of assistDocuments) {
+    await d
+      .prepare("DELETE FROM document_versions WHERE document_id=?")
+      .run(id);
+    await d.prepare("DELETE FROM documents WHERE id=?").run(id);
+  }
+  await d.close();
+});
+test("extension files require explicit document scope, applicant ownership and a current version", async () => {
+  const c = await account("ayesha");
+  try {
+    const png = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    const upload = await c.post("/api/workspace/documents", {
+      multipart: {
+        personId: "amira",
+        title: "Extension QA document",
+        category: "Other",
+        sectionKey: "education",
+        file: { name: "extension-qa.png", mimeType: "image/png", buffer: png },
+      },
+    });
+    assert.equal(upload.status(), 200, await upload.text());
+    const { id } = await upload.json();
+    assistDocuments.push(id);
+    const pair = async (includeDocuments, sectionKeys = ["education"]) =>
+      (
+        await (
+          await c.post("/api/workspace/assist-tokens", {
+            data: { personId: "amira", sectionKeys, includeDocuments },
+          })
+        ).json()
+      ).token;
+    const noFiles = await pair(false),
+      files = await pair(true),
+      wrongSection = await pair(true, ["identity"]);
+    const fetchFile = (token, version = 1) =>
+      c.get(`/api/assist?documentId=${id}&version=${version}`, {
+        headers: { Authorization: "Bearer " + token },
+      });
+    assert.equal((await fetchFile(noFiles)).status(), 404);
+    assert.equal((await fetchFile(wrongSection)).status(), 404);
+    assert.equal((await fetchFile(files, 2)).status(), 409);
+    const response = await fetchFile(files);
+    assert.equal(response.status(), 200, await response.text());
+    assert.deepEqual(await response.body(), png);
+    const profile = await (
+      await c.get("/api/assist", {
+        headers: { Authorization: "Bearer " + files },
+      })
+    ).json();
+    assert.ok(profile.documents.some((d) => d.id === id));
+    assert.ok(profile.facts.every((f) => f.sectionKey === "education"));
+  } finally {
+    await c.dispose();
   }
 });
 test("packaged extension scans and fills a real Chromium fixture without overwriting", async () => {
@@ -216,6 +279,30 @@ test("packaged extension scans and fills a real Chromium fixture without overwri
       false,
     );
     assert.equal(await page.locator("[name=given]").inputValue(), "");
+    // Approved file attachment uses the reviewed input; replacement and existing files are protected.
+    const uploadScan = await rescan(),
+      uploadField = uploadScan.fileFields[0];
+    assert.ok(uploadField);
+    const attach = () =>
+      worker.evaluate(
+        ({ tabId, field, url }) =>
+          chrome.tabs.sendMessage(tabId, {
+            type: "HUMETO_ATTACH",
+            url,
+            fieldId: field.id,
+            label: field.label,
+            name: "fictional.txt",
+            mime: "text/plain",
+            base64: "SGVsbG8=",
+          }),
+        { tabId: tab.id, field: uploadField, url: scan.url },
+      );
+    assert.equal((await attach()).ok, true);
+    assert.equal(
+      await page.locator("input[type=file]").evaluate((el) => el.files[0].name),
+      "fictional.txt",
+    );
+    assert.equal((await attach()).ok, false);
     await page.reload();
     const panel = await context.newPage();
     await panel.setViewportSize({ width: 380, height: 1100 });

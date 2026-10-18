@@ -2,7 +2,8 @@
 (() => {
   if (globalThis.__humetoAssistInstalled) return;
   globalThis.__humetoAssistInstalled = true;
-  let reviewedFields = new Map();
+  let reviewedFields = new Map(),
+    reviewedFiles = new Map();
   function labelFor(el) {
     const ids = (el.getAttribute("aria-labelledby") || "")
       .split(/\s+/)
@@ -73,7 +74,102 @@
               : [],
         };
       });
-      reply({ url: location.href, title: document.title, fields });
+      reviewedFiles = new Map();
+      const fileFields = [...document.querySelectorAll('input[type="file"]')]
+        .filter(
+          (el) =>
+            !el.disabled &&
+            el.getClientRects().length &&
+            getComputedStyle(el).visibility !== "hidden",
+        )
+        .map((el, i) => {
+          const id = String(i),
+            label = labelFor(el);
+          reviewedFiles.set(id, { el, label, accept: el.accept });
+          return {
+            id,
+            label,
+            accept: el.accept,
+            multiple: el.multiple,
+            hasFile: el.files.length > 0,
+          };
+        });
+      reply({ url: location.href, title: document.title, fields, fileFields });
+    }
+    if (msg.type === "HUMETO_ATTACH") {
+      const reviewed = reviewedFiles.get(String(msg.fieldId)),
+        el = reviewed?.el;
+      if (
+        msg.url !== location.href ||
+        !el ||
+        !el.isConnected ||
+        el.disabled ||
+        !el.getClientRects().length ||
+        labelFor(el) !== reviewed.label ||
+        msg.label !== reviewed.label ||
+        el.accept !== reviewed.accept ||
+        el.files.length
+      ) {
+        reply({
+          ok: false,
+          error:
+            "Upload field changed or already contains a file. Scan and review again.",
+        });
+        return;
+      }
+      if (
+        typeof msg.base64 !== "string" ||
+        msg.base64.length > 14 * 1024 * 1024
+      ) {
+        reply({
+          ok: false,
+          error: "File exceeds the attachment-assistance limit.",
+        });
+        return;
+      }
+      try {
+        const accepted = el.accept
+            .split(",")
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean),
+          mime = String(msg.mime || "").toLowerCase(),
+          name = String(msg.name || "document").replace(/[\/]/g, "_");
+        if (
+          accepted.length &&
+          !accepted.some((a) =>
+            a.startsWith(".")
+              ? name.toLowerCase().endsWith(a)
+              : a.endsWith("/*")
+                ? mime.startsWith(a.slice(0, -1))
+                : a === mime,
+          )
+        ) {
+          reply({
+            ok: false,
+            error:
+              "This file type is not accepted by the page. Attach a compatible document manually.",
+          });
+          return;
+        }
+        const bytes = Uint8Array.from(atob(msg.base64), (c) => c.charCodeAt(0)),
+          file = new File([bytes], name, { type: mime }),
+          transfer = new DataTransfer();
+        transfer.items.add(file);
+        el.files = transfer.files;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+        el.dispatchEvent(new Event("change", { bubbles: true }));
+        reply({
+          ok: el.files.length === 1,
+          error: "The page did not retain the file. Attach it manually.",
+        });
+      } catch {
+        reply({
+          ok: false,
+          error:
+            "The page could not accept this attachment. Attach it manually.",
+        });
+      }
+      return;
     }
     if (msg.type === "HUMETO_FILL") {
       if (msg.url !== location.href) {

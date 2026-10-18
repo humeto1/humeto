@@ -1,4 +1,9 @@
 "use client";
+import { assistSectionKeys } from "@/lib/assist-scope";
+import FinanceCenter from "./finance-center";
+import WorkAssignment from "./work-assignment";
+import PipelineSettings from "./pipeline-settings";
+import TaskFocus from "./task-focus";
 import UpdateInbox from "./update-inbox";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -103,6 +108,10 @@ type Data = {
   goals: Workstream[];
   leads: Lead[];
   finance: Finance[];
+  pipelines?: Record<
+    string,
+    { revision: number; stages: { key: string; title: string }[] }
+  >;
   people: Person[];
   applications: Application[];
   tasks: Task[];
@@ -148,6 +157,7 @@ const navItems = [
   ["students", "Applicants", Users],
   ["applications", "Applications", GraduationCap],
   ["updates", "Update inbox", Mail],
+  ["finance", "Finance", Wallet],
   ["documents", "Documents", FolderOpen],
   ["assistant", "Humeto assistant", Sparkles],
   ["requests", "Requests", MessageSquare],
@@ -284,6 +294,10 @@ export default function Workspace({
     [team, setTeam] = useState<
       { id: string; name: string; email: string; role: string }[]
     >([]),
+    [pairingSections, setPairingSections] = useState<string[]>([
+      "identity",
+      "contact",
+    ]),
     [pairingSecret, setPairingSecret] = useState(""),
     [pairings, setPairings] = useState<
       { id: string; person_id: string; expires_at: number; revoked: number }[]
@@ -474,6 +488,7 @@ export default function Workspace({
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
+  const [focusOnly, setFocusOnly] = useState(false);
   const filteredTasks = data.tasks.filter((t) =>
     (t.title + " " + t.person_name + " " + t.assignee + " " + quadrant(t))
       .toLowerCase()
@@ -559,6 +574,8 @@ export default function Workspace({
       </div>
     );
   }
+  const stageTitle = (kind: string, key: string) =>
+    data.pipelines?.[kind]?.stages.find((s) => s.key === key)?.title || key;
   function applicantCard(p: Person) {
     return (
       <article className="applicant-card" key={p.id}>
@@ -580,15 +597,18 @@ export default function Workspace({
         </div>
         <div className="applicant-card-bottom">
           <span>{p.destination || "Undecided"}</span>
-          <Badge>{p.journey_stage}</Badge>
+          <Badge>{stageTitle("applicants", p.journey_stage)}</Badge>
         </div>
+        {staff && (
+          <WorkAssignment type="applicant" id={p.id} writable={writable} />
+        )}
         <div className="application-mini-list">
           {data.applications
             .filter((a) => a.person_id === p.id)
             .map((a) => (
               <span key={a.id}>
                 {a.country} · {a.kind}
-                <b>{a.status}</b>
+                <b>{stageTitle("applications", a.status)}</b>
               </span>
             ))}
         </div>
@@ -629,7 +649,7 @@ export default function Workspace({
             )}
           </span>
           <Badge tone={a.status === "Failed" ? "red" : undefined}>
-            {a.status}
+            {stageTitle("applications", a.status)}
           </Badge>
         </div>
         <span className="eyebrow">
@@ -647,6 +667,9 @@ export default function Workspace({
             {a.intake || "Intake to add"}
           </span>
         </div>
+        {staff && (
+          <WorkAssignment type="application" id={a.id} writable={writable} />
+        )}
         <div className="application-footer">
           <button
             onClick={() => {
@@ -688,6 +711,7 @@ export default function Workspace({
         </div>
         <h3>{t.title}</h3>
         <p>{t.person_name || "Team task"}</p>
+        {staff && <WorkAssignment type="task" id={t.id} writable={writable} />}
         <TaskLinks
           task={t}
           projects={data.projects || []}
@@ -866,6 +890,7 @@ export default function Workspace({
             navItems
               .filter(
                 ([key]) =>
+                  (key !== "finance" || actor.role === "owner") &&
                   !(
                     isStudent &&
                     [
@@ -1045,6 +1070,7 @@ export default function Workspace({
           )}
           {view === "leads" && staff && (
             <Leads
+              pipeline={data.pipelines?.leads}
               leads={data.leads || []}
               refresh={refresh}
               writable={writable}
@@ -1358,7 +1384,16 @@ export default function Workspace({
                 <PipelineBoard
                   label="Applicant journey"
                   items={filteredPeople}
-                  stages={applicantStages}
+                  stages={
+                    data.pipelines?.applicants?.stages.map((s) => s.key) ||
+                    applicantStages
+                  }
+                  titles={Object.fromEntries(
+                    (data.pipelines?.applicants?.stages || []).map((s) => [
+                      s.key,
+                      s.title,
+                    ]),
+                  )}
                   stageOf={(p) => p.journey_stage}
                   render={applicantCard}
                   editable={staff && writable && !busy}
@@ -1702,7 +1737,16 @@ export default function Workspace({
                 <PipelineBoard
                   label="Application pipeline"
                   items={filteredApps}
-                  stages={applicationStages}
+                  stages={
+                    data.pipelines?.applications?.stages.map((s) => s.key) ||
+                    applicationStages
+                  }
+                  titles={Object.fromEntries(
+                    (data.pipelines?.applications?.stages || []).map((s) => [
+                      s.key,
+                      s.title,
+                    ]),
+                  )}
                   stageOf={(a) => a.status}
                   render={applicationCard}
                   editable={staff && writable && !busy}
@@ -1740,7 +1784,7 @@ export default function Workspace({
             <>
               {title(
                 "Busy isn’t the goal. Progress is.",
-                "Keep importance and urgency visible as work moves forward.",
+                "Choose one thing. Make room for progress, with a little help from Humeto.",
                 staff && writable ? (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <a href="/workspace/assistant" className="btn secondary">
@@ -1753,165 +1797,177 @@ export default function Workspace({
                   </div>
                 ) : undefined,
               )}
-              <div className="filter-bar">
-                <div className="segmented">
-                  {[
-                    ["board", "Board", Columns3],
-                    ["matrix", "Priority matrix", Grid2X2],
-                    ["list", "List", List],
-                  ].map(([key, label, Icon]) => {
-                    const I = Icon as LucideIcon;
-                    return (
-                      <button
-                        key={String(key)}
-                        className={taskView === key ? "active" : ""}
-                        onClick={() => setTaskView(String(key))}
-                      >
-                        <I size={14} />
-                        {String(label)}
-                      </button>
-                    );
-                  })}
-                </div>
-                <span className="subtle">
-                  {filteredTasks.length} tasks · stage and priority are
-                  independent
-                </span>
-              </div>
-              {taskView === "board" ? (
-                <div className="kanban-board">
-                  {states.map((s) => (
-                    <section
-                      className="kanban-column"
-                      key={s}
-                      onDragOver={(e) => {
-                        if (
-                          staff &&
-                          writable &&
-                          e.dataTransfer.types.includes(
-                            "application/humeto-task",
-                          )
-                        )
-                          e.preventDefault();
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const task = data.tasks.find(
-                          (t) =>
-                            t.id ===
-                            e.dataTransfer.getData("application/humeto-task"),
-                        );
-                        if (task && staff && writable && task.stage !== s)
-                          void mutate(
-                            "tasks/" + task.id,
-                            "PATCH",
-                            { stage: s, revision: task.revision },
-                            "Task moved. Priority preserved.",
-                          );
-                      }}
-                    >
-                      <h2>
-                        <span
-                          className={
-                            "stage-dot " + s.toLowerCase().replace(" ", "-")
-                          }
-                        />
-                        {s}
-                        <span>
-                          {filteredTasks.filter((t) => t.stage === s).length}
-                        </span>
-                      </h2>
-                      {filteredTasks.filter((t) => t.stage === s).map(taskCard)}
-                      {!filteredTasks.some((t) => t.stage === s) && (
-                        <p className="empty-column">
-                          A little space for what’s next.
-                        </p>
-                      )}
-                    </section>
-                  ))}
-                </div>
-              ) : taskView === "matrix" ? (
-                <div className="priority-matrix">
-                  {[
-                    ["Do now", "Important + urgent"],
-                    ["Schedule", "Important + not urgent"],
-                    ["Delegate", "Not important + urgent"],
-                    ["Later", "Not important + not urgent"],
-                  ].map(([q, desc]) => (
-                    <section
-                      key={q}
-                      onDragOver={(e) => {
-                        if (
-                          staff &&
-                          writable &&
-                          e.dataTransfer.types.includes(
-                            "application/humeto-task",
-                          )
-                        )
-                          e.preventDefault();
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const task = data.tasks.find(
-                          (t) =>
-                            t.id ===
-                            e.dataTransfer.getData("application/humeto-task"),
-                        );
-                        if (task && staff && writable && quadrant(task) !== q)
-                          void mutate(
-                            "tasks/" + task.id,
-                            "PATCH",
-                            {
-                              stage: task.stage,
-                              revision: task.revision,
-                              important: q === "Do now" || q === "Schedule",
-                              urgent: q === "Do now" || q === "Delegate",
-                            },
-                            "Task priority changed. Workflow stage preserved.",
-                          );
-                      }}
-                    >
-                      <div className="matrix-heading">
-                        <h2>{q}</h2>
-                        <small>{desc}</small>
-                      </div>
-                      {filteredTasks
-                        .filter((t) => quadrant(t) === q)
-                        .map(taskCard)}
-                    </section>
-                  ))}
-                </div>
-              ) : (
-                <div className="panel">
-                  {filteredTasks.map((t) => (
-                    <div className="task-list-row" key={t.id}>
-                      <span>
-                        {t.title}
-                        <small>{t.person_name || "Team task"}</small>
-                      </span>
-                      <Badge>{quadrant(t)}</Badge>
-                      <span>{dateLabel(t.due_date)}</span>
-                      <select
-                        disabled={!staff || !writable || busy}
-                        value={t.stage}
-                        onChange={(e) =>
-                          void mutate(
-                            "tasks/" + t.id,
-                            "PATCH",
-                            { stage: e.target.value, revision: t.revision },
-                            "Task updated.",
-                          )
-                        }
-                        aria-label={`Stage for ${t.title}`}
-                      >
-                        {states.map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                  ))}
-                </div>
+              {staff && (
+                <TaskFocus
+                  tasks={data.tasks}
+                  writable={writable}
+                  onChange={refresh}
+                  onFocusChange={setFocusOnly}
+                />
               )}
+              <div hidden={focusOnly}>
+                <div className="filter-bar">
+                  <div className="segmented">
+                    {[
+                      ["board", "Board", Columns3],
+                      ["matrix", "Priority matrix", Grid2X2],
+                      ["list", "List", List],
+                    ].map(([key, label, Icon]) => {
+                      const I = Icon as LucideIcon;
+                      return (
+                        <button
+                          key={String(key)}
+                          className={taskView === key ? "active" : ""}
+                          onClick={() => setTaskView(String(key))}
+                        >
+                          <I size={14} />
+                          {String(label)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="subtle">
+                    {filteredTasks.length} tasks · stage and priority are
+                    independent
+                  </span>
+                </div>
+                {taskView === "board" ? (
+                  <div className="kanban-board">
+                    {states.map((s) => (
+                      <section
+                        className="kanban-column"
+                        key={s}
+                        onDragOver={(e) => {
+                          if (
+                            staff &&
+                            writable &&
+                            e.dataTransfer.types.includes(
+                              "application/humeto-task",
+                            )
+                          )
+                            e.preventDefault();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const task = data.tasks.find(
+                            (t) =>
+                              t.id ===
+                              e.dataTransfer.getData("application/humeto-task"),
+                          );
+                          if (task && staff && writable && task.stage !== s)
+                            void mutate(
+                              "tasks/" + task.id,
+                              "PATCH",
+                              { stage: s, revision: task.revision },
+                              "Task moved. Priority preserved.",
+                            );
+                        }}
+                      >
+                        <h2>
+                          <span
+                            className={
+                              "stage-dot " + s.toLowerCase().replace(" ", "-")
+                            }
+                          />
+                          {s}
+                          <span>
+                            {filteredTasks.filter((t) => t.stage === s).length}
+                          </span>
+                        </h2>
+                        {filteredTasks
+                          .filter((t) => t.stage === s)
+                          .map(taskCard)}
+                        {!filteredTasks.some((t) => t.stage === s) && (
+                          <p className="empty-column">
+                            A little space for what’s next.
+                          </p>
+                        )}
+                      </section>
+                    ))}
+                  </div>
+                ) : taskView === "matrix" ? (
+                  <div className="priority-matrix">
+                    {[
+                      ["Do now", "Important + urgent"],
+                      ["Schedule", "Important + not urgent"],
+                      ["Delegate", "Not important + urgent"],
+                      ["Later", "Not important + not urgent"],
+                    ].map(([q, desc]) => (
+                      <section
+                        key={q}
+                        onDragOver={(e) => {
+                          if (
+                            staff &&
+                            writable &&
+                            e.dataTransfer.types.includes(
+                              "application/humeto-task",
+                            )
+                          )
+                            e.preventDefault();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const task = data.tasks.find(
+                            (t) =>
+                              t.id ===
+                              e.dataTransfer.getData("application/humeto-task"),
+                          );
+                          if (task && staff && writable && quadrant(task) !== q)
+                            void mutate(
+                              "tasks/" + task.id,
+                              "PATCH",
+                              {
+                                stage: task.stage,
+                                revision: task.revision,
+                                important: q === "Do now" || q === "Schedule",
+                                urgent: q === "Do now" || q === "Delegate",
+                              },
+                              "Task priority changed. Workflow stage preserved.",
+                            );
+                        }}
+                      >
+                        <div className="matrix-heading">
+                          <h2>{q}</h2>
+                          <small>{desc}</small>
+                        </div>
+                        {filteredTasks
+                          .filter((t) => quadrant(t) === q)
+                          .map(taskCard)}
+                      </section>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="panel">
+                    {filteredTasks.map((t) => (
+                      <div className="task-list-row" key={t.id}>
+                        <span>
+                          {t.title}
+                          <small>{t.person_name || "Team task"}</small>
+                        </span>
+                        <Badge>{quadrant(t)}</Badge>
+                        <span>{dateLabel(t.due_date)}</span>
+                        <select
+                          disabled={!staff || !writable || busy}
+                          value={t.stage}
+                          onChange={(e) =>
+                            void mutate(
+                              "tasks/" + t.id,
+                              "PATCH",
+                              { stage: e.target.value, revision: t.revision },
+                              "Task updated.",
+                            )
+                          }
+                          aria-label={`Stage for ${t.title}`}
+                        >
+                          {states.map((s) => (
+                            <option key={s}>{s}</option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
           {view === "requests" && (
@@ -1969,11 +2025,27 @@ export default function Workspace({
               </section>
             </>
           )}
+          {view === "finance" && actor.role === "owner" && (
+            <FinanceCenter
+              people={data.people}
+              applications={data.applications}
+              projects={data.projects || []}
+              writable={writable}
+              onChange={refresh}
+            />
+          )}
           {view === "settings" && (
             <>
               {title(
                 "Your workspace, thoughtfully set up.",
                 "Local subscription and session details. No live payments are connected.",
+              )}
+              {actor.role === "owner" && (
+                <PipelineSettings
+                  settings={data.pipelines || {}}
+                  writable={writable}
+                  onChange={refresh}
+                />
               )}
               <div className="settings-grid">
                 <section className="panel settings-panel">
@@ -2073,9 +2145,9 @@ export default function Workspace({
                     <div className="assistant-settings">
                       <h3>Humeto Assist · local alpha</h3>
                       <p>
-                        Pair one applicant’s basic identity/contact fields for
-                        one hour. The extension is read-only until you approve
-                        each match on a page.
+                        Pair selected reusable information and supporting
+                        documents for one hour. The extension is read-only until
+                        you approve each match on a page.
                       </p>
                       <a
                         className="btn secondary small"
@@ -2271,8 +2343,8 @@ export default function Workspace({
                 <span className="eyebrow">BROWSER ASSISTANT · LOCAL ALPHA</span>
                 <h2 id="modal-title">A little head start.</h2>
                 <p>
-                  Create a scoped token. Only the selected applicant’s
-                  identity/contact sections are exposed. Tokens expire in one
+                  Create a scoped token. Only the selected applicant’s selected
+                  sections and their documents are exposed. Tokens expire in one
                   hour and can be revoked here.
                 </p>
                 {pairingSecret ? (
@@ -2313,7 +2385,8 @@ export default function Workspace({
                       try {
                         const result = await api("assist-tokens", "POST", {
                           personId: f.get("personId"),
-                          sectionKeys: ["identity", "contact"],
+                          sectionKeys: pairingSections,
+                          includeDocuments: f.get("includeDocuments") === "on",
                         });
                         setPairingSecret(result.token);
                         setPairings((await api("assist-tokens")).tokens);
@@ -2334,7 +2407,69 @@ export default function Workspace({
                         ))}
                       </select>
                     </label>
-                    <button className="btn primary full" disabled={busy}>
+                    <fieldset
+                      style={{
+                        border: "1px solid #dae2d4",
+                        borderRadius: 12,
+                        padding: 14,
+                        margin: "14px 0",
+                      }}
+                    >
+                      <legend>Information to share with the extension</legend>
+                      <p style={{ fontSize: 12 }}>
+                        Choose only what this application needs. Files in
+                        selected sections are also available for reviewed
+                        attachment.
+                      </p>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          gap: 10,
+                        }}
+                      >
+                        {assistSectionKeys.map((key) => (
+                          <label
+                            key={key}
+                            style={{
+                              display: "flex",
+                              gap: 7,
+                              alignItems: "center",
+                              fontSize: 12,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={pairingSections.includes(key)}
+                              onChange={(e) =>
+                                setPairingSections((old) =>
+                                  e.target.checked
+                                    ? [...old, key]
+                                    : old.filter((k) => k !== key),
+                                )
+                              }
+                            />
+                            {sections.find((s) => s.key === key)?.title}
+                          </label>
+                        ))}
+                      </div>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          marginTop: 15,
+                        }}
+                      >
+                        <input type="checkbox" name="includeDocuments" />
+                        Also allow document downloads and approved attachments
+                        from these sections
+                      </label>
+                    </fieldset>
+                    <button
+                      className="btn primary full"
+                      disabled={busy || !pairingSections.length}
+                    >
                       Create one-hour pairing
                     </button>
                   </form>
@@ -2991,8 +3126,16 @@ export default function Workspace({
                       <label>
                         Status
                         <select name="status" defaultValue={selectedApp.status}>
-                          {applicationStages.map((s) => (
-                            <option key={s}>{s}</option>
+                          {(
+                            data.pipelines?.applications?.stages ||
+                            applicationStages.map((key) => ({
+                              key,
+                              title: key,
+                            }))
+                          ).map((s) => (
+                            <option key={s.key} value={s.key}>
+                              {s.title}
+                            </option>
                           ))}
                         </select>
                       </label>

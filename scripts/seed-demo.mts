@@ -1,3 +1,4 @@
+import { seedFinanceDemo } from "../src/lib/finance-demo";
 import { db, seed, seedCRM, initializeChecklists } from "../src/lib/db";
 import { seedTaskProgress } from "../src/lib/task-schema";
 import { seedRequestWorkflow } from "../src/lib/request-schema";
@@ -12,6 +13,7 @@ try {
   await seedRequestWorkflow(d);
   await seedUpdateInbox(d);
   await initializeChecklists(d);
+  await seedFinanceDemo();
   console.log("Fictional PostgreSQL demo records initialized.");
 } finally {
   await d.close();

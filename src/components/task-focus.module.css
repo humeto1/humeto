@@ -1,0 +1,221 @@
+.shell {
+  border: 1px solid #d9e3d3;
+  background: linear-gradient(125deg, #f0f5e7, #f9fbf7);
+  border-radius: 22px;
+  padding: 26px;
+  margin: 0 0 24px;
+  color: #233d31;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.top > span {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+.shell h2 {
+  font-family: var(--font-serif), Georgia, serif;
+  font-size: clamp(25px, 3vw, 35px);
+  line-height: 1.2;
+  margin: 8px 0 12px;
+  font-weight: 400;
+  max-width: 700px;
+}
+.eyebrow {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: #6f7f65;
+}
+.message {
+  font-size: 14px;
+  line-height: 1.7;
+  max-width: 650px;
+  color: #5a6e5f;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 28px;
+  align-items: center;
+}
+.timer {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 7px;
+  padding: 20px 28px;
+  border-radius: 18px;
+  background: #fff9;
+  min-width: 220px;
+}
+.timer strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 39px;
+  font-weight: 400;
+  letter-spacing: 1px;
+}
+.timer span,
+.timer small {
+  font-size: 11px;
+  color: #6c7f6b;
+}
+.controls,
+.pick {
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.shell button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #d8e2d4;
+  border-radius: 9px;
+  padding: 10px 13px;
+  font-size: 12px;
+  color: #314c3c;
+  cursor: pointer;
+}
+.shell button.primary {
+  background: #254d3b;
+  border-color: #254d3b;
+  color: #fff;
+}
+.shell button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.shell button.textButton {
+  padding: 6px 0;
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+}
+.pick label,
+.note {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+}
+.pick label:first-child {
+  flex: 1;
+  min-width: 220px;
+}
+.pick small,
+.hint {
+  font-size: 11px;
+  color: #7a8974;
+  line-height: 1.6;
+}
+.shell input,
+.shell select {
+  padding: 11px 12px;
+  border: 1px solid #d5dfd0;
+  border-radius: 9px;
+  background: #fff;
+  color: #2e4838;
+  font: inherit;
+  max-width: 100%;
+}
+.shell select {
+  width: 100%;
+}
+.pick input {
+  width: 100px;
+}
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.controls input {
+  width: 65px;
+}
+.note {
+  margin-top: 20px;
+}
+.savedNote {
+  padding: 10px;
+  background: #fff8;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.pill {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 15px;
+  background: #e2ead9;
+  font-size: 11px;
+}
+.history {
+  border-top: 1px solid #dce4d6;
+  margin-top: 20px;
+  padding-top: 10px;
+}
+.history h3 {
+  font-size: 14px;
+}
+.history article {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e1e8dc;
+  font-size: 12px;
+}
+.history small {
+  display: block;
+  margin-top: 5px;
+  color: #6a7c64;
+}
+.history article > span {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.error {
+  color: #9f3838;
+  font-size: 13px;
+}
+@media (max-width: 650px) {
+  .shell {
+    padding: 18px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .timer {
+    min-width: 0;
+  }
+  .pick {
+    align-items: stretch;
+  }
+  .pick label {
+    width: 100%;
+  }
+  .top {
+    align-items: start;
+  }
+  .controls {
+    gap: 7px;
+  }
+  .controls button {
+    flex: 1;
+    white-space: nowrap;
+  }
+  .shell h2 {
+    font-size: 28px;
+  }
+}

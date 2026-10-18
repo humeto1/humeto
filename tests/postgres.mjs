@@ -1,5 +1,6 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { request } from "playwright";
 import { database, parameters } from "../src/lib/postgres.mjs";
@@ -52,7 +53,9 @@ test("PostgreSQL is the actual database and supports safe parameter compilation"
   );
   assert.equal(
     (await d.query("SELECT count(*) AS n FROM schema_migrations")).rows[0].n,
-    2,
+    readdirSync(new URL("../migrations/", import.meta.url)).filter((f) =>
+      f.endsWith(".sql"),
+    ).length,
   );
   assert.equal(
     parameters(

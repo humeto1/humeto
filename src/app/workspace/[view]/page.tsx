@@ -25,11 +25,13 @@ export default async function Page({
       "requests",
       "activity",
       "settings",
+      "finance",
       "platform",
     ].includes(view)
   )
     notFound();
   const a = await requireActor();
+  if (view === "finance" && a.role !== "owner") notFound();
   if (view === "platform" && a.role !== "platform_admin") notFound();
   if (
     ["assistant", "leads", "progress", "crm-ai", "updates"].includes(view) &&

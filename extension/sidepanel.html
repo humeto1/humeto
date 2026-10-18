@@ -45,6 +45,20 @@
           Review the suggested values together, then fill your selected empty
           fields in one batch.
         </div>
+        <section class="helper">
+          <h3>Ask Extension AI</h3>
+          <p class="tiny">Local search and guidance · no external model</p>
+          <form id="help-form">
+            <label
+              >Your question<input
+                id="help-question"
+                placeholder="Find passport number or explain attachments"
+                maxlength="500"
+                required /></label
+            ><button type="submit">Ask Humeto</button>
+          </form>
+          <div id="help-answer" role="status"></div>
+        </section>
         <button id="scan">Find fields on this page</button>
         <p class="tiny">
           Open this panel from the extension’s toolbar icon on the page you want
@@ -91,10 +105,30 @@
         </div>
         <div id="matches"></div>
         <button id="fill" hidden>Fill selected empty fields →</button>
+        <section class="helper">
+          <h3>Document attachment assistant</h3>
+          <p class="tiny">
+            Attach only to the website you are applying on. Files are shared
+            with that site only when you press Attach.
+          </p>
+          <label
+            >Applicant document<select id="attach-document">
+              <option value="">Choose a shared file</option>
+            </select></label
+          ><label
+            >Page upload field<select id="attach-field">
+              <option value="">Scan a page first</option>
+            </select></label
+          ><button id="attach" type="button">
+            Attach selected file to this page</button
+          ><button id="download-document" type="button" class="subtle">
+            Download selected file instead
+          </button>
+          <p id="attachment-status" role="status"></p>
+        </section>
         <p class="tiny">
           No overwriting, submission, signatures, payments, sensitive
-          declarations or automatic file uploads. Use the app to download
-          supporting files.
+          declarations or unapproved file uploads.
         </p>
       </section>
       <div id="status" role="status" aria-live="polite"></div>

@@ -77,3 +77,49 @@ test("review separates suggested, ambiguous and preserved answers before any fil
     [true, false, false],
   );
 });
+
+test("repeated education and passport facts need a unique match and never leak into applicant names", async () => {
+  const facts = [
+    { key: "institution", sectionKey: "education", value: "Sample University" },
+    { key: "number", sectionKey: "passports", value: "FAKE123" },
+  ];
+  assert.equal(
+    matchField({ label: "Institution name" }, facts).fact.value,
+    "Sample University",
+  );
+  assert.equal(
+    matchField({ label: "Passport number" }, facts).fact.value,
+    "FAKE123",
+  );
+  assert.equal(
+    matchField({ label: "Institution name" }, [
+      facts[0],
+      { ...facts[0], value: "Other University" },
+    ]),
+    null,
+  );
+  assert.equal(
+    matchField({ label: "First name", context: "Mother" }, [
+      { key: "givenNames", value: "Amira" },
+    ]),
+    null,
+  );
+  const { answerQuestion } = await import("../extension/helper.mjs");
+  assert.equal(
+    answerQuestion("find passport number", {
+      facts: [
+        {
+          key: "number",
+          section: "Passports & identity",
+          label: "Passport number",
+          value: "FAKE123",
+        },
+      ],
+    }).facts[0].value,
+    "FAKE123",
+  );
+  assert.match(
+    answerQuestion("submit this form", { facts }).text,
+    /never submit/i,
+  );
+});

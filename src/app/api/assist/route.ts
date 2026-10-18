@@ -1,3 +1,7 @@
+import { assistAllowed } from "@/lib/assist-scope";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { dataDir } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { db } from "@/lib/db";
@@ -31,6 +35,7 @@ export async function GET(req: Request) {
         email: string;
         section_keys: string;
         expires_at: number;
+        allow_documents: boolean;
       }
     | undefined;
   if (!row)
@@ -42,46 +47,92 @@ export async function GET(req: Request) {
       { status: 401 },
     );
   const keys = JSON.parse(row.section_keys) as string[];
+  const documents = await db()
+    .prepare(
+      `SELECT d.id,d.title,d.section_key,d.category,d.status,d.current_version AS version,v.original_name,v.mime_type,v.byte_size FROM documents d JOIN document_versions v ON v.document_id=d.id AND v.tenant_id=d.tenant_id AND v.version=d.current_version WHERE d.tenant_id=? AND d.person_id=? ORDER BY d.created_at DESC`,
+    )
+    .all(row.tenant_id, row.person_id);
+  const permittedDocuments = documents.filter(
+    (d) =>
+      row.allow_documents &&
+      keys.includes(String(d.section_key)) &&
+      assistAllowed(String(d.section_key)),
+  );
+  const url = new URL(req.url),
+    documentId = url.searchParams.get("documentId");
+  if (documentId) {
+    const doc = permittedDocuments.find((d) => d.id === documentId);
+    if (!doc)
+      return NextResponse.json(
+        { error: "Document is outside this pairing scope." },
+        { status: 404 },
+      );
+    if (Number(url.searchParams.get("version")) !== doc.version)
+      return NextResponse.json(
+        { error: "Document changed. Refresh before attaching." },
+        { status: 409 },
+      );
+    if (Number(doc.byte_size) > 10 * 1024 * 1024)
+      return NextResponse.json(
+        { error: "Files over 10 MB must be attached manually." },
+        { status: 413 },
+      );
+    const source = await db()
+      .prepare(
+        "SELECT stored_name FROM document_versions WHERE tenant_id=? AND document_id=? AND version=?",
+      )
+      .get(row.tenant_id, doc.id, doc.version);
+    return new NextResponse(
+      new Uint8Array(
+        readFileSync(resolve(dataDir, "uploads", String(source!.stored_name))),
+      ),
+      {
+        headers: {
+          "Content-Type": String(doc.mime_type),
+          "Cache-Control": "private, no-store",
+          "Content-Disposition": 'attachment; filename="document"',
+        },
+      },
+    );
+  }
   const facts: Record<string, unknown>[] = [];
   for (const key of keys) {
     const section = sections.find((s) => s.key === key);
-    if (
-      !section ||
-      section.repeatable ||
-      !["identity", "contact"].includes(section.key)
-    )
-      continue;
-    const saved = (await db()
+    if (!section || !assistAllowed(key) || section.restricted) continue;
+    const saved = await db()
       .prepare(
         "SELECT data,revision,updated_at FROM intake WHERE tenant_id=? AND person_id=? AND section_key=?",
       )
-      .get(row.tenant_id, row.person_id, key)) as
-      | {
-          data: string;
-          revision: number;
-          updated_at: string;
-        }
-      | undefined;
+      .get(row.tenant_id, row.person_id, key);
     if (!saved) continue;
-    const data = JSON.parse(saved.data);
-    for (const field of section.fields) {
-      if (field.sensitive) continue;
-      const value = data[field.key];
-      if (typeof value === "string" && value.trim())
-        facts.push({
-          key: field.key,
-          label: field.label,
-          value,
-          section: section.title,
-          status: "Provided, not verified",
-          updatedAt: saved.updated_at,
-        });
+    const data = JSON.parse(String(saved.data));
+    const records = section.repeatable ? data.items || [] : [data];
+    for (const [index, record] of records.entries()) {
+      for (const field of section.fields) {
+        if (field.sensitive) continue;
+        const value = record[field.key];
+        if (typeof value === "string" && value.trim())
+          facts.push({
+            key: field.key,
+            label: section.repeatable
+              ? `${section.title} #${index + 1} · ${field.label}`
+              : field.label,
+            value,
+            section: section.title,
+            sectionKey: key,
+            recordIndex: index,
+            status: "Provided, not verified",
+            revision: saved.revision,
+            updatedAt: saved.updated_at,
+          });
+      }
     }
   }
   return NextResponse.json(
     {
       applicant: { id: row.person_id, name: row.name },
       facts,
+      documents: permittedDocuments,
       expiresAt: row.expires_at,
     },
     { headers: { "Cache-Control": "private, no-store" } },

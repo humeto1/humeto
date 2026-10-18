@@ -13,11 +13,13 @@ export default function Leads({
   refresh,
   writable,
   search,
+  pipeline,
 }: {
   leads: Lead[];
   refresh: () => Promise<void>;
   writable: boolean;
   search: string;
+  pipeline?: { stages: { key: string; title: string }[] };
 }) {
   const [editing, setEditing] = useState<Draft | null>(null),
     [error, setError] = useState(""),
@@ -367,7 +369,10 @@ export default function Leads({
       <PipelineBoard
         label="Lead pipeline"
         items={filtered}
-        stages={leadStages}
+        stages={pipeline?.stages.map((s) => s.key) || leadStages}
+        titles={Object.fromEntries(
+          (pipeline?.stages || []).map((s) => [s.key, s.title]),
+        )}
         stageOf={(l) => l.stage}
         editable={writable && !busy}
         move={async (l, stage) => {

@@ -1,4 +1,5 @@
 import "server-only";
+import { pipelineSettings } from "./pipeline-settings";
 import { db } from "./db";
 import { sections } from "./sections";
 import { scope, canSeePerson } from "./auth";
@@ -144,13 +145,15 @@ export async function bootstrap(a: Actor) {
             .all(a.tenantId)
         ).map((r) => ({ ...r, extras: JSON.parse(String(r.extras)) }))
       : [],
+    pipelines:
+      a.role === "platform_admin" ? {} : await pipelineSettings(a.tenantId),
     finance:
       a.role === "platform_admin" || a.role === "student"
         ? []
         : (
             await db()
               .prepare(
-                "SELECT f.*,COALESCE((SELECT SUM(amount) FROM payments p WHERE p.person_id=f.person_id AND p.tenant_id=f.tenant_id),0) AS paid FROM case_finance f WHERE f.tenant_id=?",
+                "SELECT f.*,COALESCE((SELECT SUM(amount) FROM payments p WHERE p.person_id=f.person_id AND p.tenant_id=f.tenant_id),0)-COALESCE((SELECT SUM(a.amount) FROM finance_adjustments a JOIN payments p ON p.id=a.source_id AND p.tenant_id=a.tenant_id WHERE p.person_id=f.person_id AND p.tenant_id=f.tenant_id AND a.kind='refund'),0) AS paid FROM case_finance f WHERE f.tenant_id=?",
               )
               .all(a.tenantId)
           ).map((r) => ({

@@ -259,3 +259,26 @@ button:disabled {
 #connect:disabled {
   cursor: wait;
 }
+
+.helper {
+  border: 1px solid #dce4d7;
+  padding: 14px;
+  border-radius: 12px;
+  margin: 18px 0;
+  background: #f7faf4;
+}
+.helper h3 {
+  margin: 0 0 10px;
+}
+#help-answer {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+#help-answer small {
+  color: #76816f;
+}
+#attachment-status {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

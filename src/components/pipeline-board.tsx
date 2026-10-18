@@ -8,6 +8,7 @@ export default function PipelineBoard<T extends { id: string }>({
   move,
   editable,
   label,
+  titles = {},
 }: {
   items: T[];
   stages: readonly string[];
@@ -16,6 +17,7 @@ export default function PipelineBoard<T extends { id: string }>({
   move: (item: T, stage: string) => Promise<void>;
   editable: boolean;
   label: string;
+  titles?: Record<string, string>;
 }) {
   const [dragged, setDragged] = useState<string | null>(null),
     [over, setOver] = useState(""),
@@ -37,7 +39,7 @@ export default function PipelineBoard<T extends { id: string }>({
         <section
           className={"pipeline-column " + (over === stage ? "drop-over" : "")}
           key={stage}
-          aria-label={stage + " column"}
+          aria-label={(titles[stage] || stage) + " column"}
           onDragOver={(e) => {
             if (editable && dragged) {
               e.preventDefault();
@@ -53,7 +55,7 @@ export default function PipelineBoard<T extends { id: string }>({
         >
           <h2>
             <i />
-            {stage}
+            {titles[stage] || stage}
             <span>{items.filter((i) => stageOf(i) === stage).length}</span>
           </h2>
           {items
@@ -90,7 +92,9 @@ export default function PipelineBoard<T extends { id: string }>({
                       onChange={(e) => void run(item, e.target.value)}
                     >
                       {stages.map((s) => (
-                        <option key={s}>{s}</option>
+                        <option key={s} value={s}>
+                          {titles[s] || s}
+                        </option>
                       ))}
                     </select>
                   </label>

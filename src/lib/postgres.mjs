@@ -5,6 +5,7 @@ const state = (globalThis[key] ||= {
   pools: new Map(),
   context: new AsyncLocalStorage(),
 });
+pg.types.setTypeParser(1082, (value) => value); // Calendar dates must not shift across timezones.
 pg.types.setTypeParser(20, (value) => {
   const n = Number(value);
   if (!Number.isSafeInteger(n))
