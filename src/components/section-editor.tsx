@@ -1,4 +1,5 @@
 "use client";
+import SectionEvidence from "./section-evidence";
 import {
   forwardRef,
   useImperativeHandle,
@@ -420,6 +421,11 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
         “Entered” means you have supplied this section. It is not verification
         or confirmation that an external application is ready.
       </p>
+      <SectionEvidence
+        personId={personId}
+        sectionKey={section.key}
+        revision={initial?.revision || 0}
+      />
     </section>
   );
 });

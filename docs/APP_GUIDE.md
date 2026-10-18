@@ -71,7 +71,7 @@ See [extension setup and limits](../extension/README.md). Local alpha 0.2.0 pair
 
 Live records are in PostgreSQL; original files and the dedicated local cluster/backups are under ignored `.data/`. Start the configured cluster with `npm run db:start`. Take a PostgreSQL dump/upload backup with app writes paused; see [database operation](POSTGRESQL.md). The old SQLite file is retained only as a historical rollback snapshot. Rebuild/restart does not reset data. Environment secrets, screenshots and private planning are also excluded from Git; ignore rules are not a backup or deployment-security mechanism.
 
-Last application release: optimized build with 61 passing automated checks plus recorded browser checks. Prefer `npm run build` then `npm run test:release`, which tests disposable records; ordinary `npm test` targets a running development database. The database migration preserved 41 tables / 907 rows and five original files, and a PostgreSQL dump/restore was verified. It does not enable new external integrations.
+Current application release: optimized build with 85 passing automated checks plus recorded browser checks. Prefer `npm run build` then `npm run test:release`, which tests disposable records; ordinary `npm test` targets a running development database. The database migration preserved 41 tables / 907 rows and five original files, and a PostgreSQL dump/restore was verified. It does not enable new external integrations.
 
 Public production still needs authentication lifecycle, independent access review, secure/scanned storage, backup/restore, retention/export/deletion, durable jobs, load testing, observability and configured external services. See [tech stack](TECH_STACK.md) and the local `planning/PENDING_FEATURES.md` checklist.
 
@@ -79,4 +79,8 @@ Public production still needs authentication lifecycle, independent access revie
 
 See [the delivery guide](FEATURE_DELIVERY_2026-10-18.md) for task focus/timers, scoped extension attachments, configurable CRM columns, team assignment and the owner Finance tab. Gmail/WhatsApp are not connected; no external messages are sent.
 
-Current expanded release validation: **73 automated checks pass**. The earlier 61-check PostgreSQL cutover result is historical.
+The preceding product increment passed **73 automated checks**. The earlier 61-check PostgreSQL cutover result is historical.
+
+## Read documents into reviewed profile facts
+
+Open **Document reader** to read a file locally, inspect source pages, confirm/correct facts and save reviewed selections to draft intake. New uploads/imports can queue reading. Source replacement and manual edits flag prior links. See [the full workflow and limits](DOCUMENT_READING.md). Current release: **85 passing checks**.

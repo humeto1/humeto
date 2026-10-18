@@ -24,6 +24,7 @@ export default function ImportPanel({
       defaultPerson || people[0]?.id || "",
     ),
     [items, setItems] = useState<Item[]>([]),
+    [readInformation, setReadInformation] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [finished, setFinished] = useState(false);
@@ -76,6 +77,7 @@ export default function ImportPanel({
         form.set("title", item.file.name);
         form.set("category", "Other");
         form.set("file", item.file);
+        form.set("readInformation", String(readInformation));
         form.set("sourcePath", item.path);
         form.set("importRunId", created.id);
         try {
@@ -91,6 +93,7 @@ export default function ImportPanel({
                 ? {
                     ...i,
                     status: result.duplicate ? "Duplicate linked" : "Imported",
+                    error: result.readingError || undefined,
                   }
                 : i,
             ),
@@ -164,6 +167,21 @@ export default function ImportPanel({
         accept=".pdf,.png,.jpg,.jpeg"
         onChange={(e) => choose(e.target.files)}
       />
+      <label
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "center",
+          margin: "12px 0",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={readInformation}
+          onChange={(e) => setReadInformation(e.target.checked)}
+        />
+        Read imported files locally and suggest information
+      </label>
       <div className="import-buttons">
         <button
           className="btn secondary"

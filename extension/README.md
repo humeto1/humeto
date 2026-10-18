@@ -18,6 +18,6 @@ Before filling, Humeto checks that each reviewed control is still the same visib
 
 Broader reusable sections, local search/help and explicitly approved ordinary file-input attachments are available. Choose a shared file and reviewed page input; existing files and changed versions are protected. Files over 10 MB and custom widgets need manual attachment. Old pairings do not gain file access; create a new pairing and enable it explicitly.
 
-Actual AI document reading, student-confirmed source assertions, nested frames, split dates and continuous guided-session assistance remain future work. See [the delivery record](../docs/FEATURE_DELIVERY_2026-10-18.md).
+Local OCR and student/staff source assertions now work in the app; paired facts show their review/source state. External-model reading, nested frames, split dates and continuous guided-session assistance remain future work. See [the delivery record](../docs/FEATURE_DELIVERY_2026-10-18.md).
 
 Run `npm run package:extension` in the app directory after editing the extension; it rebuilds `public/humeto-assist.zip` from the current files.

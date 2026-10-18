@@ -1,5 +1,6 @@
 "use client";
 import { assistSectionKeys } from "@/lib/assist-scope";
+import DocumentReader from "./document-reader";
 import FinanceCenter from "./finance-center";
 import WorkAssignment from "./work-assignment";
 import PipelineSettings from "./pipeline-settings";
@@ -35,6 +36,7 @@ import {
   Download,
   Upload,
   ShieldCheck,
+  ScanText,
   Building2,
   Menu,
   X,
@@ -159,6 +161,7 @@ const navItems = [
   ["updates", "Update inbox", Mail],
   ["finance", "Finance", Wallet],
   ["documents", "Documents", FolderOpen],
+  ["reading", "Document reader", ScanText],
   ["assistant", "Humeto assistant", Sparkles],
   ["requests", "Requests", MessageSquare],
   ["activity", "Activity", History],
@@ -456,7 +459,13 @@ export default function Workspace({
       await refresh();
       if (isPlatform) await loadPlatform();
       setModal(null);
-      notify(message);
+      notify(
+        result.readingError
+          ? message + " Reading: " + result.readingError
+          : result.readingJobId
+            ? message + " Local reading queued."
+            : message,
+      );
       return result;
     } catch (e) {
       setError((e as Error).message);
@@ -806,6 +815,14 @@ export default function Workspace({
                 </td>
                 <td>
                   <div className="table-actions">
+                    <a
+                      className="icon-btn"
+                      href={`/workspace/reading?documentId=${d.id}`}
+                      aria-label={`Read and verify ${d.title}`}
+                    >
+                      <ScanText size={16} />
+                    </a>
+
                     <a
                       className="icon-btn"
                       href={`/api/workspace/documents/${d.id}/download?inline=1`}
@@ -1635,6 +1652,14 @@ export default function Workspace({
               )}
             </>
           )}
+          {view === "reading" && (
+            <DocumentReader
+              documents={data.documents}
+              actor={actor}
+              writable={writable}
+              onChange={refresh}
+            />
+          )}
           {view === "documents" && (
             <>
               {title(
@@ -1678,8 +1703,8 @@ export default function Workspace({
                   <span>02</span>
                   <strong>Check the details</strong>
                   <p>
-                    Review the applicant’s profile before reusing answers. AI
-                    document reading is not connected yet.
+                    Read text locally, inspect each source and confirm details
+                    before applying them to the profile.
                   </p>
                   <a
                     href={
@@ -2670,6 +2695,17 @@ export default function Workspace({
                       required
                     />
                   </label>
+                  <label
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
+                    <input
+                      type="checkbox"
+                      name="readInformation"
+                      value="true"
+                      defaultChecked
+                    />
+                    Read this file locally and suggest profile information
+                  </label>
                   <button className="btn primary full" disabled={busy}>
                     {busy ? "Uploading…" : "Upload private document"}
                     <Upload size={15} />
@@ -2713,6 +2749,13 @@ export default function Workspace({
                     Download <Download size={14} />
                   </a>
                 </div>
+                <a
+                  className="btn primary full"
+                  href={`/workspace/reading?documentId=${selectedDocument.id}`}
+                >
+                  <ScanText size={15} />
+                  Read & verify information
+                </a>
                 {staff && writable && (
                   <form
                     onSubmit={async (e) => {
@@ -2800,6 +2843,17 @@ export default function Workspace({
                       accept="application/pdf,image/png,image/jpeg"
                       required
                     />
+                    <label
+                      style={{ display: "flex", gap: 8, alignItems: "center" }}
+                    >
+                      <input
+                        type="checkbox"
+                        name="readInformation"
+                        value="true"
+                        defaultChecked
+                      />
+                      Read the new version; earlier facts will need fresh review
+                    </label>
                     <button className="btn secondary full" disabled={busy}>
                       Upload next version
                     </button>

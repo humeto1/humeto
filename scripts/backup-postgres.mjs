@@ -53,11 +53,12 @@ export function backupPostgres() {
     process.env.DATABASE_URL,
   );
   chmodSync(dump, 0o600);
-  cpSync(
-    resolve(process.env.HUMETO_DATA_DIR || ".data", "uploads"),
-    resolve(folder, "uploads"),
-    { recursive: true },
-  );
+  for (const name of ["uploads", "ocr"]) {
+    const source = resolve(process.env.HUMETO_DATA_DIR || ".data", name),
+      target = resolve(folder, name);
+    if (existsSync(source)) cpSync(source, target, { recursive: true });
+    else mkdirSync(target, { mode: 0o700 });
+  }
   writeFileSync(
     resolve(folder, "manifest.json"),
     JSON.stringify(
@@ -65,7 +66,8 @@ export function backupPostgres() {
         createdAt: new Date().toISOString(),
         format: "pg_dump custom",
         uploads: "uploads",
-        note: "Pause application writes during dump/upload capture.",
+        ocr: "ocr",
+        note: "Pause application writes and the OCR worker during database/file capture.",
       },
       null,
       2,

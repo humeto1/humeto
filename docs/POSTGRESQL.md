@@ -65,13 +65,13 @@ A PostgreSQL logical dump plus upload copy was also restored into a disposable d
 
 ## Backups and rollback
 
-Pause application writes while taking the database/upload backup:
+Pause application writes and the OCR worker while taking a database/file backup:
 
 ```sh
 npm run db:backup
 ```
 
-This uses `pg_dump` custom format plus an upload-directory copy in `.data/postgres-backups/`. Credentials are supplied through environment variables, not command-line arguments. Protect and privately back up this folder; Git-ignore is not a backup. Do not copy a running PostgreSQL cluster directory as if it were a consistent logical backup.
+This uses `pg_dump` custom format plus original-upload and OCR-preview directory copies in `.data/postgres-backups/`. Credentials are supplied through environment variables, not command-line arguments. Protect and privately back up this folder; Git-ignore is not a backup. Do not copy a running PostgreSQL cluster directory as if it were a consistent logical backup.
 
 Restore into an **empty, isolated** target first using `pg_restore --dbname TARGET_DATABASE --no-owner --no-privileges --exit-on-error`, supplying its credentials securely. Reconcile records, file hashes, migration versions, identities and event history before considering a real restore. Avoid printing connection strings/passwords in logs or shell history.
 
@@ -86,4 +86,6 @@ npm run build
 npm run test:release
 ```
 
-Production capacity/load targets, deployment-grade backup retention, monitoring, role separation, storage scanning/encryption and full operational hardening remain separate work. The migration does not enable Gmail, WhatsApp, OCR or mobile clients.
+Production capacity/load targets, deployment-grade backup retention, monitoring, role separation, storage scanning/encryption and full operational hardening remain separate work. The database migration itself did not enable integrations. Local OCR was implemented subsequently; see [document reading](DOCUMENT_READING.md). Gmail, WhatsApp and mobile remain separate work.
+
+The current application includes additional migrations through 008 and passes **85 release checks**. To capture and restore-test a full current backup, with app/worker writes paused, run `npm run db:verify-backup`. Restore `uploads/` and `ocr/` alongside the database. The earlier 41/42-table cutover counts above are historical, not the current schema count.

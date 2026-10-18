@@ -95,6 +95,11 @@ export async function GET(req: Request) {
       },
     );
   }
+  const provenance = await db()
+    .prepare(
+      `SELECT a.*,f.document_id,f.document_version,f.page_number,f.chosen_value,f.applicant_review,f.staff_review,f.source_stale,d.current_version FROM fact_applications a JOIN document_facts f ON f.id=a.fact_id AND f.tenant_id=a.tenant_id JOIN documents d ON d.id=f.document_id AND d.tenant_id=f.tenant_id WHERE a.tenant_id=? AND a.person_id=? ORDER BY a.created_at DESC`,
+    )
+    .all(row.tenant_id, row.person_id);
   const facts: Record<string, unknown>[] = [];
   for (const key of keys) {
     const section = sections.find((s) => s.key === key);
@@ -111,7 +116,31 @@ export async function GET(req: Request) {
       for (const field of section.fields) {
         if (field.sensitive) continue;
         const value = record[field.key];
-        if (typeof value === "string" && value.trim())
+        if (typeof value === "string" && value.trim()) {
+          const linked = provenance.find(
+            (p) =>
+              p.section_key === key &&
+              p.field_key === field.key &&
+              p.record_id === (section.repeatable ? record._id || "" : "") &&
+              p.applied_value === value,
+          );
+          let status = "Provided, not verified";
+          if (linked) {
+            if (
+              linked.source_stale ||
+              linked.current_version !== linked.document_version
+            )
+              status = "Source replaced; review again";
+            else if (linked.chosen_value !== value)
+              status = "Source review changed; review again";
+            else if (
+              linked.applicant_review === "rejected" ||
+              linked.staff_review === "rejected"
+            )
+              status = "Source fact rejected; review again";
+            else
+              status = `Student ${linked.applicant_review} · Staff ${linked.staff_review} · source-linked`;
+          }
           facts.push({
             key: field.key,
             label: section.repeatable
@@ -121,10 +150,19 @@ export async function GET(req: Request) {
             section: section.title,
             sectionKey: key,
             recordIndex: index,
-            status: "Provided, not verified",
+            status,
+            source: linked
+              ? {
+                  documentId: linked.document_id,
+                  version: linked.document_version,
+                  page: linked.page_number,
+                  stale: linked.source_stale,
+                }
+              : null,
             revision: saved.revision,
             updatedAt: saved.updated_at,
           });
+        }
       }
     }
   }

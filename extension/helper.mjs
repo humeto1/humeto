@@ -20,7 +20,7 @@ export function answerQuestion(question, profile) {
     };
   if (/verify|verified|source|accurate/.test(q))
     return {
-      text: "These are saved profile answers, not OCR-verified facts. Each result names its section and last update. Check it against the original document before using it.",
+      text: "Each result shows its saved review state. Source-linked answers can include student confirmation and a separate staff review; pending or changed sources still need checking. Reading or confirming a value does not authenticate the original document.",
       facts: [],
     };
   const synonyms = {

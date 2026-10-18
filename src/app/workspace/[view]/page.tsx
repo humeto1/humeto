@@ -16,6 +16,7 @@ export default async function Page({
       "students",
       "leads",
       "documents",
+      "reading",
       "applications",
       "tasks",
       "progress",

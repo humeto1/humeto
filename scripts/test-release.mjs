@@ -30,6 +30,7 @@ const env = {
   HUMETO_AGENT_PROVIDER: "local",
   HUMETO_TEST_URL: url,
   HUMETO_ISOLATED_QA: "true",
+  HUMETO_OCR_ENABLED: "true",
 };
 const run = (args, options = {}) =>
   new Promise((resolve, reject) => {
@@ -42,6 +43,8 @@ const run = (args, options = {}) =>
     c.once("exit", (code) => resolve(code ?? 1));
   });
 let server,
+  worker,
+  workerFd,
   fd,
   result = 1;
 try {
@@ -78,6 +81,11 @@ try {
     await new Promise((r) => setTimeout(r, 250));
   }
   if (!ready) throw new Error("QA server did not become ready.");
+  workerFd = openSync(join(directory, "ocr-worker.log"), "w");
+  worker = spawn(process.execPath, ["scripts/ocr-worker.mjs"], {
+    env,
+    stdio: ["ignore", workerFd, workerFd],
+  });
   console.log("Testing isolated PostgreSQL release at " + url);
   const files = readdirSync("tests")
     .filter((f) => f.endsWith(".mjs"))
@@ -91,6 +99,12 @@ try {
     );
   } catch {}
 } finally {
+  if (worker && worker.exitCode === null && worker.signalCode === null) {
+    const done = new Promise((r) => worker.once("exit", r));
+    worker.kill("SIGTERM");
+    await done;
+  }
+  if (workerFd !== undefined) closeSync(workerFd);
   if (server && server.exitCode === null && server.signalCode === null) {
     const done = new Promise((r) => server.once("exit", r));
     server.kill("SIGTERM");

@@ -1,3 +1,5 @@
+> Subsequent OCR delivery: local document reading/source-linked reviews are now implemented. See [Document reading](DOCUMENT_READING.md) for current behavior and limits. Earlier OCR-pending statements below describe the preceding increment.
+
 # Product expansion — 18 October 2026
 
 This record distinguishes working local behavior from account integrations and production work. The user's nine-point request and later clarifications drive this increment.

@@ -1,3 +1,9 @@
+import {
+  readingRead,
+  readingWrite,
+  queueReading,
+  ReadingError,
+} from "@/lib/document-intelligence";
 import { financeRead, financeWrite } from "@/lib/finance";
 import { assignmentRead, assignmentWrite } from "@/lib/assignments";
 import {
@@ -69,6 +75,7 @@ const string = z.string().trim().max(500),
 async function handle(req: Request, parts: string[], a: Actor) {
   const [resource, rid, action] = parts;
   if (req.method === "GET") {
+    if (resource === "reading") return readingRead(req, parts, a);
     if (resource === "finance")
       return financeRead(a, new URL(req.url).searchParams.get("month") || "");
     if (resource === "assignments") {
@@ -438,11 +445,12 @@ async function handle(req: Request, parts: string[], a: Actor) {
         return fail("Import does not match selected applicant.");
       const duplicate = (await db()
         .prepare(
-          "SELECT d.id FROM document_versions v JOIN documents d ON d.id=v.document_id AND d.tenant_id=v.tenant_id WHERE v.sha256=? AND v.tenant_id=? AND d.person_id=? LIMIT 1",
+          "SELECT d.id,d.current_version FROM document_versions v JOIN documents d ON d.id=v.document_id AND d.tenant_id=v.tenant_id WHERE v.sha256=? AND v.tenant_id=? AND d.person_id=? LIMIT 1",
         )
         .get(sha, a.tenantId, pid)) as
         | {
             id: string;
+            current_version: number;
           }
         | undefined;
       if (duplicate) {
@@ -458,7 +466,22 @@ async function handle(req: Request, parts: string[], a: Actor) {
             duplicate.id,
             "Duplicate linked",
           );
-        return NextResponse.json({ id: duplicate.id, duplicate: true });
+        let readingJobId = "";
+        if (form.get("readInformation") === "true") {
+          try {
+            readingJobId = String(
+              (await queueReading(a, duplicate.id, duplicate.current_version))
+                .id,
+            );
+          } catch {
+            /* The existing original remains available even when reading is disabled. */
+          }
+        }
+        return NextResponse.json({
+          id: duplicate.id,
+          duplicate: true,
+          readingJobId,
+        });
       }
     }
     const stored = id();
@@ -535,9 +558,28 @@ async function handle(req: Request, parts: string[], a: Actor) {
       unlinkSync(resolve(dataDir, "uploads", stored));
       throw e;
     }
-    return NextResponse.json({ id: docId, version });
+    let readingJobId = "",
+      readingError = "";
+    if (form.get("readInformation") === "true") {
+      try {
+        readingJobId = String((await queueReading(a, docId, version)).id);
+      } catch (e) {
+        readingError =
+          e instanceof ReadingError
+            ? e.message
+            : "File saved. Use Document reader to retry reading.";
+      }
+    }
+    return NextResponse.json({
+      id: docId,
+      version,
+      readingJobId,
+      readingError,
+    });
   }
   const body = await req.json();
+  if (resource === "reading" && req.method === "POST")
+    return readingWrite(a, body);
   if (resource === "finance" && req.method === "POST")
     return financeWrite(a, body);
   if (resource === "assignments" && req.method === "POST")
@@ -1562,6 +1604,7 @@ async function route(
     const { path } = await ctx.params;
     return await handle(req, path, a);
   } catch (e) {
+    if (e instanceof ReadingError) return fail(e.message, e.status);
     if (e instanceof RequestWorkflowError) return fail(e.message, e.status);
     if (e instanceof z.ZodError)
       return fail(e.issues[0]?.message || "Invalid input.");

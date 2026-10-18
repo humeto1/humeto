@@ -168,6 +168,7 @@ export default function RequestCenter({
       f.set("title", file.name);
       f.set("category", r.section_key === "passports" ? "Identity" : "Other");
       f.set("file", file);
+      f.set("readInformation", "true");
       f.set("requestId", r.id);
       f.set("requestRevision", String(r.revision));
       f.set("replyMessage", message);

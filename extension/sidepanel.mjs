@@ -281,8 +281,19 @@ $("#help-form").onsubmit = (e) => {
       value = document.createElement("strong"),
       source = document.createElement("small");
     value.textContent = `${f.label}: ${f.value}`;
-    source.textContent = `${f.section} · ${f.status} · updated ${new Date(f.updatedAt).toLocaleDateString()}`;
+    source.textContent = `${f.section} · ${f.status} · updated ${new Date(f.updatedAt).toLocaleDateString()}${f.source ? ` · source v${f.source.version}, page ${f.source.page}` : ""}`;
     item.append(value, document.createElement("br"), source);
+    if (f.source) {
+      const link = document.createElement("a");
+      link.href =
+        base +
+        "/workspace/reading?documentId=" +
+        encodeURIComponent(f.source.documentId);
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      link.textContent = "Open source review in Humeto";
+      item.append(document.createElement("br"), link);
+    }
     $("#help-answer").append(item);
   }
 };
