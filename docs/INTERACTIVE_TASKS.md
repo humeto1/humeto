@@ -34,4 +34,4 @@ The compiled build and all 90 release tests pass. Release checks cover the exist
 
 ## Remaining task features
 
-Recurring tasks, notebook-photo task recognition/reconciliation, durable closed-app follow-ups, voice, WhatsApp task commands and broader model conversation remain separate deliverables. The company WhatsApp connector does not yet execute task commands.
+Recurring tasks and durable in-app follow-ups are now delivered; see [Task scheduling](TASK_SCHEDULING.md). Notebook-photo task recognition/reconciliation, closed-app device push, voice, WhatsApp task commands and broader model conversation remain separate deliverables. The company WhatsApp connector does not yet execute task commands.

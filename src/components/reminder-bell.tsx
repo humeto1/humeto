@@ -7,15 +7,12 @@ export default function ReminderBell() {
     let live = true;
     const refresh = () => {
       if (document.hidden) return;
-      const timezone =
-        Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Karachi";
-      fetch("/api/agent?summary=1&timezone=" + encodeURIComponent(timezone), {
+      fetch("/api/workspace/scheduling?summary=1", {
         cache: "no-store",
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
-          if (live && d)
-            setCount(d.reminders.filter((r: { due: boolean }) => r.due).length);
+          if (live && d) setCount(d.readyCount);
         })
         .catch(() => {});
     };
@@ -33,7 +30,7 @@ export default function ReminderBell() {
   return (
     <a
       className="notification-button"
-      href="/workspace/assistant#reminders"
+      href="/workspace/tasks#task-followups"
       aria-label={`Task reminders${count ? `: ${count} due` : ""}`}
       title={count ? `${count} reminders due` : "Task reminders"}
     >

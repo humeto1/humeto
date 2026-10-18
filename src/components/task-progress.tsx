@@ -9,6 +9,7 @@ import {
   History,
 } from "lucide-react";
 import type { Task, Workstream, TaskEvent } from "@/lib/types";
+import WorkAssignment from "./work-assignment";
 import TaskLinks from "./task-links";
 type Report = {
   events: TaskEvent[];
@@ -270,6 +271,13 @@ export default function TaskProgress({
                     </span>
                     <span>{related.length - done} pending</span>
                   </footer>
+                  {tab === "projects" && (
+                    <WorkAssignment
+                      type="project"
+                      id={item.id}
+                      writable={writable}
+                    />
+                  )}
                   <details>
                     <summary>View contributing tasks</summary>
                     {related.map((t) => (

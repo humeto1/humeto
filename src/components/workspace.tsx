@@ -5,6 +5,7 @@ import DocumentReader from "./document-reader";
 import FinanceCenter from "./finance-center";
 import WorkAssignment from "./work-assignment";
 import PipelineSettings from "./pipeline-settings";
+import TaskSchedules from "./task-schedules";
 import TaskFocus from "./task-focus";
 import UpdateInbox from "./update-inbox";
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -1833,6 +1834,13 @@ export default function Workspace({
                 />
               )}
               <div hidden={focusOnly}>
+                {staff && (
+                  <TaskSchedules
+                    tasks={data.tasks}
+                    writable={writable}
+                    onChange={refresh}
+                  />
+                )}
                 <div className="filter-bar">
                   <div className="segmented">
                     {[

@@ -84,3 +84,7 @@ Company-owned QR pairing, private text inbox and reviewed outbox are available i
 ### Interactive Tasks to-do
 
 The Task AI focus companion supports task suggestions, custom timers, reviewed local conversation, progress/next steps, blocker guidance, atomic switching, history and opt-in open-app browser alerts. See [Interactive tasks](docs/INTERACTIVE_TASKS.md) for commands, safeguards and remaining work.
+
+### Recurring tasks and follow-ups
+
+Schedule repeating work, manage an in-app follow-up inbox, snooze reminders and set personal quiet hours/frequency limits. Run `npm run tasks:worker` alongside the web app. Project cards also support team assignments. See [Task scheduling](docs/TASK_SCHEDULING.md).

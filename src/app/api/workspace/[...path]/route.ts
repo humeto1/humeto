@@ -1,3 +1,4 @@
+import { schedulingRead, schedulingWrite } from "@/lib/task-scheduling";
 import {
   readingRead,
   readingWrite,
@@ -88,6 +89,11 @@ async function handle(req: Request, parts: string[], a: Actor) {
     }
     if (resource === "pipelines") return pipelineRead(a);
     if (resource === "focus") return focusRead(a);
+    if (resource === "scheduling")
+      return schedulingRead(
+        a,
+        new URL(req.url).searchParams.get("summary") === "1",
+      );
     const conversation = await requestRead(parts, a);
     if (conversation) return conversation;
     const progress = await progressRead(req, parts, a);
@@ -586,6 +592,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return assignmentWrite(a, body);
   if (resource === "pipelines" && req.method === "POST")
     return pipelineWrite(a, body);
+  if (resource === "scheduling" && req.method === "POST")
+    return schedulingWrite(a, body);
   if (resource === "focus" && rid === "interpret" && req.method === "POST")
     return focusInterpret(a, body);
   if (resource === "focus" && req.method === "POST")

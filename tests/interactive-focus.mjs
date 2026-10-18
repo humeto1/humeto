@@ -336,6 +336,16 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
       .getByRole("button", { name: "Let’s begin", exact: true })
       .click();
     await page.getByText("Tracking time", { exact: true }).waitFor();
+    await page.getByRole("link", { name: /^Task reminders/ }).click();
+    await page
+      .getByRole("tab", { name: "Follow-up inbox", exact: true })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Return to focus", exact: true })
+      .click();
+    await page.locator(".kanban-board").waitFor({ state: "hidden" });
+    assert.equal(new URL(page.url()).hash, "");
+
     await page
       .getByLabel("Tell your task companion", { exact: true })
       .fill("50% done, need 15 minutes");

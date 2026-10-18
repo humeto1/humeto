@@ -151,8 +151,15 @@ export default function TaskFocus({
     setPreview(null);
     setMessage("");
     setSwitching(false);
-    setShowAll(false);
+    setShowAll(location.hash === "#task-followups");
   }, [active?.id]);
+  useEffect(() => {
+    const revealInbox = () => {
+      if (location.hash === "#task-followups") setShowAll(true);
+    };
+    window.addEventListener("hashchange", revealInbox);
+    return () => window.removeEventListener("hashchange", revealInbox);
+  }, []);
   useEffect(() => {
     setCanNotify("Notification" in window);
     try {
@@ -257,7 +264,15 @@ export default function TaskFocus({
       if (!r.ok) throw Error(j.error || "Could not update focus.");
       setPreview(null);
       setMessage("");
-      if (["start", "switch"].includes(action)) setShowAll(false);
+      if (["start", "switch"].includes(action)) {
+        setShowAll(false);
+        if (location.hash === "#task-followups")
+          window.history.replaceState(
+            null,
+            "",
+            location.pathname + location.search,
+          );
+      }
       await load();
       onChange();
     } catch (e) {
@@ -767,7 +782,15 @@ export default function TaskFocus({
           <button
             type="button"
             className={styles.textButton}
-            onClick={() => setShowAll(!showAll)}
+            onClick={() => {
+              if (showAll && location.hash === "#task-followups")
+                window.history.replaceState(
+                  null,
+                  "",
+                  location.pathname + location.search,
+                );
+              setShowAll(!showAll);
+            }}
           >
             {showAll ? "Return to focus" : "Show the rest of my tasks"}{" "}
             <ArrowRight size={13} />

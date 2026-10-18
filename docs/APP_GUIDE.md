@@ -88,3 +88,7 @@ Open **Document reader** to read a file locally, inspect source pages, confirm/c
 ## Interactive Tasks to-do
 
 The focus companion now supports reviewed local conversations, progress percentages, next steps, blocker guidance, safe switching and optional open-app check-in alerts. See [the interactive task guide](INTERACTIVE_TASKS.md).
+
+## Recurring tasks and follow-ups
+
+Open Tasks to-do → Follow-ups & recurring tasks for your inbox, schedules, preferences and history. The header bell opens this panel. Project cards now include Assign team. See [Task scheduling](TASK_SCHEDULING.md) for setup and delivery boundaries.
