@@ -92,3 +92,7 @@ The focus companion now supports reviewed local conversations, progress percenta
 ## Recurring tasks and follow-ups
 
 Open Tasks to-do → Follow-ups & recurring tasks for your inbox, schedules, preferences and history. The header bell opens this panel. Project cards now include Assign team. See [Task scheduling](TASK_SCHEDULING.md) for setup and delivery boundaries.
+
+## Company notifications
+
+Open Notifications to read company messages. Company owners can draft, preview and publish to staff/instructors, students, selected people or everyone, with optional pop-ups and start/expiry dates. See [Announcements](ANNOUNCEMENTS.md).

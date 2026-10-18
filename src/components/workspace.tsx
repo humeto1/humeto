@@ -1,5 +1,6 @@
 "use client";
 import { assistSectionKeys } from "@/lib/assist-scope";
+import Announcements from "./announcements";
 import CompanyWhatsApp from "./company-whatsapp";
 import DocumentReader from "./document-reader";
 import FinanceCenter from "./finance-center";
@@ -166,6 +167,7 @@ const navItems = [
   ["reading", "Document reader", ScanText],
   ["assistant", "Humeto assistant", Sparkles],
   ["requests", "Requests", MessageSquare],
+  ["notifications", "Notifications", Bell],
   ["activity", "Activity", History],
 ] as const;
 const states = ["To do", "In progress", "Waiting", "Review", "Done"];
@@ -1034,6 +1036,12 @@ export default function Workspace({
               />
               <kbd>⌘ K</kbd>
             </label>
+            {!isPlatform && (
+              <Announcements
+                key={`announcements:${actor.tenantId}:${actor.id}:${actor.role}`}
+                actor={actor}
+              />
+            )}
             {staff ? (
               <ReminderBell />
             ) : (
@@ -2067,6 +2075,13 @@ export default function Workspace({
               projects={data.projects || []}
               writable={writable}
               onChange={refresh}
+            />
+          )}
+          {view === "notifications" && (
+            <Announcements
+              key={`announcement-center:${actor.tenantId}:${actor.id}:${actor.role}`}
+              actor={actor}
+              center
             />
           )}
           {view === "settings" && (

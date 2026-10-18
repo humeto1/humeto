@@ -13,6 +13,7 @@ export default async function Page({
   const { view } = await params;
   if (
     ![
+      "notifications",
       "students",
       "leads",
       "documents",

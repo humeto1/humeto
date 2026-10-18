@@ -1,0 +1,331 @@
+.center {
+  color: #284231;
+}
+.center > header {
+  margin: 0 0 28px;
+}
+.eyebrow {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  letter-spacing: 0.12em;
+  font-size: 10px;
+  color: #7b8b6b;
+}
+.center h1 {
+  font-size: 32px;
+  font-weight: 500;
+  margin: 15px 0;
+}
+.center p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #728166;
+}
+.center h2 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 30px 0 18px;
+}
+.center h2 small {
+  font-size: 12px;
+  margin-left: 10px;
+  color: #849176;
+}
+.compose {
+  background: #fff;
+  border: 1px solid #dfe6d6;
+  border-radius: 18px;
+  padding: 24px;
+}
+.compose summary {
+  font-size: 17px;
+  cursor: pointer;
+}
+.compose form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 20px;
+}
+.compose label {
+  display: grid;
+  gap: 8px;
+  font-size: 12px;
+}
+.compose input,
+.compose select,
+.compose textarea {
+  font: inherit;
+  color: #304b38;
+  border: 1px solid #d7e0cf;
+  border-radius: 9px;
+  padding: 12px;
+  background: #fff;
+  min-width: 0;
+  width: 100%;
+}
+.compose textarea {
+  min-height: 110px;
+  resize: vertical;
+}
+.wide {
+  grid-column: 1/-1;
+}
+.compose label.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2e583f;
+}
+.compose fieldset {
+  border: 1px solid #dfe6d6;
+  border-radius: 10px;
+  padding: 15px;
+  display: grid;
+  gap: 12px;
+}
+.compose legend {
+  font-size: 12px;
+}
+.actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.center button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #d9e1d0;
+  border-radius: 9px;
+  padding: 10px 14px;
+  background: #fff;
+  color: #36503b;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+.center button.primary,
+.cta {
+  background: #254d3b;
+  border-color: #254d3b;
+  color: #fff;
+}
+.center button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.inbox {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.inbox article {
+  border: 1px solid #c6d4b7;
+  background: #fff;
+  border-radius: 15px;
+  overflow: hidden;
+}
+.inbox article.read {
+  border-color: #e1e7db;
+}
+.inbox article > img {
+  width: 100%;
+  height: 155px;
+  object-fit: cover;
+}
+.inbox article > div {
+  padding: 22px;
+}
+.inbox h3 {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.inbox p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.empty {
+  padding: 30px;
+  background: #f2f6ec;
+  border: 1px dashed #d4dfc8;
+  border-radius: 15px;
+  grid-column: 1/-1;
+}
+.campaign {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+  background: white;
+  border: 1px solid #dfe6d7;
+  border-radius: 12px;
+  margin: 12px 0;
+}
+.campaign strong {
+  font-size: 14px;
+}
+.campaign small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.8;
+  color: #7a896e;
+  margin-top: 7px;
+}
+.error {
+  color: #a33d3d !important;
+  background: #fff1ee;
+  padding: 12px;
+  border-radius: 8px;
+}
+.notice {
+  background: #edf5e6;
+  color: #406b38 !important;
+  padding: 12px;
+  border-radius: 8px;
+}
+.footnote {
+  font-size: 11px !important;
+  margin-top: 24px;
+}
+.dialog {
+  border: 0;
+  padding: 0;
+  border-radius: 23px;
+  max-width: min(900px, calc(100vw - 32px));
+  width: 900px;
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+  background: #fff;
+  color: #294232;
+  box-shadow: 0 24px 90px #14251e55;
+}
+.dialog::backdrop {
+  background: #14251e88;
+  backdrop-filter: blur(3px);
+}
+.popup {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  position: relative;
+  min-height: 410px;
+}
+.popupPlain {
+  position: relative;
+}
+.cover {
+  width: 100%;
+  height: 100%;
+  min-height: 410px;
+  object-fit: cover;
+}
+.popupBody {
+  padding: 48px 42px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.popupBody h2 {
+  font-size: 29px;
+  line-height: 1.3;
+  font-weight: 500;
+  margin: 22px 0 15px;
+  overflow-wrap: anywhere;
+}
+.popupBody p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.9;
+  color: #65775a;
+  margin: 0 0 24px;
+}
+.dialog .close {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 1;
+  border: 0;
+  border-radius: 50%;
+  width: 33px;
+  height: 33px;
+  display: grid;
+  place-items: center;
+  background: #eef3e9;
+  color: #304c39;
+  cursor: pointer;
+}
+.cta {
+  display: inline-block;
+  padding: 13px 24px;
+  text-decoration: none;
+  border-radius: 24px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.dismiss {
+  margin: 18px 0 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: #6d805f;
+  cursor: pointer;
+  padding: 8px;
+}
+.popupBody small {
+  font-size: 10px;
+  color: #91a083;
+  margin-top: 12px;
+}
+.dialog button:focus-visible,
+.center button:focus-visible,
+.cta:focus-visible {
+  outline: 2px solid #72915e;
+  outline-offset: 3px;
+}
+@media (max-width: 750px) {
+  .inbox {
+    grid-template-columns: 1fr;
+  }
+  .compose form {
+    grid-template-columns: 1fr;
+  }
+  .compose {
+    padding: 18px;
+  }
+  .campaign {
+    flex-direction: column;
+    align-items: start;
+  }
+  .center h1 {
+    font-size: 27px;
+  }
+  .popup {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+  .cover {
+    height: 170px;
+    min-height: 0;
+  }
+  .popupBody {
+    padding: 30px 23px;
+  }
+  .popupBody h2 {
+    font-size: 24px;
+  }
+  .dialog {
+    max-width: calc(100vw - 24px);
+  }
+}
