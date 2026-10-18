@@ -21,12 +21,15 @@
     "db:backup": "node --env-file-if-exists=.env.local scripts/backup-postgres.mjs",
     "ocr:worker": "node --env-file-if-exists=.env.local scripts/ocr-worker.mjs",
     "seed:ocr": "node --env-file-if-exists=.env.local scripts/seed-ocr-demo.mjs",
-    "db:verify-backup": "node --env-file-if-exists=.env.local scripts/verify-postgres-backup.mjs"
+    "db:verify-backup": "node --env-file-if-exists=.env.local scripts/verify-postgres-backup.mjs",
+    "whatsapp:worker": "node --env-file-if-exists=.env.local scripts/whatsapp-worker.mjs"
   },
   "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.24",
     "lucide-react": "^0.577.0",
     "next": "16.4.2",
     "pg": "^8.23.1",
+    "pino": "^10.4.0",
     "qrcode": "^1.5.4",
     "react": "19.3.1",
     "react-dom": "19.3.1",

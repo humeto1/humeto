@@ -76,3 +76,7 @@ Latest product increment: [focus companion, broader extension, flexible CRM pipe
 Previous product increment: **73 automated checks passed**, including focus UI, finance reconciliation, configurable pipelines, team permissions and extension file authorization.
 
 Document intelligence: [local OCR and source-linked fact review](docs/DOCUMENT_READING.md). Run `npm run ocr:worker` alongside the web app. The current expanded release passes **85 checks**.
+
+### Self-hosted company WhatsApp
+
+Company-owned QR pairing, private text inbox and reviewed outbox are available in Workspace Settings. Run the persistent worker separately from the Next.js web app. See [WhatsApp setup and current limits](docs/WHATSAPP.md). No Wasender API is used.

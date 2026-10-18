@@ -1,5 +1,6 @@
 "use client";
 import { assistSectionKeys } from "@/lib/assist-scope";
+import CompanyWhatsApp from "./company-whatsapp";
 import DocumentReader from "./document-reader";
 import FinanceCenter from "./finance-center";
 import WorkAssignment from "./work-assignment";
@@ -2139,26 +2140,27 @@ export default function Workspace({
                         <Badge>Local testing available</Badge>
                       </dd>
                       <dt>WhatsApp account linking</dt>
-                      <dd>Planned</dd>
+                      <dd>Self-hosted company connector below</dd>
                       <dt>Telegram</dt>
                       <dd>Planned</dd>
                       <dt>Email</dt>
                       <dd>Planned</dd>
                     </dl>
                     <p>
-                      External channels are not connected. Start with the in-app
-                      assistant; account connections will be added in a later
-                      delivery.
+                      Use the company WhatsApp panel below to pair your number.
+                      Telegram and live email connections are still pending.
                     </p>
                   </section>
                 )}
+                {staff && <CompanyWhatsApp />}
                 <section className="panel settings-panel">
                   <ShieldCheck size={25} />
                   <h2>Local build notes</h2>
                   <p>
-                    Changes are stored in the local SQLite database and survive
-                    reloads. Uploaded originals are stored outside public assets
-                    and checked against your session and applicant access.
+                    Changes are stored in the local PostgreSQL database and
+                    survive reloads. Uploaded originals are stored outside
+                    public assets and checked against your session and applicant
+                    access.
                   </p>
                   <p>
                     This is a development build. Production identity recovery,
