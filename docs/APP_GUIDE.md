@@ -108,3 +108,7 @@ Tasks to-do includes **From paper to progress**: upload an image, inspect source
 ### Journey insights
 
 Staff can review structured deadlines, overdue work, observed stage durations and case value under **Journey insights**. [Guide and accounting boundaries](JOURNEY_INSIGHTS.md).
+
+### Reviewed document bundles
+
+Documents includes a one-applicant original-file bundle with reviewed filenames, type/size checks and a version/hash manifest. [Guide](DOCUMENT_BUNDLES.md).

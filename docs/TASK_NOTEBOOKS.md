@@ -20,4 +20,4 @@ For a fictional demonstration without personal files, run `npm run seed:notebook
 
 ## Verification
 
-Validated in the optimized local build and 114-check PostgreSQL release suite, including browser interaction and narrow-screen checks. See [delivery record](DELIVERY_2026-10-19.md) for the combined validation and restore drill.
+Validated in the optimized local build and 119-check PostgreSQL release suite, including browser interaction and narrow-screen checks. See [delivery record](DELIVERY_2026-10-19.md) for the combined validation and restore drill.

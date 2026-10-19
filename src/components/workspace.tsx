@@ -2,6 +2,7 @@
 import { assistSectionKeys } from "@/lib/assist-scope";
 import Announcements from "./announcements";
 import CompanyWhatsApp from "./company-whatsapp";
+import DocumentBundle from "./document-bundle";
 import DocumentReader from "./document-reader";
 import JourneyInsights from "./journey-insights";
 import FinanceCenter from "./finance-center";
@@ -1743,6 +1744,7 @@ export default function Workspace({
                   </a>
                 </div>
               </section>
+              <DocumentBundle documents={data.documents} people={data.people} />
               {docsTable(filteredDocs)}
               <ImportHistory refreshKey={importRefresh} />
             </>
