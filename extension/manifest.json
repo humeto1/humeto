@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Humeto Assist — Local Alpha",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Review matches from one paired applicant on the current form. Local development alpha.",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "scripting", "storage", "sidePanel"],

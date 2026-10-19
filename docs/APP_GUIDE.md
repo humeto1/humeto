@@ -96,3 +96,7 @@ Open Tasks to-do → Follow-ups & recurring tasks for your inbox, schedules, pre
 ## Company notifications
 
 Open Notifications to read company messages. Company owners can draft, preview and publish to staff/instructors, students, selected people or everyone, with optional pop-ups and start/expiry dates. See [Announcements](ANNOUNCEMENTS.md).
+
+## Broader form filling
+
+Humeto Assist 0.4 adds split dates, conservative family/referee matching, same-origin frames and open shadow roots. Workspace Settings links the download and advanced fictional practice form. See [Extension compatibility](EXTENSION_COMPATIBILITY.md).

@@ -2194,7 +2194,7 @@ export default function Workspace({
                   </p>
                   {!isPlatform && (
                     <div className="assistant-settings">
-                      <h3>Humeto Assist · local alpha</h3>
+                      <h3>Humeto Assist 0.4 · local alpha</h3>
                       <p>
                         Pair selected reusable information and supporting
                         documents for one hour. The extension is read-only until
@@ -2206,6 +2206,14 @@ export default function Workspace({
                         download
                       >
                         Download extension files <Download size={14} />
+                      </a>
+                      <a
+                        className="btn secondary small"
+                        href="/test-application-advanced.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Practice on a sample form <ArrowUpRight size={14} />
                       </a>
                       <button
                         className="btn secondary small"

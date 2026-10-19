@@ -92,3 +92,7 @@ Schedule repeating work, manage an in-app follow-up inbox, snooze reminders and 
 ### Company announcements
 
 Company admins can draft, preview, publish and retract targeted in-app notifications with optional illustrated pop-ups. Recipients have a private notification inbox and saved read/dismiss state. See [Announcements](docs/ANNOUNCEMENTS.md).
+
+### Humeto Assist 0.4
+
+The extension now supports reviewed split-date values, conservative family/referee matching, same-origin frames and open shadow roots, with warnings for unsupported controls. Try `/test-application-advanced.html` with fictional data. See [extension notes](extension/README.md).

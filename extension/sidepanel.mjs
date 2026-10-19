@@ -1,3 +1,4 @@
+import { prepareValue } from "./matcher.mjs";
 import { answerQuestion } from "./helper.mjs";
 import { reviewFields, reviewCounts } from "./review-state.mjs";
 const $ = (s) => document.querySelector(s),
@@ -70,7 +71,17 @@ $("#matches").onchange = (event) => {
     const check = document.querySelector(
       `[data-index="${selected.dataset.fact}"]`,
     );
-    if (!check.disabled) check.checked = selected.value !== "";
+    const field = rows[Number(selected.dataset.fact)]?.field;
+    const fact = profile?.facts[Number(selected.value)];
+    const value =
+      selected.value !== "" && fact ? prepareValue(field, fact) : null;
+    document.querySelector(
+      `[data-preview="${selected.dataset.fact}"]`,
+    ).textContent =
+      value === null
+        ? "Choose a compatible value, or enter manually."
+        : "Will fill: " + value;
+    if (!check.disabled) check.checked = value !== null;
   }
   refreshReview();
 };
@@ -163,7 +174,10 @@ $("#scan").onclick = async () => {
       new Option("Choose a page upload field", ""),
       ...(scan.fileFields || []).map(
         (f) =>
-          new Option(`${f.label}${f.accept ? " · " + f.accept : ""}`, f.id),
+          new Option(
+            `${f.label}${f.location ? " · " + f.location : ""}${f.accept ? " · " + f.accept : ""}`,
+            f.id,
+          ),
       ),
     );
     $("#page-name").textContent =
@@ -177,14 +191,14 @@ $("#scan").onclick = async () => {
     $("#matches").innerHTML = rows
       .map(
         ({ field, match, index: i, selected, group }) =>
-          `<article class="match" data-row="${i}"><label><input type="checkbox" data-index="${i}" ${selected ? "checked" : ""} ${field.value ? "disabled" : ""}><strong>${esc(field.label)}</strong></label><small>${field.value ? "Existing answer preserved" : "Empty " + esc(field.type) + " field"}</small><select data-fact="${i}" aria-label="Profile field for ${esc(field.label)}" ${field.value ? "disabled" : ""}><option value="">Leave for manual entry</option>${profile.facts.map((f, j) => `<option value="${j}" ${match?.fact === f ? "selected" : ""}>${esc(f.label)} · ${esc(f.value.slice(0, 60))}</option>`).join("")}</select><small>${group === "preserved" ? "Humeto will not replace this answer" : match ? "Suggested mapping · review the value before applying" : "No unique match · keep manual or choose a value"}</small><div data-result="${i}"></div></article>`,
+          `<article class="match" data-row="${i}"><label><input type="checkbox" data-index="${i}" ${selected ? "checked" : ""} ${field.value ? "disabled" : ""}><strong>${esc(field.label)}</strong></label><small>${field.value ? "Existing answer preserved" : "Empty " + esc(field.type) + " field"}${field.location ? " · " + esc(field.location) : ""}</small><select data-fact="${i}" aria-label="Profile field for ${esc(field.label)}" ${field.value ? "disabled" : ""}><option value="">Leave for manual entry</option>${profile.facts.map((f, j) => `<option value="${j}" ${match?.fact === f ? "selected" : ""}>${esc(f.label)} · ${esc(f.value.slice(0, 60))}</option>`).join("")}</select><small>${group === "preserved" ? "Humeto will not replace this answer" : match ? "Suggested mapping · review the value before applying" : "No unique match · keep manual or choose a value"}</small><small data-preview="${i}">${match ? "Will fill: " + esc(prepareValue(field, match.fact)) : ""}</small><div data-result="${i}"></div></article>`,
       )
       .join("");
     $("#review-tools").hidden = !scan.fields.length;
     refreshReview();
     $("#fill").hidden = !scan.fields.length;
     status(
-      `${scan.fields.length} visible fields. Review suggestions together and fill one approved batch. Uncertain matches and file uploads stay under your control.`,
+      `${scan.fields.length} visible fields${scan.skippedFrames ? ` · ${scan.skippedFrames} inaccessible frame(s) require manual entry` : ""}${scan.unsupportedControls ? ` · ${scan.unsupportedControls} custom control(s) require manual entry` : ""}. Review suggestions together and fill one approved batch. Uncertain matches and file uploads stay under your control.`,
     );
   } catch (e) {
     status(e.message);
@@ -222,10 +236,16 @@ $("#fill").onclick = async () => {
       if (selected === "") continue;
       const fact = profile.facts[Number(selected)];
       if (!fact) continue;
+      const value = prepareValue(scan.fields[i], fact);
+      if (value === null) {
+        document.querySelector(`[data-result="${i}"]`).textContent =
+          "Value needs manual date review.";
+        continue;
+      }
       items.push({
         id: scan.fields[i].id,
         label: scan.fields[i].label,
-        value: fact.value,
+        value,
       });
     }
     if (!items.length)
