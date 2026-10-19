@@ -1,4 +1,5 @@
 // A separate durable local worker; no request-scoped background promises or network OCR.
+import { processNotebookOne } from "./notebook-worker.mjs";
 import { database } from "../src/lib/postgres.mjs";
 import { engineInfo, readDocument } from "../src/lib/ocr/engine.mjs";
 import { extractFacts } from "../src/lib/ocr/extract.mjs";
@@ -190,7 +191,9 @@ if (process.argv[1]?.endsWith("ocr-worker.mjs")) {
         );
         lastPulse = Date.now();
       }
-      const handled = await processOne();
+      const handledDocument = await processOne();
+      const handledNotebook = await processNotebookOne(d);
+      const handled = handledDocument || handledNotebook;
       if (process.argv.includes("--once")) break;
       if (!handled) await new Promise((r) => setTimeout(r, 1000));
     }

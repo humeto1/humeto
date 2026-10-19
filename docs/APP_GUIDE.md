@@ -100,3 +100,11 @@ Open Notifications to read company messages. Company owners can draft, preview a
 ## Broader form filling
 
 Humeto Assist 0.4 adds split dates, conservative family/referee matching, same-origin frames and open shadow roots. Workspace Settings links the download and advanced fictional practice form. See [Extension compatibility](EXTENSION_COMPATIBILITY.md).
+
+### Notebook task review
+
+Tasks to-do includes **From paper to progress**: upload an image, inspect source-linked text and explicitly create or complete tasks. See [Task notebooks](TASK_NOTEBOOKS.md) for local OCR limits and review safeguards.
+
+### Journey insights
+
+Staff can review structured deadlines, overdue work, observed stage durations and case value under **Journey insights**. [Guide and accounting boundaries](JOURNEY_INSIGHTS.md).

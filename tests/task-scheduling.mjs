@@ -463,6 +463,43 @@ test("schedules UI creates a recurring series, saves preferences and fits a narr
       (x) => x.template_task_id === t.id,
     );
     seriesIds.push(s.id);
+    const seriesCard = page
+      .locator("article")
+      .filter({ has: page.getByText(t.title, { exact: true }) })
+      .filter({
+        has: page.getByText("Edit future occurrences", { exact: true }),
+      });
+    await seriesCard
+      .getByText("Edit future occurrences", { exact: true })
+      .click();
+    await seriesCard
+      .getByLabel("Edit repeat frequency", { exact: true })
+      .selectOption("monthly");
+    await seriesCard
+      .getByLabel("Edit next occurrence", { exact: true })
+      .fill(nextDay(localDay(new Date(), "UTC"), "daily", 1));
+    await seriesCard
+      .getByRole("button", { name: "Save future schedule", exact: true })
+      .click();
+    await page.getByText("Schedule updated.", { exact: true }).waitFor();
+    assert.equal(
+      (await read(context.request)).series.find((x) => x.id === s.id).frequency,
+      "monthly",
+    );
+    await seriesCard.getByLabel(/I want to skip/).check();
+    await page.screenshot({
+      path: "artifacts/recurrence-review.jpg",
+      fullPage: true,
+    });
+    await seriesCard
+      .getByRole("button", { name: "Confirm skip occurrence", exact: true })
+      .click();
+    await page.getByText("Schedule updated.", { exact: true }).waitFor();
+    assert.ok(
+      (await read(context.request)).seriesEvents.some(
+        (e) => e.series_id === s.id && e.event === "skipped",
+      ),
+    );
     await page
       .getByRole("tab", { name: "My preferences", exact: true })
       .click();
@@ -475,14 +512,12 @@ test("schedules UI creates a recurring series, saves preferences and fits a narr
       .waitFor();
     assert.equal((await read(context.request)).preferences.daily_limit, 3);
     await page.goto(base + "/workspace/progress");
-    const project = page
-      .locator("article")
-      .filter({
-        has: page.getByRole("heading", {
-          name: "UK September intake",
-          exact: true,
-        }),
-      });
+    const project = page.locator("article").filter({
+      has: page.getByRole("heading", {
+        name: "UK September intake",
+        exact: true,
+      }),
+    });
     await project
       .getByRole("button", { name: "Assign team", exact: true })
       .click();
@@ -517,4 +552,123 @@ test("schedules UI creates a recurring series, saves preferences and fits a narr
     await context.close();
     await browser.close();
   }
+});
+
+test("recurring schedule edits preserve history, reject stale/foreign edits and skip one occurrence without creating work", async () => {
+  const c = await ctx("ayesha"),
+    other = await ctx("consultant"),
+    t = await create(c),
+    today = localDay(new Date(), "UTC"),
+    tomorrow = nextDay(today, "daily", 1);
+  assert.equal(
+    (
+      await send(c, {
+        action: "series",
+        taskId: t.id,
+        taskRevision: t.revision,
+        frequency: "daily",
+        interval: 1,
+        firstDay: tomorrow,
+        time: "09:00",
+        timezone: "UTC",
+      })
+    ).status(),
+    200,
+  );
+  let s = (await read(c)).series.find((s) => s.template_task_id === t.id);
+  seriesIds.push(s.id);
+  const edit = {
+    action: "series-edit",
+    id: s.id,
+    revision: s.revision,
+    frequency: "monthly",
+    interval: 1,
+    nextDay: tomorrow,
+    time: "10:30",
+    timezone: "UTC",
+    endDay: "",
+  };
+  assert.equal((await send(other, edit)).status(), 404);
+  assert.equal(
+    (await send(c, { ...edit, nextDay: "2026-02-30" })).status(),
+    400,
+  );
+  assert.equal(
+    (await send(c, { ...edit, nextDay: today, time: "00:00" })).status(),
+    400,
+  );
+  assert.equal((await send(c, edit)).status(), 200);
+  assert.equal((await send(c, edit)).status(), 409);
+  s = (await read(c)).series.find((x) => x.id === s.id);
+  assert.equal(s.frequency, "monthly");
+  assert.equal(s.local_time, "10:30");
+  assert.equal(s.first_day, tomorrow);
+  const skip = { action: "series-skip", id: s.id, revision: s.revision };
+  const attempts = await Promise.all([send(c, skip), send(c, skip)]);
+  assert.deepEqual(attempts.map((r) => r.status()).sort(), [200, 409]);
+  s = (await read(c)).series.find((x) => x.id === s.id);
+  assert.equal(s.next_day, nextDay(tomorrow, "monthly", 1));
+  assert.equal(Number(s.occurrence_count), 0);
+  const skipped = await d
+    .prepare("SELECT * FROM task_occurrences WHERE series_id=? AND day=?")
+    .get(s.id, tomorrow);
+  assert.equal(skipped.task_id, null);
+  // The worker cannot turn a skipped day into a task, even when retried at that date.
+  await runTaskScheduler({ d, now: new Date(tomorrow + "T12:00:00Z") });
+  assert.equal(
+    (
+      await d
+        .prepare(
+          "SELECT task_id FROM task_occurrences WHERE series_id=? AND day=?",
+        )
+        .get(s.id, tomorrow)
+    ).task_id,
+    null,
+  );
+  assert.equal(
+    (
+      await send(c, { ...edit, revision: s.revision, nextDay: tomorrow })
+    ).status(),
+    409,
+  );
+  const state = await read(c);
+  assert.ok(
+    state.seriesEvents.some(
+      (e) => e.series_id === s.id && e.event === "edited",
+    ),
+  );
+  assert.ok(
+    state.seriesEvents.some(
+      (e) => e.series_id === s.id && e.event === "skipped",
+    ),
+  );
+  assert.ok(
+    !(await read(other)).seriesEvents.some((e) => e.series_id === s.id),
+  );
+  assert.equal(
+    (
+      await send(c, {
+        action: "series-state",
+        id: s.id,
+        revision: s.revision,
+        status: "paused",
+      })
+    ).status(),
+    200,
+  );
+  s = (await read(c)).series.find((x) => x.id === s.id);
+  assert.equal(
+    (
+      await send(c, {
+        ...edit,
+        revision: s.revision,
+        nextDay: nextDay(s.next_day, "daily", 1),
+      })
+    ).status(),
+    200,
+  );
+  assert.equal(
+    (await read(c)).series.find((x) => x.id === s.id).status,
+    "paused",
+  );
 });

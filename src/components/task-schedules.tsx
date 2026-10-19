@@ -1,4 +1,5 @@
 "use client";
+import RecurrenceEditor from "./recurrence-editor";
 import { useEffect, useState, useCallback } from "react";
 import {
   Repeat2,
@@ -51,6 +52,14 @@ type Series = {
   last_error: string | null;
 };
 type State = {
+  seriesEvents: {
+    id: string;
+    title: string;
+    event: string;
+    previous_day: string;
+    next_day: string;
+    created_at: string;
+  }[];
   preferences: Preferences;
   reminders: Reminder[];
   series: Series[];
@@ -512,6 +521,17 @@ export default function TaskSchedules({
                     calm.
                   </p>
                 )}
+                {!!data.seriesEvents?.length && (
+                  <details>
+                    <summary>Schedule change history</summary>
+                    {data.seriesEvents.map((e) => (
+                      <p key={e.id} className={styles.hint}>
+                        {e.title} · {e.event} · {e.previous_day} → {e.next_day}{" "}
+                        · {new Date(e.created_at).toLocaleString()}
+                      </p>
+                    ))}
+                  </details>
+                )}
                 <h3 className={styles.seriesHeading}>Your recurring series</h3>
                 {data.series.length ? (
                   data.series.map((s) => (
@@ -538,6 +558,12 @@ export default function TaskSchedules({
                       </div>
                       {["active", "paused"].includes(s.status) && (
                         <div className={styles.actions}>
+                          <RecurrenceEditor
+                            series={s}
+                            writable={writable}
+                            busy={busy}
+                            act={act}
+                          />
                           <button
                             disabled={!writable || busy}
                             onClick={() =>

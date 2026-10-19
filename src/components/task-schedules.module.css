@@ -251,7 +251,8 @@
 }
 .series .actions {
   margin: 0;
-  flex-shrink: 0;
+  flex: 0 1 360px;
+  min-width: 0;
 }
 .event {
   display: grid;
@@ -286,6 +287,10 @@
   }
   .inbox {
     grid-template-columns: 1fr;
+  }
+  .series .actions {
+    flex-basis: auto;
+    width: 100%;
   }
   .series {
     align-items: start;

@@ -39,4 +39,12 @@ Each cycle handles up to 100 eligible reminders per member. API panels return up
 
 Release checks cover calendar anchors, weekdays/DST, quiet hours, daily caps/cooldown, catch-up, concurrent/repeated generation, inherited project/goal/staff links, snooze, completion, personal/tenant boundaries, stale preferences and series, inactive subscriptions, UI schedule creation, project assignment and narrow-screen overflow. All 95 compiled-release tests passed for this delivery.
 
-Still pending: recurrence exceptions/editing, holiday calendars, notification digests, cross-device read/acknowledgment, native push/closed-app OS delivery, channel delivery, voice, notebook-photo task proposals/reconciliation, private journals and external calendar/task sync. Production Vercel runs the web app; the persistent task worker needs an always-running Node host alongside the other workers. No paid service or external account was connected.
+Still pending: holiday calendars, bulk recurrence exceptions, notification digests, cross-device read/acknowledgment, native push/closed-app OS delivery, channel delivery, voice, stronger handwritten/strike-through notebook recognition, private journals and external calendar/task sync. Production Vercel runs the web app; the persistent task worker needs an always-running Node host alongside the other workers. No paid service or external account was connected.
+
+## Editing a series and skipping one day
+
+**Edit future occurrences** changes frequency, interval, next date, local time/timezone and optional end date. Choose a future occurrence, after every generated/skipped day. The chosen next date becomes the new monthly anchor. Existing tasks, assignments, reminders and completion history are preserved; a paused series stays paused. Stale edits are rejected under the same series lock used by the worker.
+
+To omit one occurrence, review the displayed scheduled date/timezone, select **I want to skip…**, then **Confirm skip occurrence**. A permanent series/day claim with no task prevents that day from being generated later. The schedule advances using its existing calendar anchor. Skipping the last allowed occurrence ends the series. Generated-task counts exclude skipped days. This does not delete or cancel an already-created task. When a series is overdue, this skips the displayed next scheduled day only; later overdue catch-up remains governed by the existing latest-only rule.
+
+**Schedule change history** retains the latest 50 edits, skips and state changes for the member, with previous/next scheduled day. Changes remain in PostgreSQL beyond this display limit. Arbitrary holiday calendars, bulk exceptions and changes to historical generated tasks remain future work.

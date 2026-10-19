@@ -13,6 +13,7 @@ export default async function Page({
   const { view } = await params;
   if (
     ![
+      "insights",
       "notifications",
       "students",
       "leads",
@@ -36,7 +37,14 @@ export default async function Page({
   if (view === "finance" && a.role !== "owner") notFound();
   if (view === "platform" && a.role !== "platform_admin") notFound();
   if (
-    ["assistant", "leads", "progress", "crm-ai", "updates"].includes(view) &&
+    [
+      "assistant",
+      "leads",
+      "progress",
+      "crm-ai",
+      "updates",
+      "insights",
+    ].includes(view) &&
     !["owner", "consultant"].includes(a.role)
   )
     notFound();

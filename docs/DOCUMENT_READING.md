@@ -23,7 +23,9 @@ Source links appear with saved section answers and in paired extension facts. Ma
 - One job per document version. Completed jobs are reused; failed jobs have a revision-checked retry. At most 50 jobs can be pending per workspace, 300 automatic suggestions per reading and 500 total suggestions per job. Apply at most 50 distinct facts at a time.
 - Each native command has a 45-second timeout and bounded output; Tesseract uses one thread. Large/unclear/corrupt/locked files fail with a useful message, without fabricating facts.
 
-Not implemented: handwritten notebook task recognition, passport MRZ validation, layout-aware multilingual classification, arbitrary unlabelled CV/transcript interpretation, automatic rotation/cropping, external model extraction, document authenticity/fraud decisions or immigration eligibility decisions. Testing used fictional fixtures; broader real-document accuracy still needs an anonymized sample set.
+Task notebook images now have a separate private reviewed workflow; see [Task notebooks](TASK_NOTEBOOKS.md). Printed-text recognition is supported; reliable handwriting/strike-through interpretation remains pending.
+
+Not implemented: passport MRZ validation, layout-aware multilingual classification, arbitrary unlabelled CV/transcript interpretation, automatic rotation/cropping, external model extraction, document authenticity/fraud decisions or immigration eligibility decisions. Testing used fictional fixtures; broader real-document accuracy still needs an anonymized sample set.
 
 ## Local operation
 

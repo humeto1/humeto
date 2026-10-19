@@ -8,6 +8,8 @@ import {
   defaultPreferences,
   quietUntil,
   localDay,
+  nextDay,
+  scheduledAt,
 } from "./scheduling-clock.mjs";
 import type { Actor } from "./types";
 const fail = (error: string, status = 400) =>
@@ -15,6 +17,22 @@ const fail = (error: string, status = 400) =>
 const time = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
   day = z.string().refine(validDay, "Choose a real calendar date.");
 const command = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("series-edit"),
+    id: z.string().uuid(),
+    revision: z.number().int().positive(),
+    frequency: z.enum(["daily", "weekdays", "weekly", "monthly"]),
+    interval: z.number().int().min(1).max(12),
+    nextDay: day,
+    time,
+    timezone: z.string().max(100),
+    endDay: z.union([z.literal(""), day]).default(""),
+  }),
+  z.object({
+    action: z.literal("series-skip"),
+    id: z.string().uuid(),
+    revision: z.number().int().positive(),
+  }),
   z.object({
     action: z.literal("preferences"),
     revision: z.number().int().nonnegative(),
@@ -116,7 +134,7 @@ export async function schedulingRead(a: Actor, summary = false) {
     );
   const series = await d
     .prepare(
-      "SELECT r.*,t.title,(SELECT count(*) FROM task_occurrences o WHERE o.series_id=r.id) AS occurrence_count FROM task_recurrences r JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? ORDER BY r.created_at DESC LIMIT 100",
+      "SELECT r.*,t.title,(SELECT count(*) FROM task_occurrences o WHERE o.series_id=r.id AND o.task_id IS NOT NULL) AS occurrence_count FROM task_recurrences r JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? ORDER BY r.created_at DESC LIMIT 100",
     )
     .all(a.tenantId, a.id);
   const events = await d
@@ -124,8 +142,14 @@ export async function schedulingRead(a: Actor, summary = false) {
       "SELECT e.*,t.title FROM task_reminder_events e JOIN task_reminders r ON r.id=e.reminder_id AND r.tenant_id=e.tenant_id JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id WHERE e.tenant_id=? AND e.user_id=? ORDER BY e.created_at DESC,e.id DESC LIMIT 30",
     )
     .all(a.tenantId, a.id);
+  const seriesEvents = await d
+    .prepare(
+      "SELECT e.*,t.title FROM task_recurrence_events e JOIN task_recurrences r ON r.id=e.series_id JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id WHERE e.tenant_id=? AND e.user_id=? ORDER BY e.created_at DESC,e.id DESC LIMIT 50",
+    )
+    .all(a.tenantId, a.id);
   return NextResponse.json(
     {
+      seriesEvents,
       preferences: prefs,
       reminders,
       series,
@@ -254,7 +278,11 @@ export async function schedulingWrite(a: Actor, body: unknown) {
           )
           .run(id(), rid, a.tenantId, a.id, at);
       }
-    } else if (v.action === "series-state") {
+    } else if (
+      v.action === "series-state" ||
+      v.action === "series-edit" ||
+      v.action === "series-skip"
+    ) {
       const s = await d
         .prepare(
           "SELECT * FROM task_recurrences WHERE id=? AND tenant_id=? AND user_id=? FOR UPDATE",
@@ -268,11 +296,129 @@ export async function schedulingWrite(a: Actor, body: unknown) {
           "This series has ended. Create a new schedule instead.",
           409,
         );
-      await d
-        .prepare(
-          "UPDATE task_recurrences SET status=?,revision=revision+1 WHERE id=?",
+      if (v.action === "series-edit") {
+        if (
+          v.nextDay < localDay(new Date(), v.timezone) ||
+          Date.parse(scheduledAt(v.nextDay, v.time, v.timezone)) <= Date.now()
         )
-        .run(v.status, s.id);
+          return fail("Choose a future occurrence time.");
+        if (v.endDay && v.endDay < v.nextDay)
+          return fail("End date must be on or after the next occurrence.");
+        if (
+          v.frequency === "weekdays" &&
+          [0, 6].includes(new Date(v.nextDay + "T12:00:00Z").getUTCDay())
+        )
+          return fail("Choose a weekday for the next occurrence.");
+        const latest = await d
+          .prepare(
+            "SELECT max(day) AS day FROM task_occurrences WHERE series_id=?",
+          )
+          .get(s.id);
+        if (latest?.day && v.nextDay <= latest.day)
+          return fail(
+            "Choose a day after the last recorded or skipped occurrence.",
+            409,
+          );
+        await d
+          .prepare(
+            "UPDATE task_recurrences SET frequency=?,interval_count=?,first_day=?,next_day=?,end_day=?,local_time=?,timezone=?,last_error=NULL,revision=revision+1 WHERE id=?",
+          )
+          .run(
+            v.frequency,
+            v.interval,
+            v.nextDay,
+            v.nextDay,
+            v.endDay,
+            v.time,
+            v.timezone,
+            s.id,
+          );
+        await d
+          .prepare(
+            "INSERT INTO task_recurrence_events(id,series_id,tenant_id,user_id,event,previous_day,next_day,details) VALUES(?,?,?,?,'edited',?,?,?::jsonb)",
+          )
+          .run(
+            id(),
+            s.id,
+            a.tenantId,
+            a.id,
+            s.next_day,
+            v.nextDay,
+            JSON.stringify({
+              previous: {
+                frequency: s.frequency,
+                interval: s.interval_count,
+                time: s.local_time,
+                timezone: s.timezone,
+                endDay: s.end_day,
+              },
+              next: {
+                frequency: v.frequency,
+                interval: v.interval,
+                time: v.time,
+                timezone: v.timezone,
+                endDay: v.endDay,
+              },
+            }),
+          );
+      } else if (v.action === "series-skip") {
+        const next = nextDay(
+          s.next_day,
+          s.frequency,
+          s.interval_count,
+          Number(s.first_day.slice(8)),
+        );
+        const existed = await d
+          .prepare(
+            "SELECT day FROM task_occurrences WHERE series_id=? AND day=?",
+          )
+          .get(s.id, s.next_day);
+        if (existed)
+          return fail(
+            "This occurrence was already recorded. Refresh first.",
+            409,
+          );
+        await d
+          .prepare("INSERT INTO task_occurrences(series_id,day) VALUES(?,?)")
+          .run(s.id, s.next_day);
+        await d
+          .prepare(
+            "UPDATE task_recurrences SET next_day=?,status=CASE WHEN end_day<>'' AND end_day<? THEN 'ended' ELSE status END,last_error=NULL,revision=revision+1 WHERE id=?",
+          )
+          .run(next, next, s.id);
+        await d
+          .prepare(
+            "INSERT INTO task_recurrence_events(id,series_id,tenant_id,user_id,event,previous_day,next_day,details) VALUES(?,?,?,?,'skipped',?,?,?::jsonb)",
+          )
+          .run(
+            id(),
+            s.id,
+            a.tenantId,
+            a.id,
+            s.next_day,
+            next,
+            JSON.stringify({ timezone: s.timezone, frequency: s.frequency }),
+          );
+      } else {
+        await d
+          .prepare(
+            "UPDATE task_recurrences SET status=?,revision=revision+1 WHERE id=?",
+          )
+          .run(v.status, s.id);
+        await d
+          .prepare(
+            "INSERT INTO task_recurrence_events(id,series_id,tenant_id,user_id,event,previous_day,next_day,details) VALUES(?,?,?,?,'state_changed',?,?,?::jsonb)",
+          )
+          .run(
+            id(),
+            s.id,
+            a.tenantId,
+            a.id,
+            s.next_day,
+            s.next_day,
+            JSON.stringify({ from: s.status, to: v.status }),
+          );
+      }
     } else {
       const r = await d
         .prepare(

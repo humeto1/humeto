@@ -96,3 +96,7 @@ Company admins can draft, preview, publish and retract targeted in-app notificat
 ### Humeto Assist 0.4
 
 The extension now supports reviewed split-date values, conservative family/referee matching, same-origin frames and open shadow roots, with warnings for unsupported controls. Try `/test-application-advanced.html` with fictional data. See [extension notes](extension/README.md).
+
+### Paper tasks, journey insights and schedule editing
+
+Notebook images can be reviewed into source-linked tasks; CRM journeys have structured deadlines and observed stage durations; recurring schedules can be edited or skipped explicitly. See the [19 October delivery](docs/DELIVERY_2026-10-19.md) for usage and limits.

@@ -3,15 +3,18 @@ import { assistSectionKeys } from "@/lib/assist-scope";
 import Announcements from "./announcements";
 import CompanyWhatsApp from "./company-whatsapp";
 import DocumentReader from "./document-reader";
+import JourneyInsights from "./journey-insights";
 import FinanceCenter from "./finance-center";
 import WorkAssignment from "./work-assignment";
 import PipelineSettings from "./pipeline-settings";
+import TaskNotebooks from "./task-notebooks";
 import TaskSchedules from "./task-schedules";
 import TaskFocus from "./task-focus";
 import UpdateInbox from "./update-inbox";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
+  BarChart3,
   Mail,
   LayoutDashboard,
   Users,
@@ -161,6 +164,7 @@ const navItems = [
   ["leads", "Leads", AtSign],
   ["students", "Applicants", Users],
   ["applications", "Applications", GraduationCap],
+  ["insights", "Journey insights", BarChart3],
   ["updates", "Update inbox", Mail],
   ["finance", "Finance", Wallet],
   ["documents", "Documents", FolderOpen],
@@ -916,6 +920,7 @@ export default function Workspace({
                     isStudent &&
                     [
                       "activity",
+                      "insights",
                       "updates",
                       "tasks",
                       "assistant",
@@ -1803,6 +1808,9 @@ export default function Workspace({
           {view === "crm-ai" && staff && (
             <CrmAssistant onChange={refresh} writable={writable} />
           )}
+          {view === "insights" && staff && (
+            <JourneyInsights writable={writable} />
+          )}
           {view === "progress" && staff && (
             <TaskProgress
               tasks={data.tasks}
@@ -1845,6 +1853,15 @@ export default function Workspace({
                 {staff && (
                   <TaskSchedules
                     tasks={data.tasks}
+                    writable={writable}
+                    onChange={refresh}
+                  />
+                )}
+                {staff && (
+                  <TaskNotebooks
+                    tasks={data.tasks}
+                    projects={data.projects}
+                    goals={data.goals}
                     writable={writable}
                     onChange={refresh}
                   />
