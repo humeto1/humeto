@@ -287,6 +287,15 @@ export default function TaskAssistant({
             <dt>Due date</dt>
             <dd>{p.dueDate || "No due date"}</dd>
           </div>
+          {p.projectTitle && (
+            <div>
+              <dt>Project</dt>
+              <dd>
+                {p.projectTitle}
+                {p.createProject ? " · will be created when applied" : ""}
+              </dd>
+            </div>
+          )}
           {p.reminderAt && (
             <div className={styles.reminderDetail}>
               <dt>
@@ -392,7 +401,7 @@ export default function TaskAssistant({
               <strong>Humeto assistant</strong>
               <small>
                 {live
-                  ? "Live model · reviewed task actions"
+                  ? "GPT-5.4 mini · reviewed task actions"
                   : data.engine === "OpenAI"
                     ? "Live model needs configuration"
                     : "Local command testing · no live AI connected"}

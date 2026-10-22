@@ -85,3 +85,28 @@ test("dates inside a quoted task title do not silently reschedule that task", ()
   assert.equal(intent.reminder, null);
   assert.equal(intent.stage, null);
 });
+
+test("Natural task wording extracts a named deadline and explicit project without executing the task", () => {
+  const p = parseLocal(
+    "submit Faiza's visa application by 23 Oct. Project is Study abroad",
+    { now: new Date("2026-10-23T05:00:00Z"), timezone: "Asia/Karachi" },
+  );
+  assert.equal(p.kind, "create");
+  assert.equal(p.title, "submit Faiza's visa application");
+  assert.equal(p.dueDate, "2026-10-23");
+  assert.equal(p.project, "Study abroad");
+  assert.equal(p.reminder, null);
+  assert.equal(
+    parseLocal("Do not submit the application by 23 Oct").kind,
+    "help",
+  );
+  assert.equal(
+    parseLocal("How do I submit a visa application by 23 Oct?").kind,
+    "help",
+  );
+  const year = parseLocal(
+    "Prepare documents by 4 February 2028. Project: Next intake",
+  );
+  assert.equal(year.dueDate, "2028-02-04");
+  assert.equal(year.project, "Next intake");
+});

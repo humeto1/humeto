@@ -2,6 +2,7 @@ import type { Intent } from "./contracts";
 const base: Intent = {
   kind: "help",
   title: null,
+  project: null,
   target: null,
   stage: null,
   important: null,
@@ -11,10 +12,19 @@ const base: Intent = {
   filter: "pending",
   scope: "mine",
 };
-export function parseLocal(message: string): Intent {
-  const text = message
+export function parseLocal(
+  message: string,
+  context: { now?: Date; timezone?: string } = {},
+): Intent {
+  let text = message
     .trim()
     .replace(/^(please\s+|can you\s+|could you\s+)/i, "");
+  const projectClause = text.match(
+    /[.;]\s*project\s*(?:is|:|=)\s*(.{1,160}?)\s*[.]?$/i,
+  );
+  const project =
+    projectClause?.[1].trim().replace(/^['"“]|['"”]$/g, "") || null;
+  if (projectClause) text = text.slice(0, projectClause.index).trim();
   const low = text.toLowerCase();
   const intent = {
     ...base,
@@ -24,13 +34,49 @@ export function parseLocal(message: string): Intent {
   };
   const schedulePattern =
     /\b(tomorrow|today|\d{4}-\d{2}-\d{2})(?:\s+at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\b|\bin\s+\d+\s*(?:minutes?|mins?|hours?|hrs?|days?)\b/i;
-  const schedule = text.match(schedulePattern)?.[0] || null;
+  const namedDeadline = text.match(
+    /\b(?:by|on|due(?: on)?)\s+(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)\b/i,
+  );
+  const namedParts = namedDeadline?.[1].match(
+    /^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)(?:\s+(\d{4}))?$/,
+  );
+  let namedDate: string | null = null;
+  if (namedParts) {
+    const year =
+      namedParts[3] ||
+      new Intl.DateTimeFormat("en", {
+        year: "numeric",
+        timeZone: context.timezone || "UTC",
+      }).format(context.now || new Date());
+    const month =
+      [
+        "jan",
+        "feb",
+        "mar",
+        "apr",
+        "may",
+        "jun",
+        "jul",
+        "aug",
+        "sep",
+        "oct",
+        "nov",
+        "dec",
+      ].indexOf(namedParts[2].slice(0, 3).toLowerCase()) + 1;
+    namedDate = `${year}-${String(month).padStart(2, "0")}-${namedParts[1].padStart(2, "0")}`;
+  }
+  const schedule =
+    namedDeadline?.[1] || text.match(schedulePattern)?.[0] || null;
   const create =
     /^(?:add|create|make|record|schedule)\s+(?:an?\s+)?(?:(?:important|urgent)\s+)*(?:task|to-do|todo)\b/i.test(
       text,
     ) ||
     /^mark\s+(?:an?\s+)?task\s+to\b/i.test(text) ||
-    /^remind me to\s/i.test(text);
+    /^remind me to\s/i.test(text) ||
+    (/^(?:submit|prepare|review|draft|write|call|email|contact|upload|book|pay|send|follow up)\b/i.test(
+      text,
+    ) &&
+      (!!schedule || !!project));
   if (create) {
     let title = text
       .replace(
@@ -39,7 +85,9 @@ export function parseLocal(message: string): Intent {
       )
       .replace(/^remind me to\s+/i, "");
     title = title.replace(/(?:[,.]?\s+(?:and\s+)?remind me\b.*)$/i, "");
-    if (schedule) title = title.replace(schedule, "");
+    if (namedDeadline) title = title.replace(namedDeadline[0], "");
+    else if (schedule) title = title.replace(schedule, "");
+    title = title.replace(/\s+(?:by|on|due(?: on)?)\s*$/i, "");
     title = title
       .replace(/\s+(?:tomorrow|today)$/i, "")
       .replace(/[\s,.]+$/g, "")
@@ -50,8 +98,17 @@ export function parseLocal(message: string): Intent {
       title: title.replace(/^['"]|['"]$/g, ""),
       important: /\bimportant\b/.test(low) && !/\bnot important\b/.test(low),
       urgent: /\burgent\b/.test(low) && !/\bnot urgent\b/.test(low),
-      dueDate: schedule,
-      reminder: /\bremind\b/.test(low) ? schedule : null,
+      project,
+      dueDate: namedDate || schedule,
+      reminder: /\bremind\b/.test(low)
+        ? namedDate
+          ? namedDate +
+            (text.match(/\bat\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i)?.[1]
+              ? " at " +
+                text.match(/\bat\s+(\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i)![1]
+              : "")
+          : schedule
+        : null,
     };
   }
   if (

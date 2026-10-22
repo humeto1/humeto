@@ -9,6 +9,7 @@ export const stages = [
 export const intentSchema = z.object({
   kind: z.enum(["create", "update", "list", "help"]),
   title: z.string().max(200).nullable(),
+  project: z.string().max(160).nullable(),
   target: z.string().max(200).nullable(),
   stage: z.enum(stages).nullable(),
   important: z.boolean().nullable(),
@@ -38,6 +39,9 @@ export type TaskSummary = {
   revision: number;
 };
 export type ActionPayload = {
+  projectId?: string;
+  projectTitle?: string;
+  createProject?: boolean;
   kind: "create" | "update";
   title: string;
   taskId: string | null;

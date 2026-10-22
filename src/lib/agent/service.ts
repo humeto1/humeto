@@ -294,8 +294,30 @@ async function plan(
   }
   if (dueDate && !validDay(dueDate))
     throw new AgentError("Please use a valid due date.");
+  let projectId = "",
+    projectTitle = "",
+    createProject = false;
+  if (intent.kind === "create" && intent.project) {
+    const matches = await db()
+      .prepare(
+        "SELECT id,title FROM projects WHERE tenant_id=? AND lower(title)=lower(?) AND status='Active' LIMIT 2",
+      )
+      .all(a.tenantId, intent.project.trim());
+    if (matches.length > 1)
+      throw new AgentError(
+        "More than one active project has that name. Rename one to make the choice unambiguous.",
+      );
+    projectTitle = matches[0]
+      ? String(matches[0].title)
+      : intent.project.trim();
+    projectId = matches[0] ? String(matches[0].id) : "";
+    createProject = !matches.length;
+  }
   const payload: ActionPayload = {
     kind: task ? "update" : "create",
+    projectId,
+    projectTitle,
+    createProject,
     title,
     taskId: task?.id || null,
     revision: task?.revision || null,
@@ -456,10 +478,53 @@ export async function decide(
       let taskId = p.taskId;
       if (decision === "apply") {
         if (p.kind === "create") {
+          let projectId = p.projectId || "";
+          if (p.projectTitle) {
+            if (projectId) {
+              if (
+                !(await d
+                  .prepare(
+                    "SELECT id FROM projects WHERE id=? AND tenant_id=? AND status='Active'",
+                  )
+                  .get(projectId, a.tenantId))
+              )
+                throw new AgentError(
+                  "The selected project is no longer available. Ask for a fresh preview.",
+                  409,
+                );
+            } else if (p.createProject) {
+              const matches = await d
+                .prepare(
+                  "SELECT id FROM projects WHERE tenant_id=? AND lower(title)=lower(?) AND status='Active' LIMIT 2",
+                )
+                .all(a.tenantId, p.projectTitle);
+              if (matches.length > 1)
+                throw new AgentError(
+                  "Project name is now ambiguous. Ask for a fresh preview.",
+                  409,
+                );
+              projectId = matches[0] ? String(matches[0].id) : id();
+              if (!matches.length) {
+                await d
+                  .prepare(
+                    "INSERT INTO projects(id,tenant_id,title,created_by) VALUES(?,?,?,?)",
+                  )
+                  .run(projectId, a.tenantId, p.projectTitle, a.id);
+                await audit(
+                  a.tenantId,
+                  a.id,
+                  "created",
+                  "project",
+                  projectId,
+                  "Created project from reviewed assistant task",
+                );
+              }
+            }
+          }
           taskId = id();
           await d
             .prepare(
-              "INSERT INTO tasks(id,tenant_id,title,stage,important,urgent,due_date,assignee,last_actor_id) VALUES(?,?,?,?,?,?,?,?,?)",
+              "INSERT INTO tasks(id,tenant_id,title,stage,important,urgent,due_date,assignee,last_actor_id,project_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
             )
             .run(
               taskId,
@@ -471,6 +536,7 @@ export async function decide(
               p.dueDate,
               p.assignee,
               a.id,
+              projectId,
             );
         } else {
           const result = await d

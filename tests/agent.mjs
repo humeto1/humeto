@@ -8,6 +8,7 @@ const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
 const zone = "Asia/Karachi",
   threads = new Set(),
   taskIds = new Set(),
+  agentProjects = new Set(),
   contexts = [];
 async function context(user) {
   const c = await request.newContext({
@@ -67,6 +68,12 @@ after(async () => {
     await db.prepare("DELETE FROM task_goals WHERE task_id=?").run(t);
     await db.prepare("DELETE FROM task_events WHERE task_id=?").run(t);
     await db.prepare("DELETE FROM tasks WHERE id=?").run(t);
+  }
+  for (const pid of agentProjects) {
+    await db
+      .prepare("DELETE FROM audit WHERE entity_type='project' AND entity_id=?")
+      .run(pid);
+    await db.prepare("DELETE FROM projects WHERE id=?").run(pid);
   }
   await db.close();
 });
@@ -314,4 +321,55 @@ test("read-only subscriptions preserve assistant summaries but block messages an
       .run(previous, "northstar");
     await db.close();
   }
+});
+
+test("Natural-language task preview creates and links an explicitly reviewed project only on apply", async () => {
+  const c = await context("ayesha"),
+    d = database(),
+    name = "Study abroad QA " + randomUUID();
+  const before = await d
+    .prepare("SELECT count(*) AS n FROM projects WHERE tenant_id=? AND title=?")
+    .get("northstar", name);
+  assert.equal(before.n, 0);
+  let s = await message(
+    c,
+    `submit Faiza's visa application by 23 Oct 2030. Project is ${name}`,
+  );
+  let card = lastAction(s);
+  assert.ok(card);
+  assert.equal(card.payload.title, "submit Faiza's visa application");
+  assert.equal(card.payload.dueDate, "2030-10-23");
+  assert.equal(card.payload.projectTitle, name);
+  assert.equal(card.payload.createProject, true);
+  assert.equal(
+    (
+      await d
+        .prepare(
+          "SELECT count(*) AS n FROM projects WHERE tenant_id=? AND title=?",
+        )
+        .get("northstar", name)
+    ).n,
+    0,
+  );
+  const result = await action(c, card);
+  assert.equal(result.r.status(), 200);
+  const task = await d
+    .prepare("SELECT * FROM tasks WHERE id=?")
+    .get(lastAction(result.d).taskId);
+  assert.ok(task.project_id);
+  const project = await d
+    .prepare("SELECT * FROM projects WHERE id=?")
+    .get(task.project_id);
+  assert.equal(project.tenant_id, "northstar");
+  assert.equal(project.title, name);
+  s = await message(
+    c,
+    `prepare documents by 24 Oct 2030. Project: ${name.toUpperCase()}`,
+  );
+  card = lastAction(s);
+  assert.equal(card.payload.projectId, project.id);
+  assert.equal(card.payload.createProject, false);
+  await action(c, card, "cancel");
+  // Project cleanup is deferred until task cleanup, via the test file's after hook.
+  agentProjects.add(project.id);
 });
