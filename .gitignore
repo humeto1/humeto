@@ -10,3 +10,4 @@ artifacts/
 
 # Local product roadmap, research references and implementation plans.
 /planning/
+.neon

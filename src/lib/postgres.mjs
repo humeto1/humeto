@@ -1,4 +1,6 @@
 import pg from "pg";
+import { attachDatabasePool } from "@vercel/functions";
+import { poolSettings } from "./database-settings.mjs";
 import { AsyncLocalStorage } from "node:async_hooks";
 const key = Symbol.for("humeto.postgres");
 const state = (globalThis[key] ||= {
@@ -24,14 +26,8 @@ function poolFor(url) {
       "DATABASE_URL is required. Run the documented PostgreSQL setup.",
     );
   if (!state.pools.has(url)) {
-    const pool = new pg.Pool({
-      connectionString: url,
-      max: 10,
-      connectionTimeoutMillis: 5000,
-      idleTimeoutMillis: 30000,
-      statement_timeout: 15000,
-      application_name: "humeto",
-    });
+    const pool = new pg.Pool(poolSettings(url));
+    if (process.env.VERCEL) attachDatabasePool(pool);
     pool.on("error", () => console.error("PostgreSQL idle connection failed."));
     state.pools.set(url, pool);
   }

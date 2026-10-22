@@ -1,23 +1,21 @@
 import pg from "pg";
+import { qaBaseUrl } from "../../src/lib/database-settings.mjs";
 import { randomUUID } from "node:crypto";
 import { database } from "../../src/lib/postgres.mjs";
 import { migrate } from "../migrate-postgres.mjs";
 export async function createTestDatabase({ migrateSchema = true } = {}) {
-  if (!process.env.DATABASE_URL || !process.env.HUMETO_PG_ADMIN_URL)
-    throw new Error(
-      "DATABASE_URL and HUMETO_PG_ADMIN_URL are needed for isolated PostgreSQL QA.",
-    );
+  const baseUrl = qaBaseUrl();
   const name = "humeto_qa_" + randomUUID().replaceAll("-", "");
   const admin = new pg.Client({
     connectionString: process.env.HUMETO_PG_ADMIN_URL,
   });
   await admin.connect();
-  const owner = decodeURIComponent(new URL(process.env.DATABASE_URL).username);
+  const owner = decodeURIComponent(new URL(baseUrl).username);
   const quoted = (s) => '"' + s.replaceAll('"', '""') + '"';
   await admin.query(
     "CREATE DATABASE " + quoted(name) + " OWNER " + quoted(owner),
   );
-  const target = new URL(process.env.DATABASE_URL);
+  const target = new URL(baseUrl);
   target.pathname = "/" + name;
   const d = database(target.toString());
   if (migrateSchema) await migrate(d);

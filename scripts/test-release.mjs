@@ -25,6 +25,8 @@ const url = `http://127.0.0.1:${port}`;
 const env = {
   ...process.env,
   DATABASE_URL: fixture.url,
+  DATABASE_URL_UNPOOLED: fixture.url,
+  HUMETO_TEST_DATABASE_URL: fixture.url,
   HUMETO_DATA_DIR: directory,
   HUMETO_LOCAL_DEMO: "true",
   HUMETO_AGENT_PROVIDER: "local",

@@ -27,6 +27,9 @@
     "seed:notebook": "node --env-file-if-exists=.env.local scripts/seed-notebook-demo.mjs"
   },
   "dependencies": {
+    "@neon/config": "^1.9.3",
+    "@neon/env": "^1.6.4",
+    "@vercel/functions": "^3.10.3",
     "@whiskeysockets/baileys": "^6.7.24",
     "lucide-react": "^0.577.0",
     "next": "16.4.2",

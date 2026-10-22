@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { migrationUrl } from "../src/lib/database-settings.mjs";
 import { database } from "../src/lib/postgres.mjs";
-export async function migrate(d = database()) {
+export async function migrate(d = database(migrationUrl())) {
   return d.transaction(async () => {
     await d.query("SELECT pg_advisory_xact_lock(781340119)");
     await d.query(
@@ -32,7 +33,7 @@ export async function migrate(d = database()) {
   });
 }
 if (process.argv[1]?.endsWith("migrate-postgres.mjs")) {
-  const d = database();
+  const d = database(migrationUrl());
   try {
     await migrate(d);
     console.log("PostgreSQL migrations applied.");

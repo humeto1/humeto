@@ -100,3 +100,5 @@ The extension now supports reviewed split-date values, conservative family/refer
 ### Paper tasks, journey insights and schedule editing
 
 Notebook images can be reviewed into source-linked tasks; CRM journeys have structured deadlines and observed stage durations; recurring schedules can be edited or skipped explicitly. See the [19 October delivery](docs/DELIVERY_2026-10-19.md) for usage and limits.
+
+Database configuration and migration: [Neon setup](docs/NEON_SETUP.md). GitHub/Vercel launch settings and remaining hosting dependencies: [Vercel deployment](docs/VERCEL_DEPLOYMENT.md).

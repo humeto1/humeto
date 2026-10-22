@@ -1,4 +1,5 @@
 // Consistent database dump; pause app writes while copying the upload directory.
+import { migrationUrl } from "../src/lib/database-settings.mjs";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -29,6 +30,9 @@ export function pgEnv(url) {
     ...(v.searchParams.has("sslmode")
       ? { PGSSLMODE: v.searchParams.get("sslmode") }
       : {}),
+    ...(v.hostname.endsWith(".neon.tech")
+      ? { PGSSLMODE: "verify-full", PGSSLROOTCERT: "system" }
+      : {}),
   };
 }
 export function command(program, args, url) {
@@ -50,7 +54,7 @@ export function backupPostgres() {
   command(
     "pg_dump",
     ["--format=custom", "--no-owner", "--no-privileges", "--file", dump],
-    process.env.DATABASE_URL,
+    migrationUrl(),
   );
   chmodSync(dump, 0o600);
   for (const name of ["uploads", "ocr"]) {
