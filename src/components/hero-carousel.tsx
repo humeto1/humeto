@@ -105,9 +105,9 @@ export default function HeroCarousel({
               <span className="status-dot" /> A LITTLE FOCUS. A LOT MORE FLOW.
             </div>
             <h1>
-              Make space.
+              Simplified
               <br />
-              <em>For what matters.</em>
+              <em>task management</em>
             </h1>
             <p className="hero-description">
               Big projects. Small to-dos. One calm place to bring it all
@@ -224,9 +224,9 @@ export default function HeroCarousel({
               ARE.
             </div>
             <h1>
-              Long forms.
+              Application
               <br />
-              <em>A little less effort.</em>
+              <em>assistant</em>
             </h1>
             <p className="hero-description">
               University, job or visa application? Meet your helper for the
