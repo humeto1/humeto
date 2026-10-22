@@ -753,12 +753,13 @@ export default function Workspace({
                 title="Change importance / urgency"
                 aria-label={`Change importance / urgency for ${t.title}`}
                 type="button"
-                className="icon-btn"
+                className="btn secondary small"
                 onClick={() => {
                   showModal("task-priority:" + t.id);
                 }}
               >
                 <Grid2X2 size={14} />
+                Change
               </button>
             )}
           </div>
