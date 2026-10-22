@@ -745,7 +745,24 @@ export default function Workspace({
         </div>
         <h3>{t.title}</h3>
         <p>{t.person_name || "Team task"}</p>
-        {staff && <WorkAssignment type="task" id={t.id} writable={writable} />}
+        {staff && (
+          <div className="task-assignment-actions">
+            <WorkAssignment type="task" id={t.id} writable={writable} />
+            {writable && (
+              <button
+                title="Change importance / urgency"
+                aria-label={`Change importance / urgency for ${t.title}`}
+                type="button"
+                className="icon-btn"
+                onClick={() => {
+                  showModal("task-priority:" + t.id);
+                }}
+              >
+                <Grid2X2 size={14} />
+              </button>
+            )}
+          </div>
+        )}
         <TaskLinks
           task={t}
           projects={data.projects || []}
@@ -786,15 +803,6 @@ export default function Workspace({
                 <option key={s}>{s}</option>
               ))}
             </select>
-            <button
-              title="Change importance / urgency"
-              className="icon-btn"
-              onClick={() => {
-                showModal("task-priority:" + t.id);
-              }}
-            >
-              <Grid2X2 size={14} />
-            </button>
           </div>
         )}
       </article>

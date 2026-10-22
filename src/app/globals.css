@@ -5834,3 +5834,17 @@ textarea {
 .voucher-list{display:grid;gap:12px;margin-top:20px;}
 .voucher-list article{border:1px solid #d9dfd9;border-radius:10px;padding:14px;}
 .voucher-center code{overflow-wrap:anywhere;}
+
+.task-assignment-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+}
+.task-assignment-actions > div {
+  min-width: 0;
+  margin-top: 0 !important;
+}
+.task-assignment-actions > .icon-btn {
+  flex-shrink: 0;
+}
