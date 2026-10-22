@@ -174,9 +174,12 @@ export async function bootstrap(a: Actor) {
       result.leads = [];
       result.applications = [];
       result.finance = [];
-      result.pipelines = {};
+      result.pipelines = featureAllowed(result.subscription, "tasks")
+        ? { tasks: result.pipelines.tasks }
+        : {};
     }
     if (!featureAllowed(result.subscription, "tasks")) {
+      delete result.pipelines.tasks;
       result.tasks = [];
       result.projects = [];
       result.goals = [];

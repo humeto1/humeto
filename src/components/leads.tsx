@@ -7,6 +7,7 @@ import type { Lead } from "@/lib/pipeline";
 import { leadStages, money } from "@/lib/pipeline";
 import { parseLeadCSV } from "@/lib/lead-csv.mjs";
 import PipelineBoard from "./pipeline-board";
+import type { StageEditor } from "./stage-controls";
 type Draft = Partial<Lead>;
 export default function Leads({
   leads,
@@ -14,7 +15,9 @@ export default function Leads({
   writable,
   search,
   pipeline,
+  stageEditor,
 }: {
+  stageEditor?: StageEditor;
   leads: Lead[];
   refresh: () => Promise<void>;
   writable: boolean;
@@ -368,6 +371,7 @@ export default function Leads({
       <LeadFollowups leads={leads} refresh={refresh} writable={writable} />
       <PipelineBoard
         label="Lead pipeline"
+        stageEditor={stageEditor}
         items={filtered}
         stages={pipeline?.stages.map((s) => s.key) || leadStages}
         titles={Object.fromEntries(

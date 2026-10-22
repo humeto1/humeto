@@ -88,7 +88,11 @@ async function handle(req: Request, parts: string[], a: Actor) {
         u.searchParams.get("id") || "",
       );
     }
-    if (resource === "pipelines") return pipelineRead(a);
+    if (resource === "pipelines")
+      return pipelineRead(
+        a,
+        new URL(req.url).searchParams.get("kind") === "tasks",
+      );
     if (resource === "focus") return focusRead(a);
     if (resource === "scheduling")
       return schedulingRead(
@@ -1100,12 +1104,14 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail("Task management is not permitted.", 403);
     const input = z
       .object({
-        stage: z.enum(["To do", "In progress", "Waiting", "Review", "Done"]),
+        stage: z.string().min(1).max(100),
         revision: z.number().int().positive(),
         important: z.boolean().optional(),
         urgent: z.boolean().optional(),
       })
       .parse(body);
+    if (!(await validStage(a.tenantId, "tasks", input.stage)))
+      return fail("Choose an active task stage.", 400);
     const task = (await db()
       .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=?")
       .get(rid, a.tenantId)) as

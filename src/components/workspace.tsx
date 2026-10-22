@@ -17,7 +17,7 @@ import DocumentReader from "./document-reader";
 import JourneyInsights from "./journey-insights";
 import FinanceCenter from "./finance-center";
 import WorkAssignment from "./work-assignment";
-import PipelineSettings from "./pipeline-settings";
+import { StageControls, type StageEditor } from "./stage-controls";
 import TaskNotebooks from "./task-notebooks";
 import TaskSchedules from "./task-schedules";
 import TaskFocus from "./task-focus";
@@ -96,6 +96,7 @@ import Leads from "./leads";
 import PipelineBoard from "./pipeline-board";
 import CaseFinance from "./case-finance";
 import {
+  leadStages,
   applicantStages,
   applicationStages,
   money,
@@ -718,6 +719,27 @@ export default function Workspace({
       </article>
     );
   }
+  const taskStageKeys =
+    data.pipelines?.tasks?.stages.map((s) => s.key) || states;
+  function boardEditor(kind: string): StageEditor {
+    const fallback =
+      kind === "tasks"
+        ? states
+        : kind === "leads"
+          ? leadStages
+          : kind === "applicants"
+            ? applicantStages
+            : applicationStages;
+    return {
+      kind,
+      config: data.pipelines?.[kind] || {
+        revision: 0,
+        stages: fallback.map((key) => ({ key, title: key })),
+      },
+      onChange: refresh,
+      enabled: actor.role === "owner" && writable,
+    };
+  }
   function compactTask(t: Task) {
     return (
       <article
@@ -743,7 +765,9 @@ export default function Workspace({
             <span>
               <Calendar size={12} /> {dateLabel(t.due_date)}
             </span>
-            <span className="compact-task-stage">{t.stage}</span>
+            <span className="compact-task-stage">
+              {stageTitle("tasks", t.stage)}
+            </span>
             <span className="tiny-avatar">
               {initials(t.assignee || actor.name)}
             </span>
@@ -834,8 +858,10 @@ export default function Workspace({
               }
               disabled={busy}
             >
-              {states.map((s) => (
-                <option key={s}>{s}</option>
+              {taskStageKeys.map((s) => (
+                <option key={s} value={s}>
+                  {stageTitle("tasks", s)}
+                </option>
               ))}
             </select>
           </div>
@@ -1171,6 +1197,7 @@ export default function Workspace({
           {view === "leads" && staff && (
             <Leads
               pipeline={data.pipelines?.leads}
+              stageEditor={boardEditor("leads")}
               leads={data.leads || []}
               refresh={refresh}
               writable={writable}
@@ -1483,6 +1510,7 @@ export default function Workspace({
               {peopleView === "board" ? (
                 <PipelineBoard
                   label="Applicant journey"
+                  stageEditor={boardEditor("applicants")}
                   items={filteredPeople}
                   stages={
                     data.pipelines?.applicants?.stages.map((s) => s.key) ||
@@ -1845,6 +1873,7 @@ export default function Workspace({
               {appsView === "board" ? (
                 <PipelineBoard
                   label="Application pipeline"
+                  stageEditor={boardEditor("applications")}
                   items={filteredApps}
                   stages={
                     data.pipelines?.applications?.stages.map((s) => s.key) ||
@@ -1962,7 +1991,7 @@ export default function Workspace({
                 </div>
                 {taskView === "board" ? (
                   <div className="kanban-board">
-                    {states.map((s) => (
+                    {taskStageKeys.map((s) => (
                       <section
                         className="kanban-column"
                         key={s}
@@ -1992,17 +2021,14 @@ export default function Workspace({
                             );
                         }}
                       >
-                        <h2>
-                          <span
-                            className={
-                              "stage-dot " + s.toLowerCase().replace(" ", "-")
-                            }
-                          />
-                          {s}
-                          <span>
-                            {filteredTasks.filter((t) => t.stage === s).length}
-                          </span>
-                        </h2>
+                        <StageControls
+                          editor={boardEditor("tasks")}
+                          stageKey={s}
+                          count={
+                            filteredTasks.filter((t) => t.stage === s).length
+                          }
+                        />
+
                         {filteredTasks
                           .filter((t) => t.stage === s)
                           .map(compactTask)}
@@ -2013,6 +2039,9 @@ export default function Workspace({
                         )}
                       </section>
                     ))}
+                    {actor.role === "owner" && writable && (
+                      <StageControls editor={boardEditor("tasks")} />
+                    )}
                   </div>
                 ) : taskView === "matrix" ? (
                   <div className="priority-matrix">
@@ -2108,8 +2137,10 @@ export default function Workspace({
                           }
                           aria-label={`Stage for ${t.title}`}
                         >
-                          {states.map((s) => (
-                            <option key={s}>{s}</option>
+                          {taskStageKeys.map((s) => (
+                            <option key={s} value={s}>
+                              {stageTitle("tasks", s)}
+                            </option>
                           ))}
                         </select>
                       </div>
@@ -2195,13 +2226,6 @@ export default function Workspace({
               {title(
                 "Your workspace, thoughtfully set up.",
                 "Your plan, team and account details. Payment checkout is coming soon.",
-              )}
-              {actor.role === "owner" && (
-                <PipelineSettings
-                  settings={data.pipelines || {}}
-                  writable={writable}
-                  onChange={refresh}
-                />
               )}
               <div className="settings-grid">
                 <EmailPreferences />
@@ -2974,7 +2998,9 @@ export default function Workspace({
                           "Changes requested",
                           "Reviewed",
                         ].map((s) => (
-                          <option key={s}>{s}</option>
+                          <option key={s} value={s}>
+                            {stageTitle("tasks", s)}
+                          </option>
                         ))}
                       </select>
                     </label>
@@ -3555,7 +3581,9 @@ export default function Workspace({
                     Plan
                     <select name="plan">
                       {["Institute", "Individual", "Enterprise"].map((s) => (
-                        <option key={s}>{s}</option>
+                        <option key={s} value={s}>
+                          {stageTitle("tasks", s)}
+                        </option>
                       ))}
                     </select>
                   </label>
@@ -3652,7 +3680,9 @@ export default function Workspace({
                     Plan
                     <select name="plan" defaultValue={selectedTenant.plan}>
                       {["Institute", "Individual", "Enterprise"].map((s) => (
-                        <option key={s}>{s}</option>
+                        <option key={s} value={s}>
+                          {stageTitle("tasks", s)}
+                        </option>
                       ))}
                     </select>
                   </label>
@@ -3666,7 +3696,9 @@ export default function Workspace({
                         "read-only",
                         "cancelled",
                       ].map((s) => (
-                        <option key={s}>{s}</option>
+                        <option key={s} value={s}>
+                          {stageTitle("tasks", s)}
+                        </option>
                       ))}
                     </select>
                   </label>

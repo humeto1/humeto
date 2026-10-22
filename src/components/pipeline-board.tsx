@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { StageControls, type StageEditor } from "./stage-controls";
 export default function PipelineBoard<T extends { id: string }>({
   items,
   stages,
@@ -9,6 +10,7 @@ export default function PipelineBoard<T extends { id: string }>({
   editable,
   label,
   titles = {},
+  stageEditor,
 }: {
   items: T[];
   stages: readonly string[];
@@ -18,6 +20,7 @@ export default function PipelineBoard<T extends { id: string }>({
   editable: boolean;
   label: string;
   titles?: Record<string, string>;
+  stageEditor?: StageEditor;
 }) {
   const [dragged, setDragged] = useState<string | null>(null),
     [over, setOver] = useState(""),
@@ -53,11 +56,19 @@ export default function PipelineBoard<T extends { id: string }>({
             if (item) void run(item, stage);
           }}
         >
-          <h2>
-            <i />
-            {titles[stage] || stage}
-            <span>{items.filter((i) => stageOf(i) === stage).length}</span>
-          </h2>
+          {stageEditor?.enabled ? (
+            <StageControls
+              editor={stageEditor}
+              stageKey={stage}
+              count={items.filter((i) => stageOf(i) === stage).length}
+            />
+          ) : (
+            <h2>
+              <i />
+              {titles[stage] || stage}
+              <span>{items.filter((i) => stageOf(i) === stage).length}</span>
+            </h2>
+          )}
           {items
             .filter((i) => stageOf(i) === stage)
             .map((item) => (
@@ -106,6 +117,7 @@ export default function PipelineBoard<T extends { id: string }>({
           )}
         </section>
       ))}
+      {stageEditor?.enabled && <StageControls editor={stageEditor} />}
     </div>
   );
 }

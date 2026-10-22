@@ -8,6 +8,9 @@ export async function hasFeature(tenant: string, feature: string | null) {
   return !!s && featureAllowed(s, feature);
 }
 export function requestFeature(url: string) {
-  const p = new URL(url).pathname.split("/").filter(Boolean);
+  const parsed = new URL(url);
+  const p = parsed.pathname.split("/").filter(Boolean);
+  if (p[2] === "pipelines" && parsed.searchParams.get("kind") === "tasks")
+    return "tasks";
   return featureForView(p[1] === "workspace" ? p[2] : p[1]);
 }

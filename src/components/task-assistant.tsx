@@ -274,7 +274,7 @@ export default function TaskAssistant({
           </div>
           <div>
             <dt>Status</dt>
-            <dd>{p.stage}</dd>
+            <dd>{p.stageTitle || p.stage}</dd>
           </div>
           <div>
             <dt>Priority</dt>

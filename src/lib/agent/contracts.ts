@@ -11,7 +11,7 @@ export const intentSchema = z.object({
   title: z.string().max(200).nullable(),
   project: z.string().max(160).nullable(),
   target: z.string().max(200).nullable(),
-  stage: z.enum(stages).nullable(),
+  stage: z.string().max(100).nullable(),
   important: z.boolean().nullable(),
   urgent: z.boolean().nullable(),
   dueDate: z.string().max(100).nullable(),
@@ -39,6 +39,7 @@ export type TaskSummary = {
   revision: number;
 };
 export type ActionPayload = {
+  stageTitle?: string;
   projectId?: string;
   projectTitle?: string;
   createProject?: boolean;

@@ -1,4 +1,5 @@
 import "server-only";
+import { hasFeature } from "./feature-guard";
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { db, audit, withTransaction } from "./db";
@@ -6,6 +7,7 @@ import { canMutate, isStaff } from "./auth";
 import { leadStages, applicantStages, applicationStages } from "./pipeline";
 import type { Actor } from "./types";
 export const defaults = {
+  tasks: ["To do", "In progress", "Waiting", "Review", "Done"],
   leads: leadStages,
   applicants: applicantStages,
   applications: applicationStages,
@@ -37,10 +39,11 @@ export async function validStage(
   const settings = await pipelineSettings(tenantId);
   return settings[kind].stages.some((s: { key: string }) => s.key === key);
 }
-export async function pipelineRead(a: Actor) {
+export async function pipelineRead(a: Actor, tasksOnly = false) {
   if (!isStaff(a))
     return NextResponse.json({ error: "Not permitted." }, { status: 403 });
-  return NextResponse.json(await pipelineSettings(a.tenantId));
+  const settings = await pipelineSettings(a.tenantId);
+  return NextResponse.json(tasksOnly ? { tasks: settings.tasks } : settings);
 }
 export async function pipelineWrite(a: Actor, body: unknown) {
   if (a.role !== "owner" || !(await canMutate(a)))
@@ -50,7 +53,7 @@ export async function pipelineWrite(a: Actor, body: unknown) {
     );
   const v = z
     .object({
-      kind: z.enum(["leads", "applicants", "applications"]),
+      kind: z.enum(["tasks", "leads", "applicants", "applications"]),
       revision: z.number().int().min(0),
       stages: z
         .array(
@@ -64,6 +67,11 @@ export async function pipelineWrite(a: Actor, body: unknown) {
       replacements: z.record(z.string(), z.string()).default({}),
     })
     .parse(body);
+  if (!(await hasFeature(a.tenantId, v.kind === "tasks" ? "tasks" : "crm")))
+    return NextResponse.json(
+      { error: "This feature is not included in your workspace access." },
+      { status: 403 },
+    );
   if (
     new Set(v.stages.map((s) => s.key)).size !== v.stages.length ||
     new Set(v.stages.map((s) => s.title.toLowerCase())).size !== v.stages.length
@@ -84,6 +92,14 @@ export async function pipelineWrite(a: Actor, body: unknown) {
         { status: 409 },
       );
     const keep = new Set(v.stages.map((s) => s.key));
+    if (v.kind === "tasks" && !keep.has("Done"))
+      return NextResponse.json(
+        {
+          error:
+            "The task completion stage must remain. Rename or reorder it instead.",
+        },
+        { status: 400 },
+      );
     const deleted = old.stages.filter((s: { key: string }) => !keep.has(s.key));
     const existing = await db()
       .prepare(
@@ -133,6 +149,17 @@ export async function pipelineWrite(a: Actor, body: unknown) {
         );
       redirects[key] = value;
     }
+    if (
+      v.kind === "tasks" &&
+      ["To do", "In progress"].some((key) => redirects[key] === "Done")
+    )
+      return NextResponse.json(
+        {
+          error:
+            "New tasks and focus sessions must start in an unfinished stage. Choose another destination.",
+        },
+        { status: 400 },
+      );
     await db()
       .prepare(
         `INSERT INTO pipeline_settings(tenant_id,kind,stages_json,redirects_json) VALUES(?,?,?::jsonb,?::jsonb) ON CONFLICT(tenant_id,kind) DO UPDATE SET stages_json=excluded.stages_json,redirects_json=excluded.redirects_json,revision=pipeline_settings.revision+1`,
@@ -147,7 +174,7 @@ export async function pipelineWrite(a: Actor, body: unknown) {
       column =
         v.kind === "applicants"
           ? "journey_stage"
-          : v.kind === "leads"
+          : v.kind === "leads" || v.kind === "tasks"
             ? "stage"
             : "status";
     for (const s of deleted)
@@ -166,4 +193,13 @@ export async function pipelineWrite(a: Actor, body: unknown) {
     );
     return NextResponse.json({ ok: true });
   });
+}
+
+export async function activeTaskStage(tenantId: string, key: string) {
+  const row = await db()
+    .prepare(
+      "SELECT redirects_json FROM pipeline_settings WHERE tenant_id=? AND kind='tasks'",
+    )
+    .get(tenantId);
+  return String(row?.redirects_json?.[key] || key);
 }

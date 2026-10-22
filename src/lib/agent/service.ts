@@ -1,3 +1,8 @@
+import {
+  pipelineSettings,
+  validStage,
+  activeTaskStage,
+} from "../pipeline-settings";
 import { withTransaction } from "../db";
 import "server-only";
 import { db, id, audit } from "../db";
@@ -321,7 +326,10 @@ async function plan(
     title,
     taskId: task?.id || null,
     revision: task?.revision || null,
-    stage: intent.stage || task?.stage || "To do",
+    stage:
+      intent.stage ||
+      task?.stage ||
+      (await activeTaskStage(a.tenantId, "To do")),
     important: intent.important ?? !!task?.important,
     urgent: intent.urgent ?? !!task?.urgent,
     dueDate,
@@ -336,6 +344,10 @@ async function plan(
       intent.urgent === null &&
       !intent.dueDate,
   };
+  payload.stageTitle =
+    (await pipelineSettings(a.tenantId)).tasks.stages.find(
+      (s: { key: string; title: string }) => s.key === payload.stage,
+    )?.title || payload.stage;
   if (payload.reminderAt && payload.stage === "Done")
     throw new AgentError(
       "This task is complete. Move it back to To do before scheduling a reminder.",
@@ -392,12 +404,26 @@ export async function sendMessage(
   const history = threadId
     ? (await agentState(a, threadId, timezone)).messages
     : [];
+  const stageConfig = (await pipelineSettings(a.tenantId)).tasks;
   const intent = await interpret(message, {
+    stages: stageConfig.stages,
     timezone,
     now: new Date().toISOString(),
     tasks: await tasks(a),
     history: history.map((m) => ({ role: m.role, content: m.content })),
   });
+  if (intent.stage) {
+    const match = stageConfig.stages.find(
+      (s: { key: string; title: string }) =>
+        s.key === intent.stage ||
+        s.title.toLowerCase() === intent.stage?.toLowerCase(),
+    );
+    if (!match && ["To do", "In progress"].includes(intent.stage)) {
+      intent.stage = await activeTaskStage(a.tenantId, intent.stage);
+    } else if (!match)
+      throw new AgentError("Choose an active stage from your task board.", 400);
+    if (match) intent.stage = match.key;
+  }
   const d = db();
   const requestedThreadId = threadId;
   try {
@@ -477,6 +503,11 @@ export async function decide(
       const p = JSON.parse(String(row.payload)) as ActionPayload;
       let taskId = p.taskId;
       if (decision === "apply") {
+        if (!(await validStage(a.tenantId, "tasks", p.stage)))
+          throw new AgentError(
+            "This stage was removed. Ask again for a fresh task proposal.",
+            409,
+          );
         if (p.kind === "create") {
           let projectId = p.projectId || "";
           if (p.projectTitle) {

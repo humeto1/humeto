@@ -24,7 +24,7 @@ Cross-origin/nested frames, split-date controls, complex upload widgets, broad r
 
 ### Flexible pipelines
 
-Owners can edit **Workspace settings → Your stages, your workflow** for leads, applicants and applications. Rename titles, reorder, add or remove columns. Removal requires a surviving destination and moves existing cards transactionally. Retired keys redirect future events so they do not recreate orphaned columns. Stable milestone keys preserve existing readiness/submission behavior after a title change. Only owners configure pipelines; staff use them. Card movement still updates status. Local CRM commands recognize configured application titles.
+Owners now edit stages **directly on each board** for tasks, leads, applicants and applications (updated 2026-10-23). Click a title to rename it, use its menu to reorder/delete, or choose Add stage. Rename titles, reorder, add or remove columns. Removal requires a surviving destination and moves existing cards transactionally. Retired keys redirect future events so they do not recreate orphaned columns. Stable milestone keys preserve existing readiness/submission behavior after a title change. Only owners configure pipelines; staff use them. Card movement still updates status. Local CRM commands recognize configured application titles.
 
 Task stages remain their own lifecycle; this increment configures CRM pipelines. Stage deadlines, velocity and speed/value reporting remain separate work.
 
