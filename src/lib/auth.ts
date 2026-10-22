@@ -1,3 +1,4 @@
+import { subscriptionAccess } from "./subscription-access.mjs";
 import "server-only";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -16,7 +17,7 @@ export async function actor(): Promise<Actor | null> {
   if (!token) return null;
   const row = await db()
     .prepare(
-      'SELECT u.id,u.name,u.email,m.tenant_id AS "tenantId",t.name AS "tenantName",t.type AS "workspaceType",m.role,m.person_id AS "personId" FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id AND m.tenant_id=s.tenant_id JOIN tenants t ON t.id=m.tenant_id WHERE s.token_hash=? AND s.expires_at>?',
+      'SELECT u.id,u.name,u.email,m.tenant_id AS "tenantId",t.name AS "tenantName",t.type AS "workspaceType",m.role,m.person_id AS "personId" FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id AND m.tenant_id=s.tenant_id JOIN tenants t ON t.id=m.tenant_id WHERE s.token_hash=? AND s.expires_at>? AND (u.verification_required=0 OR u.email_verified_at IS NOT NULL)',
     )
     .get(digest(token), Date.now());
   return row ? ({ ...row } as Actor) : null;
@@ -37,7 +38,7 @@ export async function newSession(userId: string, tenantId: string) {
   (await cookies()).set(cookieName, token, {
     httpOnly: true,
     sameSite: "lax",
-    secure: process.env.HUMETO_HTTPS === "true",
+    secure: process.env.HUMETO_HTTPS === "true" || process.env.VERCEL === "1",
     path: "/",
     maxAge: 60 * 60 * 12,
   });
@@ -90,11 +91,7 @@ export async function canMutate(a: Actor) {
         expires_at: string;
       }
     | undefined;
-  return (
-    !!s &&
-    ["active", "trial", "grace"].includes(s.status) &&
-    (!s.expires_at || s.expires_at >= new Date().toISOString().slice(0, 10))
-  );
+  return subscriptionAccess(s);
 }
 export function scope(a: Actor, column = "person_id") {
   return a.role === "student"

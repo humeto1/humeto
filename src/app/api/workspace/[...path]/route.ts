@@ -1,3 +1,4 @@
+import { subscriptionAccess, trialExpiry } from "@/lib/subscription-access.mjs";
 import { schedulingRead, schedulingWrite } from "@/lib/task-scheduling";
 import {
   readingRead,
@@ -62,11 +63,7 @@ async function writable(a: Actor) {
         expires_at: string;
       }
     | undefined;
-  return (
-    !!s &&
-    ["trial", "active", "grace"].includes(s.status) &&
-    (!s.expires_at || s.expires_at >= new Date().toISOString().slice(0, 10))
-  );
+  return subscriptionAccess(s);
 }
 async function staff(a: Actor) {
   return isStaff(a) && (await canMutate(a));
@@ -330,7 +327,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return NextResponse.json({
         tenants: await db()
           .prepare(
-            "SELECT t.*,s.plan,s.status,s.seats,s.case_limit,s.storage_mb,s.expires_at,(SELECT count(*) FROM people p WHERE p.tenant_id=t.id) AS case_count FROM tenants t JOIN subscriptions s ON s.tenant_id=t.id ORDER BY t.created_at DESC",
+            "SELECT t.*,s.plan,s.status,s.seats,s.case_limit,s.storage_mb,s.expires_at,(SELECT requested_at FROM upgrade_requests u WHERE u.tenant_id=t.id AND u.status='pending') AS upgrade_requested_at,(SELECT count(*) FROM people p WHERE p.tenant_id=t.id) AS case_count FROM tenants t JOIN subscriptions s ON s.tenant_id=t.id ORDER BY t.created_at DESC",
           )
           .all(),
         activity: await db()
@@ -584,6 +581,20 @@ async function handle(req: Request, parts: string[], a: Actor) {
     });
   }
   const body = await req.json();
+  if (resource === "billing" && rid === "request" && req.method === "POST") {
+    if (a.role !== "owner")
+      return fail("Only the workspace owner can request activation.", 403);
+    await db()
+      .prepare(
+        "INSERT INTO upgrade_requests(tenant_id,requested_by,requested_at) VALUES(?,?,?) ON CONFLICT(tenant_id) DO NOTHING",
+      )
+      .run(a.tenantId, a.id, Date.now());
+    return NextResponse.json({
+      ok: true,
+      message:
+        "Your activation request is saved for the platform administrator. No payment has been taken.",
+    });
+  }
   if (resource === "reading" && req.method === "POST")
     return readingWrite(a, body);
   if (resource === "finance" && req.method === "POST")
@@ -1538,9 +1549,17 @@ async function handle(req: Request, parts: string[], a: Actor) {
             .run(uid, tid, "owner");
           await db()
             .prepare(
-              "INSERT INTO subscriptions(tenant_id,plan,status,seats,case_limit) VALUES(?,?,?,?,?)",
+              "INSERT INTO subscriptions(tenant_id,plan,status,seats,case_limit,expires_at,trial_started_at) VALUES(?,?,?,?,?,?,?)",
             )
-            .run(tid, input.plan, "trial", input.seats, input.caseLimit);
+            .run(
+              tid,
+              input.plan,
+              "trial",
+              input.seats,
+              input.caseLimit,
+              trialExpiry(),
+              Date.now(),
+            );
           await audit(
             tid,
             a.id,
@@ -1583,10 +1602,18 @@ async function handle(req: Request, parts: string[], a: Actor) {
           input.seats,
           input.caseLimit,
           input.storageMb,
-          input.expiresAt,
+          input.status === "trial"
+            ? input.expiresAt || trialExpiry()
+            : input.expiresAt,
           rid,
         );
       if (!result.changes) return fail("Workspace not found.", 404);
+      if (input.status === "active")
+        await db()
+          .prepare(
+            "UPDATE upgrade_requests SET status='resolved' WHERE tenant_id=?",
+          )
+          .run(rid);
       await audit(
         rid,
         a.id,

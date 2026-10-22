@@ -1,3 +1,4 @@
+import { subscriptionAccess } from "./subscription-access.mjs";
 import { randomUUID } from "node:crypto";
 import { database } from "./postgres.mjs";
 import {
@@ -7,11 +8,12 @@ import {
   quietUntil,
 } from "./scheduling-clock.mjs";
 async function writable(d, tenant, user, now) {
-  return !!(await d
+  const s = await d
     .prepare(
-      "SELECT m.user_id FROM memberships m JOIN subscriptions s ON s.tenant_id=m.tenant_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant') AND s.status IN ('active','trial','grace') AND (s.expires_at='' OR s.expires_at IS NULL OR s.expires_at>=?)",
+      "SELECT s.status,s.expires_at FROM memberships m JOIN subscriptions s ON s.tenant_id=m.tenant_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant')",
     )
-    .get(tenant, user, now.toISOString().slice(0, 10)));
+    .get(tenant, user);
+  return subscriptionAccess(s, now.getTime());
 }
 export async function runTaskScheduler({
   d = database(),

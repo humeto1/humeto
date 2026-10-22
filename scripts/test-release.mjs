@@ -32,6 +32,8 @@ const env = {
   HUMETO_AGENT_PROVIDER: "local",
   HUMETO_TEST_URL: url,
   HUMETO_ISOLATED_QA: "true",
+  HUMETO_EMAIL_MODE: "capture",
+  HUMETO_PUBLIC_APP_URL: url,
   HUMETO_OCR_ENABLED: "true",
 };
 const run = (args, options = {}) =>

@@ -10,10 +10,21 @@ import {
   User,
   LoaderCircle,
 } from "lucide-react";
-export default function Login({ demoEnabled }: { demoEnabled: boolean }) {
-  const [mode, setMode] = useState("login"),
+export default function Login({
+  demoEnabled,
+  initialMode = "login",
+  signupEnabled = true,
+}: {
+  demoEnabled: boolean;
+  initialMode?: "login" | "register";
+  signupEnabled?: boolean;
+}) {
+  const [mode, setMode] = useState(initialMode),
     [busy, setBusy] = useState(""),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [accountType, setAccountType] = useState("individual"),
+    [pendingEmail, setPendingEmail] = useState(""),
+    [message, setMessage] = useState("");
   async function submit(action: string, body: unknown, key = action) {
     setBusy(key);
     setError("");
@@ -24,6 +35,12 @@ export default function Login({ demoEnabled }: { demoEnabled: boolean }) {
         body: JSON.stringify(body),
       });
       const d = await r.json();
+      if (d.verificationRequired) {
+        setPendingEmail(d.email);
+        setMessage(d.message || d.error);
+        setBusy("");
+        return;
+      }
       if (!r.ok) throw new Error(d.error);
       location.href = "/workspace";
     } catch (e) {
@@ -74,85 +91,157 @@ export default function Login({ demoEnabled }: { demoEnabled: boolean }) {
           <p>
             {mode === "login"
               ? "Sign in to pick up where you left off."
-              : "Create a local individual workspace."}
+              : "Start your free 15-day trial. No card required."}
           </p>
           {error && (
             <div className="notice error" role="alert">
               {error}
             </div>
           )}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              submit(mode, {
-                name: f.get("name"),
-                email: f.get("email"),
-                password: f.get("password"),
-              });
-            }}
-          >
-            {mode === "register" && (
-              <label>
-                Your name
-                <input
-                  required
-                  name="name"
-                  autoComplete="name"
-                  placeholder="Alex Morgan"
-                />
-              </label>
-            )}
-            <label>
-              Email address
-              <input
-                name="email"
-                type="email"
-                required
-                autoComplete="email"
-                placeholder="you@example.com"
-              />
-            </label>
-            <label>
-              Password
-              <input
-                name="password"
-                type="password"
-                required
-                minLength={mode === "register" ? 12 : 1}
-                autoComplete={
-                  mode === "login" ? "current-password" : "new-password"
-                }
-                placeholder={
-                  mode === "register"
-                    ? "At least 12 characters"
-                    : "Your password"
-                }
-              />
-            </label>
-            <button className="btn primary full" disabled={!!busy}>
-              {busy === mode ? (
-                <LoaderCircle className="spin" size={16} />
-              ) : (
-                <>
-                  {mode === "login" ? "Sign in" : "Create workspace"}
-                  <ArrowUpRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-          {demoEnabled && (
-            <button
-              className="auth-mode"
-              onClick={() => {
-                setMode(mode === "login" ? "register" : "login");
-                setError("");
+          {pendingEmail ? (
+            <section className="notice">
+              <h3>Check your email</h3>
+              <p>{message}</p>
+              <p>
+                Verify {pendingEmail} to start your trial. If delivery is
+                delayed, check spam or request another link.
+              </p>
+              <button
+                className="btn secondary"
+                disabled={!!busy}
+                onClick={async () => {
+                  setBusy("resend");
+                  try {
+                    const r = await fetch("/api/auth/resend-verification", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ email: pendingEmail }),
+                    });
+                    const v = await r.json();
+                    setMessage(v.message || v.error);
+                  } catch {
+                    setMessage("Unable to request a new link. Please retry.");
+                  } finally {
+                    setBusy("");
+                  }
+                }}
+              >
+                Resend verification
+              </button>
+            </section>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                submit(mode, {
+                  name: f.get("name"),
+                  email: f.get("email"),
+                  password: f.get("password"),
+                  accountType,
+                  companyName: f.get("companyName") || "",
+                });
               }}
             >
+              {mode === "register" && (
+                <label>
+                  Your name
+                  <input
+                    required
+                    name="name"
+                    autoComplete="name"
+                    placeholder="Alex Morgan"
+                  />
+                </label>
+              )}
+              {mode === "register" && (
+                <>
+                  <label>
+                    Account type
+                    <select
+                      name="accountType"
+                      value={accountType}
+                      onChange={(e) => setAccountType(e.target.value)}
+                    >
+                      <option value="individual">Individual</option>
+                      <option value="company">Company / agency</option>
+                    </select>
+                  </label>
+                  {accountType === "company" && (
+                    <label>
+                      Company name
+                      <input
+                        required
+                        minLength={2}
+                        maxLength={100}
+                        name="companyName"
+                        autoComplete="organization"
+                        placeholder="Your company or agency"
+                      />
+                    </label>
+                  )}
+                </>
+              )}
+              <label>
+                Email address
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  minLength={mode === "register" ? 12 : 1}
+                  autoComplete={
+                    mode === "login" ? "current-password" : "new-password"
+                  }
+                  placeholder={
+                    mode === "register"
+                      ? "At least 12 characters"
+                      : "Your password"
+                  }
+                />
+              </label>
+              <button className="btn primary full" disabled={!!busy}>
+                {busy === mode ? (
+                  <LoaderCircle className="spin" size={16} />
+                ) : (
+                  <>
+                    {mode === "login" ? "Sign in" : "Start free trial"}
+                    <ArrowUpRight size={16} />
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+          {mode === "login" && !pendingEmail && (
+            <a className="auth-mode" href="/forgot-password">
+              Forgot password?
+            </a>
+          )}
+          {signupEnabled && (
+            <a
+              className="auth-mode"
+              href={mode === "login" ? "/signup" : "/login"}
+            >
               {mode === "login"
-                ? "New here? Create an individual workspace"
-                : "Already have a workspace? Sign in"}
-            </button>
+                ? "New here? Start your 15-day free trial"
+                : "Already have an account? Sign in"}
+            </a>
+          )}
+          {mode === "register" && (
+            <p className="tiny">
+              Your trial starts when you create your account. After 15 days,
+              your workspace becomes read-only until activation. No automatic
+              charges.
+            </p>
           )}
           {demoEnabled && (
             <div className="demo-entry">

@@ -1,4 +1,7 @@
 "use client";
+import EmailPreferences from "./email-preferences";
+import TrialBanner from "./trial-banner";
+import { subscriptionAccess } from "@/lib/subscription-access.mjs";
 import { assistSectionKeys } from "@/lib/assist-scope";
 import Announcements from "./announcements";
 import CompanyWhatsApp from "./company-whatsapp";
@@ -130,6 +133,7 @@ type Data = {
   subscription: Subscription;
 };
 type Tenant = {
+  upgrade_requested_at?: number;
   id: string;
   name: string;
   type: string;
@@ -321,13 +325,15 @@ export default function Workspace({
   const editor = useRef<EditorHandle>(null),
     fileInput = useRef<HTMLInputElement>(null),
     toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [entitlementNow, setEntitlementNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setEntitlementNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
   const isPlatform = actor.role === "platform_admin",
     isStudent = actor.role === "student",
     staff = ["owner", "consultant"].includes(actor.role),
-    writable =
-      ["active", "trial", "grace"].includes(data.subscription?.status) &&
-      (!data.subscription?.expires_at ||
-        data.subscription.expires_at >= new Date().toISOString().slice(0, 10));
+    writable = subscriptionAccess(data.subscription, entitlementNow);
   const notify = useCallback((message: string) => {
     setToast(message);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -1001,6 +1007,13 @@ export default function Workspace({
         />
       )}
       <div className="app-main">
+        {!isPlatform && (
+          <TrialBanner
+            subscription={data.subscription}
+            owner={actor.role === "owner"}
+            now={entitlementNow}
+          />
+        )}
         <header className="app-topbar">
           <button
             className="icon-btn mobile-menu"
@@ -2107,7 +2120,7 @@ export default function Workspace({
             <>
               {title(
                 "Your workspace, thoughtfully set up.",
-                "Local subscription and session details. No live payments are connected.",
+                "Your plan, team and account details. Payment checkout is coming soon.",
               )}
               {actor.role === "owner" && (
                 <PipelineSettings
@@ -2117,6 +2130,7 @@ export default function Workspace({
                 />
               )}
               <div className="settings-grid">
+                <EmailPreferences />
                 <section className="panel settings-panel">
                   <Building2 size={25} />
                   <h2>{actor.tenantName}</h2>
@@ -2347,6 +2361,9 @@ export default function Workspace({
                           <td>{t.plan}</td>
                           <td>
                             <Badge>{t.status}</Badge>
+                            {t.upgrade_requested_at && (
+                              <small>Activation requested</small>
+                            )}
                           </td>
                           <td>
                             {t.case_count} / {t.case_limit}
@@ -3554,7 +3571,7 @@ export default function Workspace({
                       <input
                         type="date"
                         name="expiresAt"
-                        defaultValue={selectedTenant.expires_at}
+                        defaultValue={selectedTenant.expires_at?.slice(0, 10)}
                       />
                     </label>
                   </div>

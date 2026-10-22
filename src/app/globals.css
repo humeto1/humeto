@@ -5813,3 +5813,15 @@ textarea {
     font-size: 27px;
   }
 }
+
+.trial-banner { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:16px 28px; background:#edf7ef; border-bottom:1px solid #cde3d2; color:#203e2a; }
+.trial-banner p { margin:5px 0 0; font-size:13px; line-height:1.5; }
+.auth-mode { display:block; text-align:center; }
+.auth-form-content select { width:100%; padding:12px; border:1px solid #d8ddd8; border-radius:10px; background:white; font:inherit; }
+@media(max-width:650px){.trial-banner {align-items:flex-start;flex-direction:column;padding:14px 18px;}}
+
+.email-action-page {max-width:580px;margin:60px auto;padding:24px;}
+.email-action-page .panel{padding:30px;margin-top:24px;}
+.email-action-page h1{font-size:30px;line-height:1.2;}
+.email-action-page form,.email-action-page label{display:grid;gap:12px;}
+.email-action-page input{padding:12px;border:1px solid #ccd6cc;border-radius:8px;font:inherit;}

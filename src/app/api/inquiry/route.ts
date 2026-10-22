@@ -1,3 +1,4 @@
+import { subscriptionAccess } from "@/lib/subscription-access.mjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createHash } from "node:crypto";
@@ -35,10 +36,10 @@ export async function POST(req: Request) {
       .get(createHash("sha256").update(v.token).digest("hex"), Date.now());
     if (
       !link ||
-      !["trial", "active", "grace"].includes(String(link.status)) ||
-      (link.subscription_expiry &&
-        String(link.subscription_expiry) <
-          new Date().toISOString().slice(0, 10))
+      !subscriptionAccess({
+        status: link.status,
+        expires_at: link.subscription_expiry,
+      })
     )
       return NextResponse.json(
         { error: "This inquiry link is unavailable. Contact the institute." },

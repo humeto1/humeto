@@ -1,3 +1,4 @@
+import { subscriptionAccess } from "./subscription-access.mjs";
 import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -24,12 +25,7 @@ async function writable(a: Actor) {
   const s = await db()
     .prepare("SELECT status,expires_at FROM subscriptions WHERE tenant_id=?")
     .get(a.tenantId);
-  if (
-    !s ||
-    !["active", "trial", "grace"].includes(s.status) ||
-    (s.expires_at && s.expires_at < new Date().toISOString().slice(0, 10))
-  )
-    bad("This workspace is read-only.", 403);
+  if (!subscriptionAccess(s)) bad("This workspace is read-only.", 403);
 }
 async function document(a: Actor, did: string, lock = false) {
   const doc = await db()

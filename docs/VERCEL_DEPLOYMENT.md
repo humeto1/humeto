@@ -22,8 +22,8 @@ The OCR, proactive task and WhatsApp workers are separate long-running processes
 
 Git push makes the source available for import, and triggers deployment only if the repository has already been connected to Vercel. Vercel dashboard environment variables and build logs are the authority for the deployed result.
 
-## Current project setup (2026-10-22)
+## Current project setup
 
-The Vercel CLI created `numdesk/humeto` and configured the production database URLs, secure cookies, disabled public demo entry, local command provider and disabled OCR worker processing. Database migration checks and a local compiled-app test against Neon passed. The user chose to deploy manually. No Vercel production build or public URL has been verified yet.
+The correct Vercel team and project are `humeto/humeto`, signed in through `creative.dotivate@gmail.com` (CLI user `creativedotivate-1004`). The former `numdesk` account must not be used for this application. Git commits use `creative.dotivate@gmail.com`; app administrator identities remain unchanged.
 
-Automatic GitHub linking failed because the signed-in Vercel account did not have access to `humeto1/humeto`. Grant the Vercel GitHub integration access to that repository when importing, or choose the correct GitHub account. The GitHub push itself succeeded.
+Production email settings are server-only: RESEND_API_KEY, HUMETO_EMAIL_FROM and HUMETO_PUBLIC_APP_URL. Signup is enabled, public demo entry disabled and secure cookies enabled. See [Signup and trial](SIGNUP_AND_TRIAL.md) for verification, recovery and unsubscribe behavior. Deployments are triggered by GitHub pushes; check the production URL after Vercel finishes its build.

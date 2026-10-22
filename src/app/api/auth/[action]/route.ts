@@ -1,3 +1,5 @@
+import { emailAuthAction, emailReady, sendAuthEmail } from "@/lib/email-auth";
+import { createHash } from "node:crypto";
 import { withTransaction } from "@/lib/db";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -23,7 +25,14 @@ export async function POST(
   try {
     ensureOrigin(req);
     const { action } = await params;
+    if (Number(req.headers.get("content-length") || 0) > 10000)
+      return NextResponse.json(
+        { error: "Request is too large." },
+        { status: 413 },
+      );
     const body = await req.json();
+    const emailResult = await emailAuthAction(action, body);
+    if (emailResult) return emailResult;
     if (action === "logout") {
       await endSession();
       return NextResponse.json({ ok: true });
@@ -79,6 +88,8 @@ export async function POST(
         | {
             id: string;
             password_hash: string;
+            email_verified_at: number | null;
+            verification_required: number;
           }
         | undefined;
       const valid = verifyPassword(
@@ -102,6 +113,15 @@ export async function POST(
           { status: 401 },
         );
       }
+      if (user.verification_required && !user.email_verified_at)
+        return NextResponse.json(
+          {
+            error: "Verify your email before signing in.",
+            verificationRequired: true,
+            email: key,
+          },
+          { status: 403 },
+        );
       await db().prepare("DELETE FROM login_attempts WHERE key=?").run(key);
       const m = (await db()
         .prepare("SELECT tenant_id FROM memberships WHERE user_id=? LIMIT 1")
@@ -112,18 +132,53 @@ export async function POST(
       return NextResponse.json({ ok: true });
     }
     if (action === "register") {
-      if (!(await demoAllowed()))
+      if (process.env.HUMETO_SIGNUP_ENABLED === "false")
         return NextResponse.json(
-          { error: "Registration is currently limited to local development." },
+          { error: "New registrations are temporarily paused." },
           { status: 403 },
+        );
+      if (!emailReady())
+        return NextResponse.json(
+          {
+            error:
+              "Signup email delivery is being configured. Please try again shortly.",
+          },
+          { status: 503 },
         );
       const input = z
         .object({
           name: z.string().trim().min(2).max(100),
           email: z.email().max(254),
           password: z.string().min(12).max(128),
+          accountType: z.enum(["individual", "company"]).default("individual"),
+          companyName: z.string().trim().max(100).default(""),
         })
         .parse(body);
+      if (input.accountType === "company" && input.companyName.length < 2)
+        return NextResponse.json(
+          { error: "Enter your company name." },
+          { status: 400 },
+        );
+      const email = input.email.trim().toLowerCase();
+      const permitted = await withTransaction(async () => {
+        for (const [key, max] of [
+          ["signup:global", 300],
+          ["signup:" + createHash("sha256").update(email).digest("hex"), 5],
+        ] as const) {
+          const r = await db()
+            .prepare(
+              "INSERT INTO signup_limits(key,window_start,count) VALUES(?,?,1) ON CONFLICT(key) DO UPDATE SET count=CASE WHEN signup_limits.window_start=excluded.window_start THEN signup_limits.count+1 ELSE 1 END,window_start=excluded.window_start RETURNING count",
+            )
+            .get(key, Math.floor(Date.now() / 3600000));
+          if (Number(r?.count || 0) > max) return false;
+        }
+        return true;
+      });
+      if (!permitted)
+        return NextResponse.json(
+          { error: "Too many signup attempts. Please try again later." },
+          { status: 429 },
+        );
       if (
         await db()
           .prepare("SELECT id FROM users WHERE email=?")
@@ -140,10 +195,16 @@ export async function POST(
         const transactionResult = await withTransaction(async () => {
           await db()
             .prepare("INSERT INTO tenants(id,name,type) VALUES(?,?,?)")
-            .run(tid, input.name + "’s workspace", "individual");
+            .run(
+              tid,
+              input.accountType === "company"
+                ? input.companyName
+                : input.name + "’s workspace",
+              input.accountType === "company" ? "institute" : "individual",
+            );
           await db()
             .prepare(
-              "INSERT INTO users(id,name,email,password_hash) VALUES(?,?,?,?)",
+              "INSERT INTO users(id,name,email,password_hash,verification_required) VALUES(?,?,?,?,1)",
             )
             .run(
               uid,
@@ -158,39 +219,64 @@ export async function POST(
             .run(uid, tid, "owner");
           await db()
             .prepare(
-              "INSERT INTO subscriptions(tenant_id,plan,status,seats,case_limit) VALUES(?,?,?,?,?)",
-            )
-            .run(tid, "Individual", "trial", 1, 1);
-          await db()
-            .prepare(
-              "INSERT INTO people(id,tenant_id,name,email,initials) VALUES(?,?,?,?,?)",
+              "INSERT INTO subscriptions(tenant_id,plan,status,seats,case_limit,expires_at,trial_started_at) VALUES(?,?,?,?,?,?,?)",
             )
             .run(
-              pid,
               tid,
-              input.name,
-              input.email,
-              input.name
-                .split(" ")
-                .map((x) => x[0])
-                .join("")
-                .slice(0, 2),
+              input.accountType === "company" ? "Institute" : "Individual",
+              "pending",
+              input.accountType === "company" ? 5 : 1,
+              input.accountType === "company" ? 100 : 1,
+              "",
+              0,
             );
+          if (input.accountType === "individual")
+            await db()
+              .prepare(
+                "INSERT INTO people(id,tenant_id,name,email,initials) VALUES(?,?,?,?,?)",
+              )
+              .run(
+                pid,
+                tid,
+                input.name,
+                input.email,
+                input.name
+                  .split(" ")
+                  .map((x) => x[0])
+                  .join("")
+                  .slice(0, 2),
+              );
         });
         if (transactionResult !== undefined) return transactionResult;
       } catch (e) {
         throw e;
       }
-      await newSession(uid, tid);
       await audit(
         tid,
         uid,
         "created",
         "workspace",
         tid,
-        "Created an individual workspace",
+        "Created a " + input.accountType + " workspace with a 15-day trial",
       );
-      return NextResponse.json({ ok: true });
+      let delivered = true;
+      try {
+        await sendAuthEmail(
+          { id: uid, email: input.email.toLowerCase() },
+          "verify",
+        );
+      } catch {
+        delivered = false;
+        console.error("Signup verification email failed");
+      }
+      return NextResponse.json({
+        ok: true,
+        verificationRequired: true,
+        email: input.email.toLowerCase(),
+        message: delivered
+          ? "Check your email to verify your account."
+          : "Account created, but email delivery failed. Please use Resend verification to try again.",
+      });
     }
     return NextResponse.json({ error: "Unknown action." }, { status: 404 });
   } catch (e) {
@@ -203,6 +289,11 @@ export async function POST(
       return NextResponse.json(
         { error: "Origin not allowed." },
         { status: 403 },
+      );
+    if (e && typeof e === "object" && "code" in e && e.code === "23505")
+      return NextResponse.json(
+        { error: "This email is already registered. Please sign in." },
+        { status: 409 },
       );
     console.error("Auth request failed");
     return NextResponse.json(
