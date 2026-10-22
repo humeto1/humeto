@@ -1,6 +1,6 @@
 # Humeto Assistant AI
 
-The server uses OpenAI Responses API with structured task intents. The only allowed model is `gpt-5.4-mini`, pinned in code; model environment overrides cannot select another model. No automatic model fallback is enabled.
+The server uses OpenAI Chat Completions API with structured task intents. The only allowed model is `gpt-5.4-mini`, pinned in code; model environment overrides cannot select another model. No automatic model fallback is enabled.
 
 Set `HUMETO_AGENT_PROVIDER=openai` and private `CHATGPT_HUMETO_API` (or legacy `OPENAI_API_KEY`). Restart after environment changes. These variables must never be public or committed. Vercel needs its own environment configuration and redeployment.
 
@@ -12,4 +12,4 @@ The provider's shared daily promotional allowance is not an app-enforced token b
 
 ## Verification, 2026-10-23
 
-Build passed. Initial live request returned HTTP 401 Unauthorized for the saved key; successful live operation is pending an active replacement key. No real tasks were changed during the connection check.
+Build passed. A live GPT-5.4 mini Chat Completions request succeeded and returned a schema-valid create-task intent with the requested project and deadline. The request did not save any real task. Initial Responses requests failed because the key allowed Chat Completions only; the endpoint mismatch is resolved.
