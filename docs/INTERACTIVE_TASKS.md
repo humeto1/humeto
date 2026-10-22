@@ -35,3 +35,9 @@ The compiled build and all 90 release tests pass. Release checks cover the exist
 ## Remaining task features
 
 Recurring tasks and durable in-app follow-ups are now delivered; see [Task scheduling](TASK_SCHEDULING.md). Reviewed notebook-image task creation/reconciliation is now available with local printed-text OCR; see [Task notebooks](TASK_NOTEBOOKS.md). Stronger handwriting/strike-through recognition, closed-app device push, voice, WhatsApp task commands and broader model conversation remain separate deliverables. The company WhatsApp connector does not yet execute task commands.
+
+## Compact boards for large task lists
+
+Board and priority-matrix views show compact clickable task summaries: title, project/person, due date, stage and assignee initials. Opening a task shows its full assignment, project/goal and workflow controls in the existing accessible dialog. Dragging summaries preserves the existing stage/priority update rules. Quadrants show counts and independently scroll within a bounded height instead of growing with their task count. Existing search and List view remain available for larger collections.
+
+Verified with 100 fictional tasks in an isolated UI test, including bounded quadrant scrolling, opening the editing controls and closing with Escape.

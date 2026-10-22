@@ -718,6 +718,40 @@ export default function Workspace({
       </article>
     );
   }
+  function compactTask(t: Task) {
+    return (
+      <article
+        className="compact-task"
+        key={t.id}
+        draggable={staff && writable && !busy}
+        onDragStart={(e) => {
+          e.dataTransfer.setData("application/humeto-task", t.id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+      >
+        <button
+          type="button"
+          className="compact-task-open"
+          onClick={() => showModal("task-details:" + t.id)}
+          aria-label={`Open task: ${t.title}`}
+        >
+          <strong>{t.title}</strong>
+          <span className="compact-task-context">
+            {t.project_title || t.person_name || "Team task"}
+          </span>
+          <span className="compact-task-bottom">
+            <span>
+              <Calendar size={12} /> {dateLabel(t.due_date)}
+            </span>
+            <span className="compact-task-stage">{t.stage}</span>
+            <span className="tiny-avatar">
+              {initials(t.assignee || actor.name)}
+            </span>
+          </span>
+        </button>
+      </article>
+    );
+  }
   function taskCard(t: Task) {
     return (
       <article
@@ -1971,7 +2005,7 @@ export default function Workspace({
                         </h2>
                         {filteredTasks
                           .filter((t) => t.stage === s)
-                          .map(taskCard)}
+                          .map(compactTask)}
                         {!filteredTasks.some((t) => t.stage === s) && (
                           <p className="empty-column">
                             A little space for what’s next.
@@ -2022,12 +2056,32 @@ export default function Workspace({
                         }}
                       >
                         <div className="matrix-heading">
-                          <h2>{q}</h2>
+                          <h2>
+                            {q}{" "}
+                            <span className="quadrant-count">
+                              {
+                                filteredTasks.filter((t) => quadrant(t) === q)
+                                  .length
+                              }
+                            </span>
+                          </h2>
                           <small>{desc}</small>
                         </div>
-                        {filteredTasks
-                          .filter((t) => quadrant(t) === q)
-                          .map(taskCard)}
+                        <div
+                          className="quadrant-task-list"
+                          tabIndex={0}
+                          aria-label={`${q} tasks`}
+                        >
+                          {filteredTasks
+                            .filter((t) => quadrant(t) === q)
+                            .map(compactTask)}
+                          {!filteredTasks.some((t) => quadrant(t) === q) && (
+                            <p className="empty-column">
+                              No tasks here. Drag a task here to change its
+                              priority.
+                            </p>
+                          )}
+                        </div>
                       </section>
                     ))}
                   </div>
@@ -2446,6 +2500,21 @@ export default function Workspace({
                 {error}
               </div>
             )}
+            {modal.startsWith("task-details:") &&
+              (() => {
+                const task = data.tasks.find(
+                  (t) => t.id === modal.slice("task-details:".length),
+                );
+                return task ? (
+                  <>
+                    <span className="eyebrow">TASK DETAILS</span>
+                    <h2 id="modal-title">Review your task</h2>
+                    {taskCard(task)}
+                  </>
+                ) : (
+                  <h2 id="modal-title">Task no longer available</h2>
+                );
+              })()}
             {modal === "import" && (
               <ImportPanel
                 people={data.people}
