@@ -70,7 +70,7 @@ export default function WorkAssignment({
         onClick={() => (open ? setOpen(false) : void load())}
       >
         <Users size={12} />
-        {data ? `${data.userIds.length} assigned` : "Assign team"}
+        {data?.userIds.length ? `${data.userIds.length} assigned` : "Assign team"}
       </button>
       {open && data && (
         <div

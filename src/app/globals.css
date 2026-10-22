@@ -5849,3 +5849,72 @@ textarea {
 .task-assignment-actions > button {
   flex-shrink: 0;
 }
+
+/* Compact task cards keep the next action visible without crowding the board. */
+.workspace-app .task-card {
+  padding: 13px;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px #203b2e05;
+  transition: border-color .15s, box-shadow .15s;
+}
+.workspace-app .task-card:hover {
+  border-color: #c6d4b8;
+  box-shadow: 0 5px 14px #203b2e0a;
+}
+.workspace-app .task-card h3 {
+  margin: 12px 0 5px;
+  line-height: 1.45;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.workspace-app .task-card > p {
+  margin: 0 0 12px;
+  color: #788971;
+}
+.task-card .task-assignment-actions {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.task-card .task-assignment-actions > div { flex: 1; }
+.task-card .task-assignment-actions .btn {
+  min-height: 31px;
+  padding: 7px 9px;
+  font-size: 9px;
+  line-height: 1.4;
+  border-radius: 7px;
+  gap: 5px;
+  white-space: nowrap;
+  background: #f8faf5;
+  border-color: #dfe7d7;
+  box-shadow: none;
+}
+.task-card .task-assignment-actions > div > button { width: 100%; }
+.task-card .task-assignment-actions .btn:hover { background: #edf3e5; }
+.task-card .task-assignment-actions .btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+.task-card .task-links {
+  border-top: 0;
+  padding: 0;
+  margin: 0 0 12px;
+}
+.task-card .task-links > summary {
+  background: #f2f5ec;
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 9px;
+  color: #58704b;
+  overflow-wrap: anywhere;
+}
+.task-card .task-meta { padding-top: 2px; }
+.task-card .task-meta > span:first-child { color: #76866b; }
+.task-card .task-controls {
+  margin-top: 10px;
+  padding-top: 10px;
+}
+.task-card .task-controls select {
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: #536e45;
+  background: #f8faf5;
+}
