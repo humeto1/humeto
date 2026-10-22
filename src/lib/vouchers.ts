@@ -1,3 +1,4 @@
+import { sendEmail, emailConfigured, publicAppUrl } from "./email-delivery.mjs";
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
@@ -13,7 +14,7 @@ export async function voucherRead(a: Actor) {
     return NextResponse.json({
       vouchers: await db()
         .prepare(
-          "SELECT id,code_hint,label,audience,recipient_email,features_json,seats,case_limit,storage_mb,duration_days,starts_at,expires_at,max_uses,uses,revoked,created_at FROM access_vouchers ORDER BY created_at DESC LIMIT 200",
+          "SELECT id,code_hint,label,audience,recipient_email,features_json,seats,case_limit,storage_mb,duration_days,starts_at,expires_at,max_uses,uses,revoked,created_at,email_status,emailed_at FROM access_vouchers ORDER BY created_at DESC LIMIT 200",
         )
         .all(),
       redemptions: await db()
@@ -34,8 +35,16 @@ export async function voucherRead(a: Actor) {
 }
 export async function voucherWrite(a: Actor, body: unknown) {
   const action = z
-    .object({ action: z.enum(["create", "revoke", "redeem"]) })
+    .object({ action: z.enum(["create", "revoke", "redeem", "email"]) })
     .parse(body).action;
+  if (action === "email") {
+    if (a.role !== "platform_admin")
+      return fail("Super admin access required.", 403);
+    const v = z
+      .object({ id: z.string().uuid(), code: z.string().trim().min(8).max(40) })
+      .parse(body);
+    return NextResponse.json(await emailVoucher(a, v.id, v.code));
+  }
   if (action === "create") {
     if (a.role !== "platform_admin")
       return fail("Super admin access required.", 403);
@@ -66,11 +75,16 @@ export async function voucherWrite(a: Actor, body: unknown) {
         startsAt: z.number().int().min(0),
         expiresAt: z.number().int().positive(),
         maxUses: z.number().int().min(1).max(100000),
+        emailVoucher: z.boolean().default(false),
       })
       .parse(body);
     if (v.expiresAt <= Math.max(v.startsAt, Date.now()))
       return fail(
         "Redemption expiry must be after the start date and in the future.",
+      );
+    if (v.emailVoucher && !v.recipientEmail)
+      return fail(
+        "Enter a restricted owner email before requesting email delivery.",
       );
     const code = v.code
         ? normalize(v.code)
@@ -108,10 +122,16 @@ export async function voucherWrite(a: Actor, body: unknown) {
         "Created an access voucher: " + v.label,
       );
     });
+    const delivery = v.emailVoucher
+      ? await emailVoucher(a, vid, code)
+      : { emailStatus: "not_requested", message: "" };
     return NextResponse.json({
       id: vid,
       code,
-      message: "Save this code now. It will not be shown again.",
+      ...delivery,
+      message: v.emailVoucher
+        ? `Voucher created. ${delivery.message || ""} Save the code before leaving this page.`
+        : "Save this code now. It will not be shown again.",
     });
   }
   if (action === "revoke") {
@@ -262,4 +282,110 @@ export async function voucherWrite(a: Actor, body: unknown) {
       features: JSON.parse(String(v.features_json)),
     });
   });
+}
+
+async function emailVoucher(a: Actor, voucherId: string, code: string) {
+  const v = await db()
+    .prepare("SELECT * FROM access_vouchers WHERE id=? AND code_hash=?")
+    .get(voucherId, hash(normalize(code)));
+  if (!v)
+    return {
+      emailStatus: "unavailable",
+      message: "Voucher code could not be verified.",
+    };
+  if (!v.recipient_email)
+    return {
+      emailStatus: "unavailable",
+      message: "This voucher has no restricted owner email.",
+    };
+  if (
+    v.revoked ||
+    Number(v.expires_at) <= Date.now() ||
+    Number(v.uses) >= Number(v.max_uses)
+  )
+    return {
+      emailStatus: "unavailable",
+      message: "This voucher is revoked, expired or fully used.",
+    };
+  if (v.email_status === "accepted")
+    return {
+      emailStatus: "accepted",
+      message:
+        "Email was already accepted by the provider. Check delivery with the recipient.",
+    };
+  if (!emailConfigured()) {
+    await db()
+      .prepare(
+        "UPDATE access_vouchers SET email_status='failed' WHERE id=? AND email_status!='accepted'",
+      )
+      .run(voucherId);
+    return {
+      emailStatus: "failed",
+      message:
+        "Email delivery is not configured. The voucher remains valid; copy it or retry later.",
+    };
+  }
+  const claim = await db()
+    .prepare(
+      "UPDATE access_vouchers SET email_status='sending',email_attempt_at=?,email_attempts=email_attempts+1 WHERE id=? AND email_status!='accepted' AND email_attempts<8 AND (email_status!='sending' OR email_attempt_at<?) RETURNING id",
+    )
+    .get(Date.now(), voucherId, Date.now() - 120000);
+  if (!claim)
+    return {
+      emailStatus: String(v.email_status),
+      message:
+        "Email is already being sent or the retry limit has been reached.",
+    };
+  let status = "failed";
+  try {
+    const result = await sendEmail({
+      to: String(v.recipient_email),
+      subject: "Your Humeto access voucher",
+      text: `You have received an access voucher from Humeto.
+
+${v.label}
+Voucher code: ${normalize(code)}
+
+For: ${v.audience}
+Included features: ${JSON.parse(String(v.features_json)).join(", ")}
+Access days: ${v.duration_days}
+Seats: ${v.seats}
+Cases: ${v.case_limit}
+Storage: ${v.storage_mb} MB
+Redeem from: ${new Date(Number(v.starts_at)).toISOString()}
+Redeem before: ${new Date(Number(v.expires_at)).toISOString()}
+
+Sign in or create an account using this email address, then open Settings and choose Redeem a voucher.
+${publicAppUrl()}/workspace/settings
+
+Redeeming replaces feature and capacity limits. Access days are added after any remaining finite access. No payment is taken.`,
+      category: "optional",
+      key: "voucher-email-" + voucherId,
+    });
+    status = result.suppressed ? "suppressed" : "accepted";
+  } catch {
+    status = "failed";
+  }
+  await db()
+    .prepare(
+      "UPDATE access_vouchers SET email_status=?,emailed_at=? WHERE id=?",
+    )
+    .run(status, status === "accepted" ? Date.now() : 0, voucherId);
+  await audit(
+    a.tenantId,
+    a.id,
+    "email_" + status,
+    "voucher",
+    voucherId,
+    "Voucher email " + status + " for restricted owner",
+  );
+  return {
+    emailStatus: status,
+    message:
+      status === "accepted"
+        ? "Email accepted for sending to the restricted owner."
+        : status === "suppressed"
+          ? "Email was not sent because the recipient unsubscribed from optional emails."
+          : "Email delivery failed. The voucher is still valid; copy the code or retry.",
+  };
 }

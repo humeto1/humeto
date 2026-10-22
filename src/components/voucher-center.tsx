@@ -14,6 +14,8 @@ type Voucher = {
   uses: number;
   max_uses: number;
   revoked: number;
+  email_status?: string;
+  recipient_email?: string;
 };
 type Redemption = {
   id: string;
@@ -33,7 +35,15 @@ export default function VoucherCenter({
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [code, setCode] = useState(""),
-    [newCode, setNewCode] = useState("");
+    [newCode, setNewCode] = useState(""),
+    [recipient, setRecipient] = useState(""),
+    [emailRequested, setEmailRequested] = useState(true),
+    [lastVoucher, setLastVoucher] = useState<{
+      id: string;
+      code: string;
+      recipient: string;
+      status: string;
+    } | null>(null);
   async function load() {
     const r = await fetch("/api/workspace/vouchers");
     if (r.ok) {
@@ -56,7 +66,20 @@ export default function VoucherCenter({
       });
       const v = await r.json();
       if (!r.ok) throw Error(v.error);
-      if (v.code) setNewCode(v.code);
+      if (v.code) {
+        setNewCode(v.code);
+        setLastVoucher({
+          id: v.id,
+          code: v.code,
+          recipient: String(
+            (body as { recipientEmail?: string }).recipientEmail || "",
+          ),
+          status: v.emailStatus || "not_requested",
+        });
+      } else if (v.emailStatus)
+        setLastVoucher((old) =>
+          old ? { ...old, status: v.emailStatus } : old,
+        );
       setMessage(v.message || "Voucher access updated.");
       setCode("");
       await load();
@@ -85,6 +108,7 @@ export default function VoucherCenter({
               label: f.get("label"),
               audience: f.get("audience"),
               recipientEmail: f.get("recipientEmail") || "",
+              emailVoucher: !!recipient && emailRequested,
               features: f.getAll("feature"),
               durationDays: Number(f.get("durationDays")),
               seats: Number(f.get("seats")),
@@ -120,7 +144,12 @@ export default function VoucherCenter({
             </label>
             <label>
               Restrict to owner email (optional)
-              <input name="recipientEmail" type="email" />
+              <input
+                name="recipientEmail"
+                type="email"
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value)}
+              />
             </label>
             <label>
               Access days
@@ -186,6 +215,22 @@ export default function VoucherCenter({
               <input type="datetime-local" name="expiresAt" required />
             </label>
           </div>
+          <label className="voucher-email-option">
+            <span>
+              <input
+                type="checkbox"
+                checked={emailRequested}
+                disabled={!recipient}
+                onChange={(e) => setEmailRequested(e.target.checked)}
+              />{" "}
+              Send voucher by email when created
+            </span>
+            <small>
+              {recipient
+                ? `Recipient: ${recipient}`
+                : "Enter an owner email to enable delivery."}
+            </small>
+          </label>
           <fieldset>
             <legend>Included features</legend>
             {[
@@ -237,7 +282,34 @@ export default function VoucherCenter({
           <p>
             <code>{newCode}</code>
           </p>
-          <p>The full code is only shown once.</p>
+          <p>
+            The full code is only shown once. Save it before leaving this page.
+          </p>
+          {lastVoucher?.recipient && (
+            <>
+              <p>
+                Email:{" "}
+                {lastVoucher.status === "accepted"
+                  ? "Accepted by email provider"
+                  : lastVoucher.status}
+              </p>
+              {["failed", "not_requested"].includes(lastVoucher.status) && (
+                <button
+                  className="btn secondary small"
+                  disabled={busy}
+                  onClick={() =>
+                    send({
+                      action: "email",
+                      id: lastVoucher.id,
+                      code: lastVoucher.code,
+                    })
+                  }
+                >
+                  Send voucher to {lastVoucher.recipient}
+                </button>
+              )}
+            </>
+          )}
           <button
             className="btn secondary small"
             onClick={() =>
@@ -267,6 +339,48 @@ export default function VoucherCenter({
                 {v.seats} seats · {v.case_limit} cases · {v.storage_mb} MB ·
                 redeem by {new Date(v.expires_at).toLocaleString()}
               </p>
+              {v.recipient_email && (
+                <p>
+                  Owner: {v.recipient_email} · Email:{" "}
+                  {v.email_status || "not_requested"}
+                </p>
+              )}
+              {!!v.recipient_email &&
+                !v.revoked &&
+                v.email_status !== "accepted" &&
+                v.email_status !== "suppressed" &&
+                v.expires_at > Date.now() && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const f = new FormData(e.currentTarget);
+                      send({
+                        action: "email",
+                        id: v.id,
+                        code: f.get("savedCode"),
+                      });
+                    }}
+                  >
+                    <label>
+                      Saved voucher code
+                      <input
+                        name="savedCode"
+                        type="password"
+                        autoComplete="off"
+                        required
+                        minLength={8}
+                        maxLength={40}
+                      />
+                    </label>
+                    <small>
+                      Paste the original saved code. Full codes cannot be
+                      recovered.
+                    </small>
+                    <button className="btn secondary small" disabled={busy}>
+                      Email voucher to {v.recipient_email}
+                    </button>
+                  </form>
+                )}
               {v.revoked ? (
                 <span>Revoked for future redemptions</span>
               ) : (

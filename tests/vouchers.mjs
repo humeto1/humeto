@@ -308,3 +308,88 @@ test(
     );
   },
 );
+
+test(
+  "Voucher email is explicit, recipient-bound, idempotent and respects unsubscribe",
+  { skip },
+  async () => {
+    const a = await admin(),
+      d = database(),
+      email = `voucher-email-${randomUUID()}@example.com`;
+    const bad = await a.post("/api/workspace/vouchers", {
+      data: { ...defaults(), emailVoucher: true },
+    });
+    assert.equal(bad.status(), 400);
+    const v = await create(a, { recipientEmail: email, emailVoucher: true });
+    assert.equal(v.emailStatus, "accepted");
+    const read = () =>
+      readdirSync(resolve(process.env.HUMETO_DATA_DIR, "email-capture")).map(
+        (f) =>
+          JSON.parse(
+            readFileSync(
+              resolve(process.env.HUMETO_DATA_DIR, "email-capture", f),
+              "utf8",
+            ),
+          ),
+      );
+    const messages = read().filter(
+      (m) => m.to === email && m.subject === "Your Humeto access voucher",
+    );
+    assert.equal(messages.length, 1);
+    assert.ok(messages[0].text.includes(v.code));
+    assert.ok(messages[0].text.includes("/workspace/settings"));
+    assert.ok(messages[0].headers["List-Unsubscribe"]);
+    const repeat = await a.post("/api/workspace/vouchers", {
+      data: { action: "email", id: v.id, code: v.code },
+    });
+    assert.equal(repeat.status(), 200);
+    assert.equal((await repeat.json()).emailStatus, "accepted");
+    assert.equal(
+      read().filter(
+        (m) => m.to === email && m.subject === "Your Humeto access voucher",
+      ).length,
+      1,
+    );
+    const list = await (await a.get("/api/workspace/vouchers")).json();
+    const row = list.vouchers.find((x) => x.id === v.id);
+    assert.equal(row.email_status, "accepted");
+    assert.ok(row.emailed_at > 0);
+    assert.ok(!JSON.stringify(list).includes(v.code));
+    await d
+      .prepare(
+        "INSERT INTO email_preferences(email,optional_notifications,marketing,updated_at) VALUES(?,0,0,?) ON CONFLICT(email) DO UPDATE SET optional_notifications=0",
+      )
+      .run(email, Date.now());
+    const suppressed = await create(a, {
+      recipientEmail: email,
+      emailVoucher: true,
+    });
+    assert.equal(suppressed.emailStatus, "suppressed");
+    assert.ok(!read().some((m) => m.text.includes(suppressed.code)));
+    const noEmail = await create(a, {
+      recipientEmail: `no-email-${randomUUID()}@example.com`,
+    });
+    assert.equal(noEmail.emailStatus, "not_requested");
+    assert.ok(!read().some((m) => m.text.includes(noEmail.code)));
+    const wrong = await a.post("/api/workspace/vouchers", {
+      data: { action: "email", id: noEmail.id, code: randomUUID() },
+    });
+    assert.equal((await wrong.json()).emailStatus, "unavailable");
+    const saved = await a.post("/api/workspace/vouchers", {
+      data: { action: "email", id: noEmail.id, code: noEmail.code },
+    });
+    assert.equal(saved.status(), 200);
+    assert.equal((await saved.json()).emailStatus, "accepted");
+    assert.ok(read().some((m) => m.text.includes(noEmail.code)));
+
+    const owner = await account();
+    assert.equal(
+      (
+        await owner.c.post("/api/workspace/vouchers", {
+          data: { action: "email", id: noEmail.id, code: noEmail.code },
+        })
+      ).status(),
+      403,
+    );
+  },
+);

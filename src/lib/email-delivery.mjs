@@ -1,4 +1,4 @@
-import { randomBytes, createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, createHmac } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { database } from "./postgres.mjs";
@@ -54,11 +54,18 @@ export async function sendEmail(
       !Number(category === "marketing" ? p.marketing : p.optional_notifications)
     )
       return { suppressed: true };
-    const token = randomBytes(32).toString("base64url"),
+    const secret =
+      process.env.HUMETO_EMAIL_LINK_SECRET ||
+      process.env.RESEND_API_KEY ||
+      (capture() ? "isolated-email-capture-only" : null);
+    if (!secret) throw Error("Email link signing is not configured");
+    const token = createHmac("sha256", secret)
+        .update(key + "\0" + to.toLowerCase())
+        .digest("base64url"),
       link = publicAppUrl() + "/unsubscribe?token=" + token;
     await d
       .prepare(
-        "INSERT INTO email_unsubscribe_tokens(token_hash,email,created_at) VALUES(?,?,?)",
+        "INSERT INTO email_unsubscribe_tokens(token_hash,email,created_at) VALUES(?,?,?) ON CONFLICT(token_hash) DO NOTHING",
       )
       .run(tokenHash(token), to.toLowerCase(), Date.now());
     headers = {

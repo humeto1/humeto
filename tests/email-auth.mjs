@@ -273,3 +273,24 @@ test(
     });
   },
 );
+
+test(
+  "Optional email retries retain the same unsubscribe payload for provider idempotency",
+  { skip: !isolated },
+  async () => {
+    const email = `retry-${randomUUID()}@example.com`,
+      key = randomUUID();
+    for (let i = 0; i < 2; i++)
+      await sendEmail({
+        to: email,
+        subject: "Retry stability",
+        text: "Same message",
+        category: "optional",
+        key,
+      });
+    const messages = mails().filter((m) => m.to === email);
+    assert.equal(messages.length, 2);
+    assert.equal(messages[0].text, messages[1].text);
+    assert.deepEqual(messages[0].headers, messages[1].headers);
+  },
+);
