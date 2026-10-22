@@ -33,6 +33,7 @@ const env = {
   HUMETO_TEST_URL: url,
   HUMETO_ISOLATED_QA: "true",
   HUMETO_EMAIL_MODE: "capture",
+  HUMETO_SUPER_ADMIN_EMAIL: "designated-admin@example.com",
   HUMETO_PUBLIC_APP_URL: url,
   HUMETO_OCR_ENABLED: "true",
 };

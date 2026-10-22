@@ -5825,3 +5825,12 @@ textarea {
 .email-action-page h1{font-size:30px;line-height:1.2;}
 .email-action-page form,.email-action-page label{display:grid;gap:12px;}
 .email-action-page input{padding:12px;border:1px solid #ccd6cc;border-radius:8px;font:inherit;}
+.voucher-center {margin-bottom:24px;}
+.voucher-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;}
+.voucher-center label{display:grid;gap:6px;margin:8px 0;}
+.voucher-center input:not([type=checkbox]),.voucher-center select{padding:10px;border:1px solid #ced6ce;border-radius:8px;background:white;font:inherit;max-width:100%;}
+.voucher-center fieldset{margin:18px 0;border:1px solid #d9dfd9;border-radius:10px;display:flex;flex-wrap:wrap;gap:20px;}
+.voucher-center fieldset label{display:flex;align-items:center;gap:7px;}
+.voucher-list{display:grid;gap:12px;margin-top:20px;}
+.voucher-list article{border:1px solid #d9dfd9;border-radius:10px;padding:14px;}
+.voucher-center code{overflow-wrap:anywhere;}

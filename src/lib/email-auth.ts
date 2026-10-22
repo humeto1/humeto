@@ -134,6 +134,25 @@ export async function emailAuthAction(action: string, body: unknown) {
       .prepare("SELECT id FROM users WHERE id=? FOR UPDATE")
       .get(t.user_id);
     if (action === "verify-email") {
+      const identity = await db()
+        .prepare("SELECT email FROM users WHERE id=?")
+        .get(t.user_id);
+      const designated = (process.env.HUMETO_SUPER_ADMIN_EMAIL || "")
+        .trim()
+        .toLowerCase();
+      if (designated && identity?.email === designated) {
+        await db()
+          .prepare(
+            "UPDATE memberships SET role='platform_admin' WHERE user_id=? AND role='owner'",
+          )
+          .run(t.user_id);
+        await db()
+          .prepare(
+            "INSERT INTO audit(id,tenant_id,actor_id,action,entity_type,entity_id,summary) SELECT ?,tenant_id,?,'granted','platform_admin',?,'Granted designated super-admin access after email verification' FROM memberships WHERE user_id=? AND role='platform_admin' LIMIT 1",
+          )
+          .run(id(), t.user_id, t.user_id, t.user_id);
+      }
+
       const result = await db()
         .prepare(
           "UPDATE users SET email_verified_at=? WHERE id=? AND email_verified_at IS NULL",

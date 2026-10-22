@@ -1,3 +1,4 @@
+import { hasFeature } from "./feature-guard";
 import "server-only";
 import { z } from "zod";
 import { NextResponse } from "next/server";
@@ -19,6 +20,20 @@ const input = z.object({
 export async function assignmentRead(a: Actor, type: string, entityId: string) {
   if (!isStaff(a) || !(type in kinds))
     return NextResponse.json({ error: "Not permitted." }, { status: 403 });
+  if (
+    !(await hasFeature(
+      a.tenantId,
+      ["task", "project"].includes(type)
+        ? "tasks"
+        : type === "applicant"
+          ? "shared"
+          : "crm",
+    ))
+  )
+    return NextResponse.json(
+      { error: "This feature is not included in your workspace access." },
+      { status: 403 },
+    );
   const table = kinds[type as keyof typeof kinds];
   if (
     !(await db()
@@ -54,6 +69,20 @@ export async function assignmentWrite(a: Actor, body: unknown) {
       { status: 403 },
     );
   const v = input.parse(body);
+  if (
+    !(await hasFeature(
+      a.tenantId,
+      ["task", "project"].includes(v.type)
+        ? "tasks"
+        : v.type === "applicant"
+          ? "shared"
+          : "crm",
+    ))
+  )
+    return NextResponse.json(
+      { error: "This feature is not included in your workspace access." },
+      { status: 403 },
+    );
   return withTransaction(async () => {
     const table = kinds[v.type];
     if (

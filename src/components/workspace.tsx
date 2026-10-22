@@ -1,4 +1,6 @@
 "use client";
+import VoucherCenter from "./voucher-center";
+import { featureAllowed, featureForView } from "@/lib/feature-access.mjs";
 import EmailPreferences from "./email-preferences";
 import TrialBanner from "./trial-banner";
 import { subscriptionAccess } from "@/lib/subscription-access.mjs";
@@ -108,6 +110,7 @@ type Activity = {
   created_at: string;
 };
 type Subscription = {
+  features_json?: string;
   plan: string;
   status: string;
   seats: number;
@@ -133,6 +136,8 @@ type Data = {
   subscription: Subscription;
 };
 type Tenant = {
+  industry?: string;
+  features_json?: string;
   upgrade_requested_at?: number;
   id: string;
   name: string;
@@ -916,12 +921,13 @@ export default function Workspace({
               onClick={() => void navigate("/workspace")}
             >
               <Building2 size={18} />
-              Institutes & plans
+              Workspaces & plans
             </button>
           ) : (
             navItems
               .filter(
                 ([key]) =>
+                  featureAllowed(data.subscription, featureForView(key)) &&
                   (key !== "finance" || actor.role === "owner") &&
                   !(
                     isStudent &&
@@ -1036,7 +1042,7 @@ export default function Workspace({
                       : view === "profile"
                         ? p?.name
                         : view === "platform"
-                          ? "Institutes & subscriptions"
+                          ? "Workspaces & subscriptions"
                           : view[0].toUpperCase() + view.slice(1)}
             </strong>
           </div>
@@ -2131,6 +2137,9 @@ export default function Workspace({
               )}
               <div className="settings-grid">
                 <EmailPreferences />
+                {actor.role === "owner" && (
+                  <VoucherCenter platform={false} onChange={refresh} />
+                )}
                 <section className="panel settings-panel">
                   <Building2 size={25} />
                   <h2>{actor.tenantName}</h2>
@@ -2302,11 +2311,14 @@ export default function Workspace({
               </div>
             </>
           )}
+          {isPlatform && (view === "platform" || view === "overview") && (
+            <VoucherCenter platform onChange={refresh} />
+          )}
           {(view === "platform" || (isPlatform && view === "overview")) && (
             <>
               {title(
                 "Room for another ambitious team.",
-                "Create institutes and manage manual subscription access. Applicant files remain outside this console.",
+                "Manage workspaces, access vouchers and subscriptions. Applicant files remain outside this console.",
                 button(
                   "Add workspace",
                   () => showModal("institute"),
@@ -3508,11 +3520,42 @@ export default function Workspace({
                         seats: Number(f.get("seats")),
                         caseLimit: Number(f.get("caseLimit")),
                         storageMb: Number(f.get("storageMb")),
+                        features: f.getAll("feature"),
                       },
                       "Subscription entitlements updated.",
                     );
                   }}
                 >
+                  <label>
+                    Business type
+                    <select
+                      name="industry"
+                      defaultValue={selectedTenant.industry || "consultant"}
+                    >
+                      <option value="consultant">Consultant</option>
+                      <option value="lawyer">Lawyer</option>
+                      <option value="agency">Agency</option>
+                      <option value="individual">Individual</option>
+                    </select>
+                  </label>
+                  <fieldset>
+                    <legend>Included features</legend>
+                    {[
+                      ["crm", "CRM"],
+                      ["tasks", "Tasks to-do"],
+                      ["forms", "Form filling"],
+                    ].map(([key, label]) => (
+                      <label key={key}>
+                        <input
+                          name="feature"
+                          type="checkbox"
+                          value={key}
+                          defaultChecked={featureAllowed(selectedTenant, key)}
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </fieldset>
                   <label>
                     Plan
                     <select name="plan" defaultValue={selectedTenant.plan}>

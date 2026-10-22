@@ -140,6 +140,7 @@ export default function Login({
                   password: f.get("password"),
                   accountType,
                   companyName: f.get("companyName") || "",
+                  industry: f.get("industry") || "consultant",
                 });
               }}
             >
@@ -167,6 +168,18 @@ export default function Login({
                       <option value="company">Company / agency</option>
                     </select>
                   </label>
+                  {accountType === "company" && (
+                    <label>
+                      Business type
+                      <select name="industry">
+                        <option value="consultant">
+                          Education / immigration consultant
+                        </option>
+                        <option value="lawyer">Lawyer / law firm</option>
+                        <option value="agency">Travel / other agency</option>
+                      </select>
+                    </label>
+                  )}
                   {accountType === "company" && (
                     <label>
                       Company name

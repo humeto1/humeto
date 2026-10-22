@@ -122,6 +122,25 @@ export async function POST(
           },
           { status: 403 },
         );
+      if (
+        user.email_verified_at &&
+        key ===
+          (process.env.HUMETO_SUPER_ADMIN_EMAIL || "").trim().toLowerCase()
+      ) {
+        await withTransaction(async () => {
+          const r = await db()
+            .prepare(
+              "UPDATE memberships SET role='platform_admin' WHERE user_id=? AND role='owner'",
+            )
+            .run(user.id);
+          if (r.changes)
+            await db()
+              .prepare(
+                "INSERT INTO audit(id,tenant_id,actor_id,action,entity_type,entity_id,summary) SELECT ?,tenant_id,?,'granted','platform_admin',?,'Granted designated super-admin access to verified account' FROM memberships WHERE user_id=? AND role='platform_admin' LIMIT 1",
+              )
+              .run(id(), user.id, user.id, user.id);
+        });
+      }
       await db().prepare("DELETE FROM login_attempts WHERE key=?").run(key);
       const m = (await db()
         .prepare("SELECT tenant_id FROM memberships WHERE user_id=? LIMIT 1")
@@ -152,6 +171,9 @@ export async function POST(
           password: z.string().min(12).max(128),
           accountType: z.enum(["individual", "company"]).default("individual"),
           companyName: z.string().trim().max(100).default(""),
+          industry: z
+            .enum(["consultant", "lawyer", "agency"])
+            .default("consultant"),
         })
         .parse(body);
       if (input.accountType === "company" && input.companyName.length < 2)
@@ -194,13 +216,16 @@ export async function POST(
       try {
         const transactionResult = await withTransaction(async () => {
           await db()
-            .prepare("INSERT INTO tenants(id,name,type) VALUES(?,?,?)")
+            .prepare(
+              "INSERT INTO tenants(id,name,type,industry) VALUES(?,?,?,?)",
+            )
             .run(
               tid,
               input.accountType === "company"
                 ? input.companyName
                 : input.name + "’s workspace",
               input.accountType === "company" ? "institute" : "individual",
+              input.accountType === "company" ? input.industry : "individual",
             );
           await db()
             .prepare(

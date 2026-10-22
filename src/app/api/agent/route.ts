@@ -1,3 +1,4 @@
+import { hasFeature } from "@/lib/feature-guard";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { actor, isStaff, canMutate, ensureOrigin } from "@/lib/auth";
@@ -33,6 +34,11 @@ const input = z.discriminatedUnion("operation", [
 async function route(req: Request) {
   try {
     const a = await actor();
+    if (a && !(await hasFeature(a.tenantId, "tasks")))
+      return Response.json(
+        { error: "This feature is not included in your workspace access." },
+        { status: 403 },
+      );
     if (!a)
       return NextResponse.json(
         { error: "Sign in to use your assistant." },

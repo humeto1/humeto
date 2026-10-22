@@ -1,3 +1,4 @@
+import { featureAllowed } from "./feature-access.mjs";
 import "server-only";
 import { pipelineSettings } from "./pipeline-settings";
 import { db } from "./db";
@@ -121,7 +122,7 @@ export async function subscription(a: Actor) {
     .get(a.tenantId);
 }
 export async function bootstrap(a: Actor) {
-  return {
+  const result = {
     projects: ["owner", "consultant"].includes(a.role)
       ? await db()
           .prepare(
@@ -168,4 +169,20 @@ export async function bootstrap(a: Actor) {
     activity: await activity(a),
     subscription: await subscription(a),
   };
+  if (a.role !== "platform_admin") {
+    if (!featureAllowed(result.subscription, "crm")) {
+      result.leads = [];
+      result.applications = [];
+      result.finance = [];
+      result.pipelines = {};
+    }
+    if (!featureAllowed(result.subscription, "tasks")) {
+      result.tasks = [];
+      result.projects = [];
+      result.goals = [];
+    }
+    if (!featureAllowed(result.subscription, "forms")) result.documents = [];
+    if (!featureAllowed(result.subscription, "shared")) result.people = [];
+  }
+  return result;
 }

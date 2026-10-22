@@ -1,3 +1,4 @@
+import { hasFeature } from "@/lib/feature-guard";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { actor, ensureOrigin } from "@/lib/auth";
@@ -11,6 +12,11 @@ const response = (value: unknown, status = 200) =>
 async function route(req: Request) {
   try {
     const a = await actor();
+    if (a && !(await hasFeature(a.tenantId, "crm")))
+      return Response.json(
+        { error: "This feature is not included in your workspace access." },
+        { status: 403 },
+      );
     if (!a) return response({ error: "Sign in to continue." }, 401);
     if (req.method === "GET") {
       const query = new URL(req.url).searchParams;

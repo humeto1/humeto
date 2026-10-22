@@ -1,3 +1,4 @@
+import { hasFeature } from "@/lib/feature-guard";
 import { assistAllowed } from "@/lib/assist-scope";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -45,6 +46,11 @@ export async function GET(req: Request) {
           "Pairing expired or revoked. Create a new one in workspace settings.",
       },
       { status: 401 },
+    );
+  if (!(await hasFeature(row.tenant_id, "forms")))
+    return NextResponse.json(
+      { error: "Form filling is not included in this workspace access." },
+      { status: 403 },
     );
   const keys = JSON.parse(row.section_keys) as string[];
   const documents = await db()

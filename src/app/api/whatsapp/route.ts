@@ -1,9 +1,15 @@
+import { hasFeature } from "@/lib/feature-guard";
 import { actor, canMutate, ensureOrigin, isStaff } from "@/lib/auth";
 import { db, id, audit } from "@/lib/db";
 import { z } from "zod";
 export const runtime = "nodejs";
 export async function GET() {
   const a = await actor();
+  if (a && !(await hasFeature(a.tenantId, "crm")))
+    return Response.json(
+      { error: "This feature is not included in your workspace access." },
+      { status: 403 },
+    );
   if (!a || !isStaff(a))
     return Response.json(
       { error: "Company staff access required" },
@@ -33,6 +39,11 @@ export async function POST(req: Request) {
   try {
     ensureOrigin(req);
     const a = await actor();
+    if (a && !(await hasFeature(a.tenantId, "crm")))
+      return Response.json(
+        { error: "This feature is not included in your workspace access." },
+        { status: 403 },
+      );
     if (!a || !(await canMutate(a)))
       return Response.json(
         { error: "Active company staff access required" },

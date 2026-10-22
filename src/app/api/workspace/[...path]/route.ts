@@ -1,3 +1,5 @@
+import { voucherRead, voucherWrite } from "@/lib/vouchers";
+import { hasFeature, requestFeature } from "@/lib/feature-guard";
 import { subscriptionAccess, trialExpiry } from "@/lib/subscription-access.mjs";
 import { schedulingRead, schedulingWrite } from "@/lib/task-scheduling";
 import {
@@ -73,6 +75,7 @@ const string = z.string().trim().max(500),
 async function handle(req: Request, parts: string[], a: Actor) {
   const [resource, rid, action] = parts;
   if (req.method === "GET") {
+    if (resource === "vouchers") return voucherRead(a);
     if (resource === "reading") return readingRead(req, parts, a);
     if (resource === "finance")
       return financeRead(a, new URL(req.url).searchParams.get("month") || "");
@@ -327,7 +330,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return NextResponse.json({
         tenants: await db()
           .prepare(
-            "SELECT t.*,s.plan,s.status,s.seats,s.case_limit,s.storage_mb,s.expires_at,(SELECT requested_at FROM upgrade_requests u WHERE u.tenant_id=t.id AND u.status='pending') AS upgrade_requested_at,(SELECT count(*) FROM people p WHERE p.tenant_id=t.id) AS case_count FROM tenants t JOIN subscriptions s ON s.tenant_id=t.id ORDER BY t.created_at DESC",
+            "SELECT t.*,s.plan,s.status,s.features_json,s.seats,s.case_limit,s.storage_mb,s.expires_at,(SELECT requested_at FROM upgrade_requests u WHERE u.tenant_id=t.id AND u.status='pending') AS upgrade_requested_at,(SELECT count(*) FROM people p WHERE p.tenant_id=t.id) AS case_count FROM tenants t JOIN subscriptions s ON s.tenant_id=t.id ORDER BY t.created_at DESC",
           )
           .all(),
         activity: await db()
@@ -581,6 +584,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
     });
   }
   const body = await req.json();
+  if (resource === "vouchers" && req.method === "POST")
+    return voucherWrite(a, body);
   if (resource === "billing" && rid === "request" && req.method === "POST") {
     if (a.role !== "owner")
       return fail("Only the workspace owner can request activation.", 403);
@@ -1513,6 +1518,9 @@ async function handle(req: Request, parts: string[], a: Actor) {
           plan: z.enum(["Institute", "Individual", "Enterprise"]),
           seats: z.number().int().min(1).max(1000),
           caseLimit: z.number().int().min(1).max(100000),
+          industry: z
+            .enum(["consultant", "lawyer", "agency", "individual"])
+            .optional(),
         })
         .parse(body);
       if (
@@ -1526,11 +1534,16 @@ async function handle(req: Request, parts: string[], a: Actor) {
       try {
         const transactionResult = await withTransaction(async () => {
           await db()
-            .prepare("INSERT INTO tenants(id,name,type) VALUES(?,?,?)")
+            .prepare(
+              "INSERT INTO tenants(id,name,type,industry) VALUES(?,?,?,?)",
+            )
             .run(
               tid,
               input.name,
               input.plan === "Individual" ? "individual" : "institute",
+              input.plan === "Individual"
+                ? "individual"
+                : input.industry || "consultant",
             );
           await db()
             .prepare(
@@ -1588,15 +1601,24 @@ async function handle(req: Request, parts: string[], a: Actor) {
           ]),
           seats: z.number().int().min(1).max(1000),
           caseLimit: z.number().int().min(1).max(100000),
+          industry: z
+            .enum(["consultant", "lawyer", "agency", "individual"])
+            .optional(),
           storageMb: z.number().int().min(1).max(1000000),
           expiresAt: z.string().max(10),
+          features: z
+            .array(z.enum(["crm", "tasks", "forms"]))
+            .min(1)
+            .max(3)
+            .optional(),
         })
         .parse(body);
       const result = await db()
         .prepare(
-          "UPDATE subscriptions SET plan=?,status=?,seats=?,case_limit=?,storage_mb=?,expires_at=?,updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE tenant_id=?",
+          "UPDATE subscriptions SET features_json=COALESCE(?,features_json),plan=?,status=?,seats=?,case_limit=?,storage_mb=?,expires_at=?,updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD HH24:MI:SS') WHERE tenant_id=?",
         )
         .run(
+          input.features ? JSON.stringify([...new Set(input.features)]) : null,
           input.plan,
           input.status,
           input.seats,
@@ -1608,6 +1630,10 @@ async function handle(req: Request, parts: string[], a: Actor) {
           rid,
         );
       if (!result.changes) return fail("Workspace not found.", 404);
+      if (input.industry)
+        await db()
+          .prepare("UPDATE tenants SET industry=? WHERE id=?")
+          .run(input.industry, rid);
       if (input.status === "active")
         await db()
           .prepare(
@@ -1638,6 +1664,14 @@ async function route(
   try {
     const a = await actor();
     if (!a) return fail("Sign in to continue.", 401);
+    if (
+      a.role !== "platform_admin" &&
+      !(await hasFeature(a.tenantId, requestFeature(req.url)))
+    )
+      return fail(
+        "This feature is not included in your workspace access.",
+        403,
+      );
     const { path } = await ctx.params;
     return await handle(req, path, a);
   } catch (e) {

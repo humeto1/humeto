@@ -1,3 +1,4 @@
+import { hasFeature } from "@/lib/feature-guard";
 import { notFound } from "next/navigation";
 import { requireActor } from "@/lib/auth";
 import { bootstrap, person, intake } from "@/lib/repository";
@@ -19,7 +20,7 @@ export default async function Page({
     { id } = await params,
     { section } = await searchParams,
     p = await person(a, id);
-  if (!p) notFound();
+  if (!p || !(await hasFeature(a.tenantId, "shared"))) notFound();
   if (
     sections.find((s) => s.key === section)?.restricted &&
     !["owner", "student"].includes(a.role)

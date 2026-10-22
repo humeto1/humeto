@@ -1,3 +1,4 @@
+import { featureAllowed } from "./feature-access.mjs";
 import { subscriptionAccess } from "./subscription-access.mjs";
 import { randomUUID } from "node:crypto";
 import { database } from "./postgres.mjs";
@@ -10,10 +11,10 @@ import {
 async function writable(d, tenant, user, now) {
   const s = await d
     .prepare(
-      "SELECT s.status,s.expires_at FROM memberships m JOIN subscriptions s ON s.tenant_id=m.tenant_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant')",
+      "SELECT s.status,s.expires_at,s.features_json FROM memberships m JOIN subscriptions s ON s.tenant_id=m.tenant_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant')",
     )
     .get(tenant, user);
-  return subscriptionAccess(s, now.getTime());
+  return subscriptionAccess(s, now.getTime()) && featureAllowed(s, "tasks");
 }
 export async function runTaskScheduler({
   d = database(),

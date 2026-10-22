@@ -1,3 +1,4 @@
+import { featureAllowed } from "@/lib/feature-access.mjs";
 import { subscriptionAccess } from "@/lib/subscription-access.mjs";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -31,11 +32,12 @@ export async function POST(req: Request) {
     const d = db();
     const link = await d
       .prepare(
-        "SELECT l.*,s.status,s.expires_at AS subscription_expiry FROM inquiry_links l JOIN subscriptions s ON s.tenant_id=l.tenant_id WHERE token_hash=? AND revoked=0 AND l.expires_at>?",
+        "SELECT l.*,s.status,s.features_json,s.expires_at AS subscription_expiry FROM inquiry_links l JOIN subscriptions s ON s.tenant_id=l.tenant_id WHERE token_hash=? AND revoked=0 AND l.expires_at>?",
       )
       .get(createHash("sha256").update(v.token).digest("hex"), Date.now());
     if (
       !link ||
+      !featureAllowed(link, "crm") ||
       !subscriptionAccess({
         status: link.status,
         expires_at: link.subscription_expiry,

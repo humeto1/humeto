@@ -1,3 +1,5 @@
+import { hasFeature } from "@/lib/feature-guard";
+import { featureForView } from "@/lib/feature-access.mjs";
 import { notFound } from "next/navigation";
 import { requireActor } from "@/lib/auth";
 import { bootstrap } from "@/lib/repository";
@@ -34,6 +36,11 @@ export default async function Page({
   )
     notFound();
   const a = await requireActor();
+  if (
+    a.role !== "platform_admin" &&
+    !(await hasFeature(a.tenantId, featureForView(view)))
+  )
+    notFound();
   if (view === "finance" && a.role !== "owner") notFound();
   if (view === "platform" && a.role !== "platform_admin") notFound();
   if (
