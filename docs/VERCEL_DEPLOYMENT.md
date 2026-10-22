@@ -21,3 +21,9 @@ Uploaded documents and OCR artifacts currently use persistent local disk. Vercel
 The OCR, proactive task and WhatsApp workers are separate long-running processes; pushing this repository does not run them on Vercel. Deploy them on a suitable worker host with shared persistent storage or object storage. Gmail and other external integrations need their own OAuth credentials/webhooks. Review tenant access, backups, retention and production authentication configuration before opening the service to customers.
 
 Git push makes the source available for import, and triggers deployment only if the repository has already been connected to Vercel. Vercel dashboard environment variables and build logs are the authority for the deployed result.
+
+## Current project setup (2026-10-22)
+
+The Vercel CLI created `numdesk/humeto` and configured the production database URLs, secure cookies, disabled public demo entry, local command provider and disabled OCR worker processing. Database migration checks and a local compiled-app test against Neon passed. The user chose to deploy manually. No Vercel production build or public URL has been verified yet.
+
+Automatic GitHub linking failed because the signed-in Vercel account did not have access to `humeto1/humeto`. Grant the Vercel GitHub integration access to that repository when importing, or choose the correct GitHub account. The GitHub push itself succeeded.

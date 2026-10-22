@@ -1,0 +1,11 @@
+.env
+.env.*
+.data
+.data-test
+planning
+artifacts
+playwright-report
+node_modules
+.next
+.git
+*.tsbuildinfo
