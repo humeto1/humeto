@@ -102,17 +102,16 @@ export default function HeroCarousel({
         <div className="hero wrap">
           <div className="hero-copy">
             <div className="eyebrow">
-              <span className="status-dot" /> A LITTLE FOCUS. A LOT MORE FLOW.
+              <span className="status-dot" /> Make space. <em>For what matters.</em>
             </div>
             <h1>
-              Simplified
+              Task Management
               <br />
-              <em>task management</em>
+              <em>AI Goal Chasing</em>
             </h1>
             <p className="hero-description">
-              Big projects. Small to-dos. One calm place to bring it all
-              together. See what’s urgent, protect what’s important, and move
-              your day forward.
+              Turn ideas into tasks, connect them to your goals, and stay focused
+              with timers, progress tracking and AI follow-ups.
             </p>
             <div className="hero-buttons">
               <a href="/workspace/tasks" className="button">
@@ -220,18 +219,17 @@ export default function HeroCarousel({
         <div className="hero wrap">
           <div className="hero-copy">
             <div className="eyebrow">
-              <span className="status-dot" /> YOUR INFORMATION. READY WHEN YOU
-              ARE.
+              <span className="status-dot" /> Big ambitions. <em>Less busywork.</em>
             </div>
             <h1>
-              Application
+              AI Form Filling
               <br />
-              <em>assistant</em>
+              <em>Chrome Extension</em>
             </h1>
             <p className="hero-description">
-              University, job or visa application? Meet your helper for the
-              details. Reuse applicant information, review suggested answers,
-              and keep the right documents close.
+              Upload your documents. AI reads and organizes your information, then
+              helps fill long forms for jobs, study, visas and more—with you in
+              control.
             </p>
             <div className="hero-buttons">
               <a href="/workspace/settings" className="button">
