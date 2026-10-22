@@ -1,3 +1,4 @@
+import { companyIndustryKeys, legacyIndustryKeys } from "@/lib/industries.mjs";
 import { emailAuthAction, emailReady, sendAuthEmail } from "@/lib/email-auth";
 import { createHash } from "node:crypto";
 import { withTransaction } from "@/lib/db";
@@ -172,8 +173,8 @@ export async function POST(
           accountType: z.enum(["individual", "company"]).default("individual"),
           companyName: z.string().trim().max(100).default(""),
           industry: z
-            .enum(["consultant", "lawyer", "agency"])
-            .default("consultant"),
+            .enum([...companyIndustryKeys, ...legacyIndustryKeys])
+            .default("education"),
         })
         .parse(body);
       if (input.accountType === "company" && input.companyName.length < 2)

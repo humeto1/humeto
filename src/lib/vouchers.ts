@@ -1,3 +1,4 @@
+import { industryKeys, industryLabel, audienceMatches } from "./industries.mjs";
 import { sendEmail, emailConfigured, publicAppUrl } from "./email-delivery.mjs";
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
@@ -56,13 +57,7 @@ export async function voucherWrite(a: Actor, body: unknown) {
           .trim()
           .regex(/^[a-zA-Z0-9-]{8,40}$/)
           .optional(),
-        audience: z.enum([
-          "any",
-          "consultant",
-          "lawyer",
-          "agency",
-          "individual",
-        ]),
+        audience: z.enum(["any", ...industryKeys]),
         recipientEmail: z.union([z.email(), z.literal("")]).default(""),
         features: z
           .array(z.enum(["crm", "tasks", "forms"]))
@@ -187,7 +182,7 @@ export async function voucherWrite(a: Actor, body: unknown) {
       .prepare("SELECT industry FROM tenants WHERE id=? FOR UPDATE")
       .get(a.tenantId);
     if (
-      (v.audience !== "any" && v.audience !== t?.industry) ||
+      !audienceMatches(v.audience, t?.industry) ||
       (v.recipient_email && v.recipient_email !== a.email.toLowerCase())
     )
       return invalid();
@@ -346,7 +341,7 @@ async function emailVoucher(a: Actor, voucherId: string, code: string) {
 ${v.label}
 Voucher code: ${normalize(code)}
 
-For: ${v.audience}
+For: ${industryLabel(v.audience)}
 Included features: ${JSON.parse(String(v.features_json)).join(", ")}
 Access days: ${v.duration_days}
 Seats: ${v.seats}

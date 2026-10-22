@@ -1,3 +1,7 @@
+import {
+  audienceMatches,
+  companyIndustryKeys,
+} from "../src/lib/industries.mjs";
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -390,6 +394,67 @@ test(
         })
       ).status(),
       403,
+    );
+  },
+);
+
+test("CRM niches stay distinct while previously issued broad vouchers retain compatibility", () => {
+  assert.deepEqual(companyIndustryKeys, [
+    "education",
+    "immigration",
+    "lawyer",
+    "travel",
+    "custom",
+  ]);
+  for (const a of companyIndustryKeys)
+    for (const b of companyIndustryKeys)
+      assert.equal(audienceMatches(a, b), a === b);
+  assert.equal(audienceMatches("consultant", "education"), true);
+  assert.equal(audienceMatches("consultant", "immigration"), true);
+  assert.equal(audienceMatches("consultant", "lawyer"), false);
+  assert.equal(audienceMatches("agency", "travel"), true);
+  assert.equal(audienceMatches("agency", "custom"), true);
+});
+test(
+  "Education and immigration signup categories and vouchers cannot be interchanged",
+  { skip },
+  async () => {
+    const a = await admin(),
+      education = await account("education"),
+      immigration = await account("immigration"),
+      custom = await account("custom");
+    assert.equal(
+      (
+        await database()
+          .prepare("SELECT industry FROM tenants WHERE id=?")
+          .get(custom.tenant)
+      ).industry,
+      "custom",
+    );
+    const v = await create(a, { audience: "education", maxUses: 2 });
+    assert.equal(
+      (
+        await immigration.c.post("/api/workspace/vouchers", {
+          data: { action: "redeem", code: v.code },
+        })
+      ).status(),
+      400,
+    );
+    assert.equal(
+      (
+        await custom.c.post("/api/workspace/vouchers", {
+          data: { action: "redeem", code: v.code },
+        })
+      ).status(),
+      400,
+    );
+    assert.equal(
+      (
+        await education.c.post("/api/workspace/vouchers", {
+          data: { action: "redeem", code: v.code },
+        })
+      ).status(),
+      200,
     );
   },
 );

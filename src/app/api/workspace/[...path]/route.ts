@@ -1,3 +1,4 @@
+import { industryKeys, legacyIndustryKeys } from "@/lib/industries.mjs";
 import { voucherRead, voucherWrite } from "@/lib/vouchers";
 import { hasFeature, requestFeature } from "@/lib/feature-guard";
 import { subscriptionAccess, trialExpiry } from "@/lib/subscription-access.mjs";
@@ -1518,9 +1519,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           plan: z.enum(["Institute", "Individual", "Enterprise"]),
           seats: z.number().int().min(1).max(1000),
           caseLimit: z.number().int().min(1).max(100000),
-          industry: z
-            .enum(["consultant", "lawyer", "agency", "individual"])
-            .optional(),
+          industry: z.enum([...industryKeys, ...legacyIndustryKeys]).optional(),
         })
         .parse(body);
       if (
@@ -1543,7 +1542,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
               input.plan === "Individual" ? "individual" : "institute",
               input.plan === "Individual"
                 ? "individual"
-                : input.industry || "consultant",
+                : input.industry || "education",
             );
           await db()
             .prepare(
@@ -1601,9 +1600,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           ]),
           seats: z.number().int().min(1).max(1000),
           caseLimit: z.number().int().min(1).max(100000),
-          industry: z
-            .enum(["consultant", "lawyer", "agency", "individual"])
-            .optional(),
+          industry: z.enum([...industryKeys, ...legacyIndustryKeys]).optional(),
           storageMb: z.number().int().min(1).max(1000000),
           expiresAt: z.string().max(10),
           features: z

@@ -1,4 +1,5 @@
 "use client";
+import { companyIndustries } from "@/lib/industries.mjs";
 import { useState } from "react";
 import {
   ArrowUpRight,
@@ -140,7 +141,7 @@ export default function Login({
                   password: f.get("password"),
                   accountType,
                   companyName: f.get("companyName") || "",
-                  industry: f.get("industry") || "consultant",
+                  industry: f.get("industry") || "education",
                 });
               }}
             >
@@ -171,12 +172,15 @@ export default function Login({
                   {accountType === "company" && (
                     <label>
                       Business type
-                      <select name="industry">
-                        <option value="consultant">
-                          Education / immigration consultant
+                      <select name="industry" required defaultValue="">
+                        <option value="" disabled>
+                          Select your business type
                         </option>
-                        <option value="lawyer">Lawyer / law firm</option>
-                        <option value="agency">Travel / other agency</option>
+                        {companyIndustries.map((i) => (
+                          <option key={i.key} value={i.key}>
+                            {i.label}
+                          </option>
+                        ))}
                       </select>
                     </label>
                   )}
@@ -251,8 +255,8 @@ export default function Login({
           )}
           {mode === "register" && (
             <p className="tiny">
-              Your trial starts when you create your account. After 15 days,
-              your workspace becomes read-only until activation. No automatic
+              Your trial starts after email verification. After 15 days, your
+              workspace becomes read-only until activation. No automatic
               charges.
             </p>
           )}

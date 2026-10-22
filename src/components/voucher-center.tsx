@@ -1,4 +1,5 @@
 "use client";
+import { companyIndustries, industryLabel } from "@/lib/industries.mjs";
 import { useEffect, useState } from "react";
 type Voucher = {
   id: string;
@@ -95,7 +96,7 @@ export default function VoucherCenter({
       <h2>{platform ? "Access vouchers" : "Redeem a voucher"}</h2>
       <p>
         {platform
-          ? "Create access for consultants, lawyers, agencies or individuals. Codes grant access without taking a payment."
+          ? "Create access for education consultants, immigration consultants, lawyers, travel agencies, custom CRMs or individuals. Codes grant access without taking a payment."
           : "Enter a code from Humeto. It replaces your feature and capacity limits and adds access days after any remaining trial or paid period."}
       </p>
       {platform ? (
@@ -136,9 +137,11 @@ export default function VoucherCenter({
               For
               <select name="audience">
                 <option value="any">Any account</option>
-                <option value="consultant">Consultants</option>
-                <option value="lawyer">Lawyers</option>
-                <option value="agency">Agencies</option>
+                {companyIndustries.map((i) => (
+                  <option key={i.key} value={i.key}>
+                    {i.label}
+                  </option>
+                ))}
                 <option value="individual">Individuals</option>
               </select>
             </label>
@@ -332,8 +335,9 @@ export default function VoucherCenter({
                 {v.label} · {v.code_hint}
               </strong>
               <p>
-                {v.audience} · {JSON.parse(v.features_json).join(", ")} ·{" "}
-                {v.duration_days} days · {v.uses}/{v.max_uses} uses
+                {industryLabel(v.audience)} ·{" "}
+                {JSON.parse(v.features_json).join(", ")} · {v.duration_days}{" "}
+                days · {v.uses}/{v.max_uses} uses
               </p>
               <p>
                 {v.seats} seats · {v.case_limit} cases · {v.storage_mb} MB ·

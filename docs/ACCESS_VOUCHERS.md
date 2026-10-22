@@ -29,3 +29,9 @@ Email status is recorded as not_requested, sending, accepted, failed or suppress
 The server binds delivery to the stored owner email and validates the code hash. Revoked, expired or fully used codes are not sent. A short send lease and stable provider idempotency key prevent concurrent/duplicate delivery. Retries are capped. Failures preserve the voucher and display a retry/manual-sharing choice. Sender retries retain the same unsubscribe payload, signed with a private stable HUMETO_EMAIL_LINK_SECRET. Existing unsubscribe tokens remain valid after key rotation because their hashes are stored.
 
 Voucher invitations use optional email delivery and honor recipient unsubscribe preferences. Super admins cannot bypass that suppression through the voucher email action. Delivery attempts are audited without storing plaintext codes in audit records or voucher tables.
+
+## Separate CRM categories
+
+New company signups and voucher targeting distinguish Education consultant, Immigration consultant, Lawyer / law firm, Travel agency and Custom CRM. Individual remains an account/audience category. New niche-specific vouchers match only their own category; an Education voucher is not an Immigration voucher.
+
+Existing combined `consultant` and `agency` account classifications are retained as explicitly labeled legacy categories. The super admin can select the correct category in Manage plan. Migration 020 does not guess or overwrite the category of a real existing account. Previously issued broad Consultant vouchers continue to cover education/immigration; broad Agency vouchers continue to cover travel/custom. New voucher creation does not offer those legacy combined audiences.

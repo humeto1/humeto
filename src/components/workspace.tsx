@@ -1,4 +1,9 @@
 "use client";
+import {
+  companyIndustries,
+  industryLabel,
+  legacyIndustryKeys,
+} from "@/lib/industries.mjs";
 import VoucherCenter from "./voucher-center";
 import { featureAllowed, featureForView } from "@/lib/feature-access.mjs";
 import EmailPreferences from "./email-preferences";
@@ -2368,7 +2373,7 @@ export default function Workspace({
                         <tr key={t.id}>
                           <td>
                             <strong>{t.name}</strong>
-                            <small>{t.type}</small>
+                            <small>{industryLabel(t.industry || t.type)}</small>
                           </td>
                           <td>{t.plan}</td>
                           <td>
@@ -3530,11 +3535,20 @@ export default function Workspace({
                     Business type
                     <select
                       name="industry"
-                      defaultValue={selectedTenant.industry || "consultant"}
+                      defaultValue={selectedTenant.industry || "education"}
                     >
-                      <option value="consultant">Consultant</option>
-                      <option value="lawyer">Lawyer</option>
-                      <option value="agency">Agency</option>
+                      {legacyIndustryKeys.includes(
+                        selectedTenant.industry || "",
+                      ) && (
+                        <option value={selectedTenant.industry}>
+                          {industryLabel(selectedTenant.industry)}
+                        </option>
+                      )}
+                      {companyIndustries.map((i) => (
+                        <option key={i.key} value={i.key}>
+                          {i.label}
+                        </option>
+                      ))}
                       <option value="individual">Individual</option>
                     </select>
                   </label>
