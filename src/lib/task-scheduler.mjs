@@ -7,6 +7,7 @@ import {
   latestOccurrence,
   localDay,
   quietUntil,
+  nextDay,
 } from "./scheduling-clock.mjs";
 async function writable(d, tenant, user, now) {
   const s = await d
@@ -20,6 +21,9 @@ export async function runTaskScheduler({
   d = database(),
   now = new Date(),
   heartbeat = true,
+  tenantId = "",
+  userId = "",
+  routineOnly = false,
 } = {}) {
   if (heartbeat)
     await d
@@ -29,9 +33,16 @@ export async function runTaskScheduler({
       .run(now.toISOString());
   const series = await d
     .prepare(
-      "SELECT id FROM task_recurrences WHERE status='active' AND next_day<=? ORDER BY next_day",
+      "SELECT id FROM task_recurrences WHERE status='active' AND next_day<=? AND (next_day || ' ' || local_time)<=to_char(timezone(task_recurrences.timezone,?::timestamptz),'YYYY-MM-DD HH24:MI')" +
+        (tenantId ? " AND tenant_id=? AND user_id=?" : "") +
+        (routineOnly ? " AND track_occurrences=TRUE" : "") +
+        " ORDER BY next_day LIMIT 500",
     )
-    .all(new Date(now.getTime() + 86400000).toISOString().slice(0, 10));
+    .all(
+      new Date(now.getTime() + 86400000).toISOString().slice(0, 10),
+      now.toISOString(),
+      ...(tenantId ? [tenantId, userId] : []),
+    );
   let created = 0,
     notified = 0;
   for (const { id } of series) {
@@ -54,7 +65,20 @@ export async function runTaskScheduler({
         return;
       }
       if (!occurrence.day && !occurrence.ended) return;
-      if (occurrence.day) {
+      const days = [];
+      if (s.track_occurrences && occurrence.day) {
+        let day = s.next_day;
+        for (let i = 0; i < 5000 && day <= occurrence.day; i++) {
+          days.push(day);
+          day = nextDay(
+            day,
+            s.frequency,
+            s.interval_count,
+            Number(s.first_day.slice(8)),
+          );
+        }
+      } else if (occurrence.day) days.push(occurrence.day);
+      for (const occurrenceDay of days) {
         const t = await d
           .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=?")
           .get(s.template_task_id, s.tenant_id);
@@ -64,11 +88,25 @@ export async function runTaskScheduler({
             .prepare(
               "INSERT INTO task_occurrences(series_id,day) VALUES(?,?) ON CONFLICT DO NOTHING",
             )
-            .run(id, occurrence.day);
+            .run(id, occurrenceDay);
+        // Keep older expected days as missed evidence without flooding the task board.
+        if (
+          claim.changes &&
+          s.track_occurrences &&
+          occurrenceDay <
+            new Date(now.getTime() - 31 * 86400000).toISOString().slice(0, 10)
+        ) {
+          await d
+            .prepare(
+              "UPDATE task_occurrences SET canonical_title=? WHERE series_id=? AND day=?",
+            )
+            .run(t.title, id, occurrenceDay);
+          continue;
+        }
         if (claim.changes) {
           await d
             .prepare(
-              "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
+              "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category,work_kind,value_type,value_minor,value_currency,value_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             )
             .run(
               taskId,
@@ -77,10 +115,16 @@ export async function runTaskScheduler({
               t.title,
               t.important,
               t.urgent,
-              occurrence.day,
+              occurrenceDay,
               t.assignee,
               s.user_id,
               t.project_id,
+              t.category || "",
+              s.track_occurrences ? "routine" : t.work_kind || "one_off",
+              t.value_type || "none",
+              t.value_minor ?? null,
+              t.value_currency || "PKR",
+              t.value_note || "",
             );
           await d
             .prepare(
@@ -96,20 +140,49 @@ export async function runTaskScheduler({
             .prepare(
               "UPDATE task_occurrences SET task_id=? WHERE series_id=? AND day=?",
             )
-            .run(taskId, id, occurrence.day);
-          // Catch-up creates just the latest occurrence, with a reminder due now.
+            .run(taskId, id, occurrenceDay);
+          const wording = await d
+            .prepare(
+              "SELECT * FROM routine_wording WHERE series_id=? AND enabled=TRUE AND canonical_title=?",
+            )
+            .get(id, t.title);
+          const variants = wording?.variants || [];
+          const prior = await d
+            .prepare(
+              "SELECT count(*) AS n FROM task_occurrences WHERE series_id=? AND day<?",
+            )
+            .get(id, occurrenceDay);
+          const display = variants.length
+            ? variants[Number(prior.n) % variants.length]
+            : "";
           await d
             .prepare(
-              "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone) VALUES(?,?,?,?,?,?)",
+              "UPDATE task_occurrences SET canonical_title=?,display_title=?,wording_revision=? WHERE series_id=? AND day=?",
             )
             .run(
-              randomUUID(),
-              s.tenant_id,
-              s.user_id,
-              taskId,
-              now.toISOString(),
-              s.timezone,
+              t.title,
+              display,
+              wording?.revision || null,
+              id,
+              occurrenceDay,
             );
+          // Past occurrences stay in history, but only today gets a fresh nudge.
+          if (
+            occurrenceDay === localDay(now, s.timezone) ||
+            !s.track_occurrences
+          )
+            await d
+              .prepare(
+                "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone) VALUES(?,?,?,?,?,?)",
+              )
+              .run(
+                randomUUID(),
+                s.tenant_id,
+                s.user_id,
+                taskId,
+                now.toISOString(),
+                s.timezone,
+              );
           created++;
         }
       }
@@ -120,6 +193,7 @@ export async function runTaskScheduler({
         .run(occurrence.next, occurrence.ended, id);
     });
   }
+  if (routineOnly) return { created, notified };
   const members = await d
     .prepare(
       "SELECT DISTINCT tenant_id,user_id FROM task_reminders WHERE status='scheduled' AND remind_at<=?",

@@ -1,3 +1,4 @@
+import { runTaskScheduler } from "./task-scheduler.mjs";
 import { featureAllowed } from "./feature-access.mjs";
 import "server-only";
 import { pipelineSettings } from "./pipeline-settings";
@@ -57,7 +58,7 @@ export async function tasks(a: Actor) {
     (
       await db()
         .prepare(
-          "SELECT t.*,p.name AS person_name,(SELECT title FROM projects x WHERE x.id=t.project_id AND x.tenant_id=t.tenant_id) AS project_title FROM tasks t LEFT JOIN people p ON p.id=t.person_id AND p.tenant_id=t.tenant_id WHERE t.tenant_id=?" +
+          "SELECT t.*,(SELECT o.series_id FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS routine_id,(SELECT CASE WHEN o.canonical_title=t.title THEN o.display_title ELSE '' END FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS display_title,EXISTS(SELECT 1 FROM task_recurrences r WHERE r.template_task_id=t.id AND r.track_occurrences=TRUE) AS routine_template,p.name AS person_name,(SELECT title FROM projects x WHERE x.id=t.project_id AND x.tenant_id=t.tenant_id) AS project_title FROM tasks t LEFT JOIN people p ON p.id=t.person_id AND p.tenant_id=t.tenant_id WHERE t.tenant_id=? AND NOT EXISTS(SELECT 1 FROM task_recurrences r WHERE r.template_task_id=t.id AND r.track_occurrences=TRUE)" +
             s.sql +
             " ORDER BY t.created_at DESC",
         )
@@ -122,6 +123,14 @@ export async function subscription(a: Actor) {
     .get(a.tenantId);
 }
 export async function bootstrap(a: Actor) {
+  if (["owner", "consultant"].includes(a.role))
+    await runTaskScheduler({
+      d: db(),
+      tenantId: a.tenantId,
+      userId: a.id,
+      routineOnly: true,
+      heartbeat: false,
+    });
   const result = {
     projects: ["owner", "consultant"].includes(a.role)
       ? await db()

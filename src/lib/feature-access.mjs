@@ -14,6 +14,7 @@ export function featureForView(view) {
       "focus",
       "scheduling",
       "progress",
+      "planning",
       "projects",
       "goals",
       "assistant",

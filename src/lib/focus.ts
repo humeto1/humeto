@@ -11,7 +11,7 @@ export async function focusRead(a: Actor) {
   if (!isStaff(a)) return fail("Task focus is not permitted.", 403);
   const rows = await db()
     .prepare(
-      `SELECT f.*,t.title,t.stage AS task_stage,t.revision AS task_revision,t.project_id,COALESCE(p.title,'') AS project_title,
+      `SELECT f.*,t.title,(SELECT CASE WHEN o.canonical_title=t.title THEN o.display_title ELSE '' END FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS display_title,t.stage AS task_stage,t.revision AS task_revision,t.project_id,COALESCE(p.title,'') AS project_title,
  f.elapsed_seconds+CASE WHEN f.running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (clock_timestamp()-f.running_since)))::bigint) END AS total_seconds
  FROM focus_sessions f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id
  LEFT JOIN projects p ON p.id=t.project_id AND p.tenant_id=t.tenant_id

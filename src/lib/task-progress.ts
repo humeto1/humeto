@@ -9,6 +9,9 @@ const fail = (error: string, status = 400) =>
   NextResponse.json({ error }, { status });
 const input = z.object({
   title: z.string().trim().min(2).max(160),
+  category: z.string().trim().max(60).optional(),
+  successMetric: z.string().trim().max(500).optional(),
+  goalId: z.string().max(100).optional(),
   description: z.string().trim().max(2000).default(""),
   targetDate: z.union([z.literal(""), z.iso.date()]).default(""),
   status: z
@@ -167,7 +170,18 @@ export async function progressMutation(
     });
   }
   if (["projects", "goals"].includes(resource)) {
+    const plan = input.parse(body);
+    if (
+      resource === "projects" &&
+      plan.goalId &&
+      !(await db()
+        .prepare("SELECT id FROM goals WHERE id=? AND tenant_id=?")
+        .get(plan.goalId, a.tenantId))
+    )
+      return fail("Goal not found in this workspace.", 404);
     if (!rid && req.method === "POST") {
+      if (resource === "goals" && !plan.targetDate)
+        return fail("A goal needs a deadline. Choose a target date.");
       const v = input.parse(body);
       const uid = id();
       await db()
@@ -182,6 +196,16 @@ export async function progressMutation(
           v.targetDate,
           v.status,
           a.id,
+        );
+      await db()
+        .prepare(
+          `UPDATE ${resource} SET category=?${resource === "goals" ? ",success_metric=?" : ",goal_id=?"} WHERE id=? AND tenant_id=?`,
+        )
+        .run(
+          v.category || (resource === "goals" ? "Personal" : "Work"),
+          resource === "goals" ? v.successMetric || "" : v.goalId || "",
+          uid,
+          a.tenantId,
         );
       await audit(
         a.tenantId,
@@ -199,13 +223,15 @@ export async function progressMutation(
         .parse(body);
       const result = await db()
         .prepare(
-          `UPDATE ${resource} SET title=?,description=?,target_date=?,status=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?`,
+          `UPDATE ${resource} SET title=?,description=?,target_date=?,status=?,category=COALESCE(?,category),${resource === "goals" ? "success_metric" : "goal_id"}=COALESCE(?,${resource === "goals" ? "success_metric" : "goal_id"}),revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?`,
         )
         .run(
           v.title,
           v.description,
           v.targetDate,
           v.status,
+          v.category ?? null,
+          (resource === "goals" ? v.successMetric : v.goalId) ?? null,
           rid,
           a.tenantId,
           v.revision,

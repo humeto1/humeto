@@ -34,7 +34,10 @@ async function task(c, id) {
   return (await boot(c)).tasks.find((t) => t.id === id);
 }
 async function plan(c, kind, title) {
-  const v = await post(c, kind, { title });
+  const v = await post(c, kind, {
+    title,
+    ...(kind === "goals" ? { targetDate: "2027-12-31" } : {}),
+  });
   planIds.push([kind, v.id]);
   return v.id;
 }

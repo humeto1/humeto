@@ -52,7 +52,7 @@ export default function RecurrenceEditor({
             value={frequency}
             onChange={(e) => setFrequency(e.target.value)}
           >
-            {["daily", "weekdays", "weekly", "monthly"].map((f) => (
+            {["daily", "weekdays", "weekly", "monthly", "yearly"].map((f) => (
               <option key={f} value={f}>
                 {f}
               </option>

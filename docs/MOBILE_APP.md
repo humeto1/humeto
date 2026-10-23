@@ -33,3 +33,7 @@ Today’s “Your next small win” uses the same active focus task as the Focus
 Task creation/editing now accepts a category of up to 60 characters. Suggested categories are Personal, Work, Social, Relationship, Family, Hobby and Financial; users can type their own. Categories persist in PostgreSQL (migration 022), sync with tasks and appear on cards. Filters combine category/uncategorized, today/overdue/no date, assignment, status and search. Cards indicate active focus and overdue tasks. Existing tasks stay uncategorized until edited.
 
 The native acceptance run passed 20 checks, including custom category persistence/filtering and switching away and back while verifying Today’s title and saved session history. This run used the local command assistant; live model connectivity was verified in the preceding Android run.
+
+## 0.2.0 · planning, alerts and routine wording
+
+See [shared task planning](TASK_PLANNING.md) for the current data model, filters, goal/project deadlines, routine types and weekly reporting, expected-impact estimates, reviewed AI wording rotation and notification limits. The same shared components are rendered by web and mobile. Android 0.2.0 (versionCode 2) includes the tilted serif h icon, chime/bell audio channels, vibration/permission diagnostics and projected local routine alerts. 149 release checks and 23 native emulator checks passed, including a live wording-generation request which did not auto-activate suggestions. Physical-device sound/vibration and store signing remain pending.

@@ -1,3 +1,12 @@
+import {
+  TaskValueFields,
+  TaskValueBadge,
+  valuePayload,
+} from "../../shared/task-value";
+import TaskCalendar from "../../shared/task-calendar";
+import PlanningHub from "../../shared/planning-hub";
+import AlertControls from "../../shared/alert-controls";
+import { deviceAlerts } from "./notifications";
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
@@ -317,6 +326,10 @@ function App() {
     [query, setQuery] = useState(""),
     [view, setView] = useState("priority"),
     [filter, setFilter] = useState("pending"),
+    [impactFilter, setImpactFilter] = useState("all"),
+    [projectFilter, setProjectFilter] = useState("all"),
+    [goalFilter, setGoalFilter] = useState("all"),
+    [natureFilter, setNatureFilter] = useState("all"),
     [categoryFilter, setCategoryFilter] = useState("all"),
     [dueFilter, setDueFilter] = useState("all"),
     [ownerFilter, setOwnerFilter] = useState("all"),
@@ -347,7 +360,7 @@ function App() {
     setFocus(f);
     setSchedule(s);
     setHistory(h);
-    await syncNotifications(s.reminders, f.active);
+    await syncNotifications(s.reminders, f.active, s.preferences, s.series);
   }
   async function load() {
     try {
@@ -451,7 +464,11 @@ function App() {
     pending = data.tasks.filter((t) => t.stage !== "Done"),
     completed = data.tasks.filter((t) => t.stage === "Done");
   const focusTask = data.tasks.find((t) => t.id === active?.task_id);
-  const focusTitle = focusTask?.title || active?.title;
+  const focusTitle =
+    focusTask?.display_title ||
+    focusTask?.title ||
+    active?.display_title ||
+    active?.title;
   const categories = [
     ...new Set([
       ...defaultCategories,
@@ -464,6 +481,16 @@ function App() {
     data.stages.stages.find((s) => s.key === stage)?.title || stage;
   const filtered = data.tasks.filter(
     (t) =>
+      (impactFilter === "all" || (t.value_type || "none") === impactFilter) &&
+      (projectFilter === "all" ||
+        (projectFilter === "none"
+          ? !t.project_id
+          : t.project_id === projectFilter)) &&
+      (goalFilter === "all" ||
+        (goalFilter === "none"
+          ? !t.goals?.length
+          : t.goals?.some((g) => g.id === goalFilter))) &&
+      (natureFilter === "all" || (t.work_kind || "one_off") === natureFilter) &&
       (categoryFilter === "all" ||
         (categoryFilter === "uncategorized"
           ? !t.category
@@ -482,6 +509,7 @@ function App() {
         (filter === "done" ? t.stage === "Done" : t.stage !== "Done")) &&
       [
         t.title,
+        t.display_title,
         t.category,
         t.project_title,
         t.assignee,
@@ -504,11 +532,15 @@ function App() {
         {t.stage === "Done" ? <Check size={15} /> : <span />}
       </span>
       <span className="task-copy">
-        <strong>{t.title}</strong>
+        <strong>{t.display_title || t.title}</strong>
+        {t.display_title && <small>Original: {t.title}</small>}
         <small>
           {t.project_title || "No project"} · {formatDate(t.due_date)}
         </small>
         <span className="task-tags">
+          {t.work_kind === "routine" && (
+            <span className="task-tag">Routine</span>
+          )}
           {t.category && <span className="task-tag">{t.category}</span>}
           {active?.task_id === t.id && (
             <span className="task-tag focusing">In focus</span>
@@ -517,6 +549,7 @@ function App() {
             <span className="task-tag overdue">Overdue</span>
           )}
         </span>
+        <TaskValueBadge task={t} />
       </span>
       <ChevronRight size={16} />
     </button>
@@ -748,6 +781,13 @@ function App() {
                   <List size={15} />
                 </button>
               </div>
+              <button
+                className="secondary"
+                aria-label="Calendar view"
+                onClick={() => setView("calendar")}
+              >
+                <Calendar size={15} />
+              </button>
               <select
                 aria-label="Task filter"
                 value={filter}
@@ -758,66 +798,156 @@ function App() {
                 <option value="all">All tasks</option>
               </select>
             </div>
-            <div className="task-filters">
-              <label>
-                Category
-                <select
-                  aria-label="Category filter"
-                  value={categoryFilter}
-                  onChange={(e) => setCategoryFilter(e.target.value)}
-                >
-                  <option value="all">All categories</option>
-                  <option value="uncategorized">Uncategorized</option>
-                  {categories.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Due date
-                <select
-                  aria-label="Due date filter"
-                  value={dueFilter}
-                  onChange={(e) => setDueFilter(e.target.value)}
-                >
-                  <option value="all">Any date</option>
-                  <option value="today">Today</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="none">No due date</option>
-                </select>
-              </label>
-              <label>
-                Assignment
-                <select
-                  aria-label="Assignment filter"
-                  value={ownerFilter}
-                  onChange={(e) => setOwnerFilter(e.target.value)}
-                >
-                  <option value="all">Everyone</option>
-                  <option value="mine">Assigned to me</option>
-                  <option value="unassigned">Unassigned</option>
-                </select>
-              </label>
-              {(categoryFilter !== "all" ||
-                dueFilter !== "all" ||
-                ownerFilter !== "all" ||
-                query) && (
-                <button
-                  className="text"
-                  onClick={() => {
-                    setCategoryFilter("all");
-                    setDueFilter("all");
-                    setOwnerFilter("all");
-                    setQuery("");
-                  }}
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-            {view === "priority" ? (
+            <details className="task-filter-panel">
+              <summary>
+                Filters ·{" "}
+                {
+                  [
+                    impactFilter,
+                    projectFilter,
+                    goalFilter,
+                    natureFilter,
+                    categoryFilter,
+                    dueFilter,
+                    ownerFilter,
+                  ].filter((v) => v !== "all").length
+                }{" "}
+                active
+              </summary>
+              <div className="task-filters">
+                <label>
+                  Expected impact
+                  <select
+                    aria-label="Expected impact filter"
+                    value={impactFilter}
+                    onChange={(e) => setImpactFilter(e.target.value)}
+                  >
+                    <option value="all">Any impact</option>
+                    <option value="profit">Potential profit</option>
+                    <option value="avoid_loss">Avoid loss</option>
+                    <option value="none">No estimate</option>
+                  </select>
+                </label>
+                <label>
+                  Project
+                  <select
+                    aria-label="Project filter"
+                    value={projectFilter}
+                    onChange={(e) => setProjectFilter(e.target.value)}
+                  >
+                    <option value="all">All projects</option>
+                    <option value="none">No project</option>
+                    {data.projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Goal
+                  <select
+                    aria-label="Goal filter"
+                    value={goalFilter}
+                    onChange={(e) => setGoalFilter(e.target.value)}
+                  >
+                    <option value="all">All goals</option>
+                    <option value="none">No goal</option>
+                    {data.goals.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Task type
+                  <select
+                    aria-label="Task type filter"
+                    value={natureFilter}
+                    onChange={(e) => setNatureFilter(e.target.value)}
+                  >
+                    <option value="all">All work</option>
+                    <option value="one_off">One-off tasks</option>
+                    <option value="routine">Routine occurrences</option>
+                  </select>
+                </label>
+                <label>
+                  Category
+                  <select
+                    aria-label="Category filter"
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                  >
+                    <option value="all">All categories</option>
+                    <option value="uncategorized">Uncategorized</option>
+                    {categories.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Due date
+                  <select
+                    aria-label="Due date filter"
+                    value={dueFilter}
+                    onChange={(e) => setDueFilter(e.target.value)}
+                  >
+                    <option value="all">Any date</option>
+                    <option value="today">Today</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="none">No due date</option>
+                  </select>
+                </label>
+                <label>
+                  Assignment
+                  <select
+                    aria-label="Assignment filter"
+                    value={ownerFilter}
+                    onChange={(e) => setOwnerFilter(e.target.value)}
+                  >
+                    <option value="all">Everyone</option>
+                    <option value="mine">Assigned to me</option>
+                    <option value="unassigned">Unassigned</option>
+                  </select>
+                </label>
+                {(impactFilter !== "all" ||
+                  projectFilter !== "all" ||
+                  goalFilter !== "all" ||
+                  natureFilter !== "all" ||
+                  categoryFilter !== "all" ||
+                  dueFilter !== "all" ||
+                  ownerFilter !== "all" ||
+                  query) && (
+                  <button
+                    className="text"
+                    onClick={() => {
+                      setImpactFilter("all");
+                      setProjectFilter("all");
+                      setGoalFilter("all");
+                      setCategoryFilter("all");
+                      setNatureFilter("all");
+                      setDueFilter("all");
+                      setOwnerFilter("all");
+                      setQuery("");
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            </details>
+            {view === "calendar" ? (
+              <TaskCalendar
+                tasks={filtered}
+                openTask={(t) => {
+                  setSelected(t.id);
+                  setSheet("task");
+                }}
+              />
+            ) : view === "priority" ? (
               <div className="matrix">
                 {priorities.map(([name, description], i) => (
                   <section key={name} className={"quadrant q" + i}>
@@ -899,6 +1029,14 @@ function App() {
                   {String(elapsed % 60).padStart(2, "0")}
                 </div>
                 <p>{active.target_minutes} minute session · Time spent</p>
+                <p>
+                  {Math.max(
+                    0,
+                    Math.ceil((active.target_minutes * 60 - elapsed) / 60),
+                  )}{" "}
+                  minutes left in your estimate · Timer keeps tracking until you
+                  pause or finish.
+                </p>
                 {active.check_in_at &&
                   new Date(active.check_in_at).getTime() <= tick && (
                     <div className="check-in">
@@ -993,7 +1131,8 @@ function App() {
                   >
                     <Play size={18} />
                     <span className="task-copy">
-                      <strong>{t.title}</strong>
+                      <strong>{t.display_title || t.title}</strong>
+                      {t.display_title && <small>Original: {t.title}</small>}
                       <small>{t.project_title || "Your next step"}</small>
                     </span>
                   </button>
@@ -1203,6 +1342,14 @@ function App() {
                 history.
               </p>
             </section>
+            <PlanningHub
+              tasks={data.tasks}
+              projects={data.projects}
+              goals={data.goals}
+              writable={writable}
+              refresh={refresh}
+              request={api}
+            />
             {(["projects", "goals"] as const).map((kind) => (
               <section key={kind}>
                 <h2 className="spaced">
@@ -1221,6 +1368,12 @@ function App() {
                     <Folder size={21} />
                     <span>
                       <strong>{p.title}</strong>
+                      <small>
+                        {p.category || "Uncategorized"} ·{" "}
+                        {p.target_date
+                          ? "Deadline " + p.target_date
+                          : "Needs a deadline"}
+                      </small>
                       <small>
                         {p.status} ·{" "}
                         {kind === "projects"
@@ -1329,7 +1482,7 @@ function App() {
               .filter(
                 (t) =>
                   t.id !== active?.task_id &&
-                  [t.title, t.project_title, t.category]
+                  [t.title, t.display_title, t.project_title, t.category]
                     .join(" ")
                     .toLowerCase()
                     .includes(focusQuery.toLowerCase()),
@@ -1363,7 +1516,8 @@ function App() {
                 >
                   <Play size={18} />
                   <span className="task-copy">
-                    <strong>{t.title}</strong>
+                    <strong>{t.display_title || t.title}</strong>
+                    {t.display_title && <small>Original: {t.title}</small>}
                     <small>
                       {t.category || "Uncategorized"} ·{" "}
                       {t.project_title || "No project"}
@@ -1375,7 +1529,7 @@ function App() {
           {!pending.some(
             (t) =>
               t.id !== active?.task_id &&
-              [t.title, t.project_title, t.category]
+              [t.title, t.display_title, t.project_title, t.category]
                 .join(" ")
                 .toLowerCase()
                 .includes(focusQuery.toLowerCase()),
@@ -1403,6 +1557,7 @@ function App() {
                 const f = new FormData(e.currentTarget);
                 void run(async () => {
                   await api("/api/workspace/tasks", {
+                    ...valuePayload(f),
                     title: f.get("title"),
                     category: f.get("category") || "",
                     dueDate: f.get("dueDate") || "",
@@ -1436,6 +1591,7 @@ function App() {
                   placeholder="Choose or type your own"
                 />
               </label>
+              <TaskValueFields />
               <label>
                 Due date
                 <input type="date" name="dueDate" />
@@ -1496,7 +1652,10 @@ function App() {
                 <span className={"pill p" + priority(task)}>
                   {priorities[priority(task)][0]}
                 </span>
-                <h2 className="detail-title">{task.title}</h2>
+                <h2 className="detail-title">
+                  {task.display_title || task.title}
+                </h2>
+                {task.display_title && <p>Original: {task.title}</p>}
                 {task.stage !== "Done" && active?.task_id !== task.id && (
                   <button
                     className="secondary"
@@ -1521,6 +1680,7 @@ function App() {
                     const f = new FormData(e.currentTarget);
                     void run(async () => {
                       await patch(task, {
+                        ...valuePayload(f),
                         stage: f.get("stage"),
                         title: f.get("title"),
                         category: f.get("category") || "",
@@ -1552,6 +1712,7 @@ function App() {
                       placeholder="Choose or type your own"
                     />
                   </label>
+                  <TaskValueFields task={task} />
                   <label>
                     Due date
                     <input
@@ -1727,6 +1888,7 @@ function App() {
                       <option value="weekdays">Weekdays</option>
                       <option value="weekly">Weekly</option>
                       <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
                     </select>
                   </label>
                   <div className="two">
@@ -1784,6 +1946,9 @@ function App() {
                   title: f.get("title"),
                   description: f.get("description"),
                   targetDate: f.get("targetDate") || "",
+                  category: f.get("category"),
+                  successMetric: f.get("successMetric") || "",
+                  goalId: f.get("goalId") || "",
                   status: "Active",
                 });
                 setSheet(null);
@@ -1806,8 +1971,36 @@ function App() {
               <textarea name="description" maxLength={2000} />
             </label>
             <label>
-              Target date
-              <input name="targetDate" type="date" />
+              Deadline
+              <input name="targetDate" type="date" required />
+            </label>
+            <label>
+              Category
+              <input
+                name="category"
+                list="planning-categories"
+                maxLength={60}
+                defaultValue="Personal"
+              />
+            </label>
+            <label>
+              Measurable outcome (goal)
+              <input
+                name="successMetric"
+                maxLength={500}
+                placeholder="Save PKR 100,000"
+              />
+            </label>
+            <label>
+              Supports goal (project)
+              <select name="goalId">
+                <option value="">No goal</option>
+                {data.goals.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.title}
+                  </option>
+                ))}
+              </select>
             </label>
             <button className="primary full" disabled={!writable}>
               Create
@@ -1817,6 +2010,12 @@ function App() {
       )}
       {sheet === "reminders" && (
         <Sheet title="Your timely nudges" close={() => setSheet(null)}>
+          <AlertControls
+            request={api}
+            writable={writable}
+            device={deviceAlerts}
+            onSaved={refresh}
+          />
           <button
             className="secondary full"
             onClick={() =>

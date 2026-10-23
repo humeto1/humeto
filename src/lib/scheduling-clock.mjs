@@ -46,8 +46,9 @@ export function nextDay(
   anchor = Number(day.slice(8)),
 ) {
   const at = new Date(day + "T12:00:00Z");
-  if (frequency === "monthly") {
-    const month = at.getUTCMonth() + interval;
+  if (frequency === "monthly" || frequency === "yearly") {
+    const month =
+      at.getUTCMonth() + interval * (frequency === "yearly" ? 12 : 1);
     const last = new Date(
       Date.UTC(at.getUTCFullYear(), month + 1, 0),
     ).getUTCDate();
@@ -129,6 +130,9 @@ export function latestOccurrence(series, now) {
   throw Error("Schedule catch-up exceeds safe limit.");
 }
 export const defaultPreferences = {
+  tone: "chime",
+  vibration: true,
+  precise: false,
   enabled: true,
   timezone: "Asia/Karachi",
   quiet_enabled: true,

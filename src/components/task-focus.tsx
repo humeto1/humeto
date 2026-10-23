@@ -1,4 +1,5 @@
 "use client";
+import { playTone } from "../../shared/alert-controls";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Play,
@@ -25,6 +26,7 @@ type Session = {
   state: string;
   total_seconds: number;
   target_minutes: number;
+  display_title?: string;
   revision: number;
   task_revision: number;
   check_in_at: string | null;
@@ -209,10 +211,28 @@ export default function TaskFocus({
     try {
       if (localStorage.getItem(store) === key) return;
       localStorage.setItem(store, key);
-      new Notification("Humeto · Time for a check-in", {
-        body: "How is your task going? Come back to finish, continue or change your plan.",
-        tag: "humeto-focus-" + memberKey,
-      });
+      void fetch("/api/workspace/scheduling")
+        .then((r) => r.json())
+        .then((s) => {
+          if (!s.preferences?.enabled || s.quietUntil) return;
+          new Notification("Humeto · Time for a check-in", {
+            body: "How is your task going? Come back to finish, continue or change your plan.",
+            tag: "humeto-focus-" + memberKey,
+            silent: true,
+          });
+          if (s.preferences.vibration && "vibrate" in navigator)
+            navigator.vibrate([200, 100, 200]);
+          void playTone(s.preferences.tone || "chime").catch(() =>
+            setAlertStatus(
+              "Sound is blocked by browser settings. Your check-in is shown here.",
+            ),
+          );
+        })
+        .catch(() =>
+          setAlertStatus(
+            "Unable to check alert preferences. Your check-in is still shown here.",
+          ),
+        );
     } catch {
       setAlertStatus(
         "Browser alerts are unavailable. Your check-in is still shown here.",
@@ -400,7 +420,8 @@ export default function TaskFocus({
           <div className={styles.grid}>
             <div>
               <p className={styles.eyebrow}>ONE THING AT A TIME</p>
-              <h2>{active.title}</h2>
+              <h2>{active.display_title || active.title}</h2>
+              {active.display_title && <small>Original: {active.title}</small>}
               <p className={styles.message} role="status">
                 {active.state === "blocked"
                   ? focusGuidance(active.blocker, active.next_step)
@@ -452,7 +473,14 @@ export default function TaskFocus({
                     ? "Blocked · timer stopped"
                     : "Paused · timer stopped"}
               </span>
-              <small>Initial estimate {active.target_minutes} min</small>
+              <small>
+                Initial estimate {active.target_minutes} min ·{" "}
+                {Math.max(
+                  0,
+                  Math.ceil((active.target_minutes * 60 - elapsed) / 60),
+                )}{" "}
+                min left in estimate
+              </small>
               {active.state === "running" && active.check_in_at && (
                 <span className={checkDue ? styles.dueLabel : ""}>
                   {checkDue

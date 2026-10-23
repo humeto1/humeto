@@ -41,6 +41,13 @@ export type Application = {
   submitted_at?: string;
 };
 export type Task = {
+  display_title?: string;
+  value_type?: string;
+  value_minor?: number | null;
+  value_currency?: string;
+  value_note?: string;
+  category?: string;
+  work_kind?: string;
   project_id: string;
   project_title?: string;
   completed_at: string | null;
@@ -102,6 +109,9 @@ export type Intake = {
 };
 
 export type Workstream = {
+  category?: string;
+  goal_id?: string;
+  success_metric?: string;
   id: string;
   title: string;
   description: string;

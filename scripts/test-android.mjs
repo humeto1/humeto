@@ -266,6 +266,8 @@ try {
       await cdp.click("Add task");
       await cdp.fill("input[name=title]", title);
       await cdp.fill("input[name=category]", "Personal");
+      await cdp.select("select[name=valueType]", "profit");
+      await cdp.fill("input[name=valueAmount]", "25000");
       await cdp.click("Create task");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
       const r = await nativeApi("/api/mobile");
@@ -293,6 +295,8 @@ try {
       await cdp.wait(`Boolean(document.querySelector('input[name=title]'))`);
       await cdp.fill("input[name=title]", title + " updated");
       await cdp.fill("input[name=category]", "Creative projects");
+      await cdp.select("select[name=valueType]", "avoid_loss");
+      await cdp.fill("input[name=valueAmount]", "75000");
       await cdp.evaluate(
         `document.querySelector('input[name=important]').click()`,
       );
@@ -304,6 +308,8 @@ try {
       assert.equal(t.title, title + " updated");
       assert.equal(t.important, 1);
       assert.equal(t.category, "Creative projects");
+      assert.equal(t.value_type, "avoid_loss");
+      assert.equal(t.value_minor, 7500000);
       await cdp.click("Close");
     },
   );
@@ -311,6 +317,9 @@ try {
   await check(
     "Custom category labels and category/assignment/date filters work on Android",
     async () => {
+      await cdp.evaluate(
+        `document.querySelector('.task-filter-panel summary').click()`,
+      );
       await cdp.select(
         'select[aria-label="Category filter"]',
         "Creative projects",
@@ -318,6 +327,24 @@ try {
       await cdp.wait(
         `document.querySelectorAll('.task').length===1 && document.querySelector('.task').textContent.includes('Creative projects')`,
       );
+      await cdp.select('select[aria-label="Expected impact filter"]', "profit");
+      await cdp.wait(`document.querySelectorAll('.task').length===0`);
+      await cdp.select(
+        'select[aria-label="Expected impact filter"]',
+        "avoid_loss",
+      );
+      await cdp.wait(`document.querySelectorAll('.task').length===1`);
+      await cdp.click("Calendar view");
+      await cdp.wait(
+        `document.querySelector('[aria-label="Filtered task calendar"]')?.textContent.includes('1 filtered tasks')`,
+      );
+      assert.equal(
+        await cdp.evaluate(
+          `document.querySelector('[aria-label="Category filter"]').value`,
+        ),
+        "Creative projects",
+      );
+      await cdp.click("Priority");
       await cdp.select('select[aria-label="Due date filter"]', "none");
       await cdp.wait(`document.querySelectorAll('.task').length===1`);
       await cdp.select('select[aria-label="Assignment filter"]', "unassigned");
@@ -333,10 +360,12 @@ try {
       await cdp.click("Create project or goal");
       await cdp.select("select[name=kind]", "goals");
       await cdp.fill("input[name=title]", "Android QA goal");
+      await cdp.fill("input[name=targetDate]", "2027-03-31");
       await cdp.click("Create");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
       await cdp.click("Create project or goal");
       await cdp.fill("input[name=title]", "Android QA project");
+      await cdp.fill("input[name=targetDate]", "2027-02-28");
       await cdp.click("Create");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
       const state = (await nativeApi("/api/mobile")).data;
@@ -765,6 +794,29 @@ try {
         );
         await cdp.click("Cancel");
         await cdp.wait(`document.body.innerText.includes('cancelled')`);
+        const routine = await nativeApi("/api/workspace/planning", {
+          action: "routine",
+          title: "Review pending enquiries",
+          kind: "operations",
+          frequency: "daily",
+          firstDay: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+          time: "09:00",
+          timezone: "UTC",
+        });
+        assert.equal(routine.status, 200);
+        const wording = await nativeApi("/api/workspace/planning", {
+          action: "wording-generate",
+          id: routine.data.id,
+        });
+        assert.equal(wording.status, 200, JSON.stringify(wording.data));
+        assert.equal(wording.data.model, "gpt-5.4-mini");
+        assert.ok(wording.data.variants.length >= 2);
+        const planning = (await nativeApi("/api/workspace/planning")).data;
+        assert.equal(
+          planning.routines.find((r) => r.id === routine.data.id)
+            .wording_enabled,
+          false,
+        );
       },
     );
   await check(
@@ -783,6 +835,94 @@ try {
       await cdp.click("Today");
       writeFileSync(
         join(out, "today.png"),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
+      );
+    },
+  );
+  await check(
+    "Android alert preferences configure tone/vibration channels, inspect device settings and deliver a timed test",
+    async () => {
+      await cdp.click("Reminders");
+      await cdp.wait(
+        `Boolean(document.querySelector('select[aria-label="Reminder tone"]'))`,
+      );
+      const health = await cdp.evaluate(
+        `window.Capacitor.Plugins.HumetoDevice.status()`,
+      );
+      assert.equal(health.platform, "Android");
+      assert.equal(typeof health.notificationVolume, "number");
+      await cdp.select('select[aria-label="Reminder tone"]', "bell");
+      await cdp.evaluate(
+        `(()=>{const l=[...document.querySelectorAll('label')].find(e=>e.textContent.includes('Vibrate when supported'));const e=l.querySelector('input');if(e.checked)e.click();})()`,
+      );
+      await cdp.click("Save alert preferences");
+      await cdp.wait(
+        `document.body.innerText.includes('Alert preferences saved.')`,
+      );
+      const p = (await nativeApi("/api/workspace/scheduling")).data.preferences;
+      assert.equal(p.tone, "bell");
+      assert.equal(p.vibration, false);
+      await cdp.click("Send test alert");
+      await cdp.wait(
+        `window.Capacitor.Plugins.LocalNotifications.getDeliveredNotifications().then(r=>r.notifications.some(n=>n.id===2000000001))`,
+        20000,
+      );
+      const channels = await cdp.evaluate(
+        `window.Capacitor.Plugins.LocalNotifications.listChannels()`,
+      );
+      assert.ok(
+        channels.channels.some(
+          (c) => c.id === "humeto-bell-still-v1" && c.vibration === false,
+        ),
+      );
+      await cdp.click("Close");
+    },
+  );
+  await check(
+    "Native calendar has shared goal deadlines and yearly subscription routines schedule device alerts",
+    async () => {
+      await cdp.click("Goals");
+      await cdp.wait(
+        `document.body.innerText.includes('Goals, projects & routines')`,
+      );
+      assert.ok(
+        (await nativeApi("/api/mobile")).data.goals.find(
+          (g) => g.title === "Android QA goal",
+        ).target_date,
+      );
+      await cdp.click("Routines & operations");
+      await cdp.click("Add routine");
+      await cdp.fill(
+        "form.planning-form input[name=title]",
+        "Android annual renewal",
+      );
+      await cdp.select('select[aria-label="Routine kind"]', "subscription");
+      await cdp.select('select[aria-label="Routine frequency"]', "yearly");
+      const tomorrow = new Date(Date.now() + 86400000)
+        .toISOString()
+        .slice(0, 10);
+      await cdp.fill("input[name=firstDay]", tomorrow);
+      await cdp.click("Save routine");
+      await cdp.wait(`document.body.innerText.includes('Routine saved.')`);
+      await cdp.wait(
+        `window.Capacitor.Plugins.LocalNotifications.getPending().then(r=>r.notifications.some(n=>n.body==='Android annual renewal'))`,
+      );
+      const planning = (await nativeApi("/api/workspace/planning")).data;
+      assert.ok(
+        planning.routines.some(
+          (r) =>
+            r.title === "Android annual renewal" &&
+            r.frequency === "yearly" &&
+            r.routine_kind === "subscription",
+        ),
+      );
+      await cdp.click("Calendar");
+      assert.equal(
+        await cdp.evaluate("document.documentElement.scrollWidth>innerWidth"),
+        false,
+      );
+      writeFileSync(
+        join(out, "calendar.png"),
         execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
       );
     },

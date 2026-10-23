@@ -1,7 +1,13 @@
 export type Task = {
+  display_title?: string;
+  value_type?: string;
+  value_minor?: number | null;
+  value_currency?: string;
+  value_note?: string;
   id: string;
   title: string;
   category?: string;
+  work_kind?: string;
   stage: string;
   important: number;
   urgent: number;
@@ -14,6 +20,10 @@ export type Task = {
   goals?: { id: string; title: string }[];
 };
 export type Workstream = {
+  revision: number;
+  category?: string;
+  goal_id?: string;
+  success_metric?: string;
   id: string;
   title: string;
   description: string;

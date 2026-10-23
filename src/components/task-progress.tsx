@@ -1,4 +1,5 @@
 "use client";
+import PlanningHub, { categories } from "../../shared/planning-hub";
 import { useState, useEffect } from "react";
 import {
   Target,
@@ -111,6 +112,9 @@ export default function TaskProgress({
           body: JSON.stringify({
             title: f.get("title"),
             description: f.get("description"),
+            category: f.get("category"),
+            successMetric: f.get("successMetric") || undefined,
+            goalId: f.get("goalId") || undefined,
             status: f.get("status"),
             targetDate: f.get("targetDate"),
             ...(edit.item ? { revision: edit.item.revision } : {}),
@@ -147,6 +151,13 @@ export default function TaskProgress({
     ) || [];
   return (
     <div className="task-progress">
+      <PlanningHub
+        tasks={tasks}
+        projects={projects}
+        goals={goals}
+        writable={writable}
+        refresh={refresh}
+      />
       <div className="page-heading">
         <div>
           <span className="eyebrow">SMALL STEPS. MEANINGFUL DIRECTION.</span>
@@ -243,6 +254,15 @@ export default function TaskProgress({
                     </button>
                   </div>
                   <h2>{item.title}</h2>
+                  <small>
+                    {item.category || "Uncategorized"}
+                    {item.goal_id
+                      ? " · Supports " +
+                        (goals.find((g) => g.id === item.goal_id)?.title ||
+                          "a goal")
+                      : ""}
+                  </small>
+                  {item.success_metric && <p>Outcome: {item.success_metric}</p>}
                   <p>
                     {item.description ||
                       "Add a short description when you are ready."}
@@ -588,10 +608,46 @@ export default function TaskProgress({
                 defaultValue={edit.item?.description}
               />
             </label>
+            <label>
+              Category
+              <input
+                name="category"
+                list="planning-categories"
+                maxLength={60}
+                defaultValue={
+                  edit.item?.category ||
+                  (edit.kind === "goals" ? "Personal" : "Work")
+                }
+              />
+            </label>
+            {edit.kind === "goals" ? (
+              <label>
+                Measurable outcome
+                <input
+                  name="successMetric"
+                  maxLength={500}
+                  defaultValue={edit.item?.success_metric}
+                  placeholder="Save PKR 100,000"
+                />
+              </label>
+            ) : (
+              <label>
+                Supports goal
+                <select name="goalId" defaultValue={edit.item?.goal_id || ""}>
+                  <option value="">No goal</option>
+                  {goals.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="crm-fields">
               <label>
-                Target date · optional
+                Deadline
                 <input
+                  required
                   name="targetDate"
                   type="date"
                   defaultValue={edit.item?.target_date}

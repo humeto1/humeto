@@ -1,4 +1,5 @@
 "use client";
+import AlertControls from "../../shared/alert-controls";
 import RecurrenceEditor from "./recurrence-editor";
 import { useEffect, useState, useCallback } from "react";
 import {
@@ -215,6 +216,7 @@ export default function TaskSchedules({
         </span>
       </summary>
       <div className={styles.body}>
+        <AlertControls writable={writable} onSaved={() => load(true)} />
         <div className={styles.tabs} role="tablist" aria-label="Task schedules">
           {tabs.map(([key, label, Icon]) => (
             <button
@@ -440,6 +442,7 @@ export default function TaskSchedules({
                           <option value="weekdays">Weekdays</option>
                           <option value="weekly">Weekly</option>
                           <option value="monthly">Monthly</option>
+                          <option value="yearly">Yearly</option>
                         </select>
                       </label>
                       <label>

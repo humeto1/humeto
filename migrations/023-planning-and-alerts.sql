@@ -1,0 +1,13 @@
+ALTER TABLE tasks ADD COLUMN work_kind TEXT NOT NULL DEFAULT 'one_off' CHECK(work_kind IN ('one_off','routine'));
+ALTER TABLE projects ADD COLUMN category TEXT NOT NULL DEFAULT 'Work';
+ALTER TABLE projects ADD COLUMN goal_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE goals ADD COLUMN category TEXT NOT NULL DEFAULT 'Personal';
+ALTER TABLE goals ADD COLUMN success_metric TEXT NOT NULL DEFAULT '';
+ALTER TABLE task_recurrences DROP CONSTRAINT task_recurrences_frequency_check;
+ALTER TABLE task_recurrences ADD CONSTRAINT task_recurrences_frequency_check CHECK(frequency IN ('daily','weekdays','weekly','monthly','yearly'));
+ALTER TABLE task_recurrences ADD COLUMN routine_kind TEXT NOT NULL DEFAULT 'operations' CHECK(routine_kind IN ('operations','groceries','subscription'));
+ALTER TABLE task_recurrences ADD COLUMN track_occurrences BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE task_occurrences ADD COLUMN disposition TEXT NOT NULL DEFAULT 'scheduled' CHECK(disposition IN ('scheduled','skipped'));
+ALTER TABLE task_followup_preferences ADD COLUMN tone TEXT NOT NULL DEFAULT 'chime' CHECK(tone IN ('chime','bell','silent'));
+ALTER TABLE task_followup_preferences ADD COLUMN vibration BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE task_followup_preferences ADD COLUMN precise BOOLEAN NOT NULL DEFAULT FALSE;

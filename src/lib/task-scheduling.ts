@@ -21,7 +21,7 @@ const command = z.discriminatedUnion("action", [
     action: z.literal("series-edit"),
     id: z.string().uuid(),
     revision: z.number().int().positive(),
-    frequency: z.enum(["daily", "weekdays", "weekly", "monthly"]),
+    frequency: z.enum(["daily", "weekdays", "weekly", "monthly", "yearly"]),
     interval: z.number().int().min(1).max(12),
     nextDay: day,
     time,
@@ -53,7 +53,7 @@ const command = z.discriminatedUnion("action", [
     action: z.literal("series"),
     taskId: z.string().min(1).max(100),
     taskRevision: z.number().int().positive(),
-    frequency: z.enum(["daily", "weekdays", "weekly", "monthly"]),
+    frequency: z.enum(["daily", "weekdays", "weekly", "monthly", "yearly"]),
     interval: z.number().int().min(1).max(12),
     firstDay: day,
     time,
@@ -149,6 +149,7 @@ export async function schedulingRead(a: Actor, summary = false) {
     .all(a.tenantId, a.id);
   return NextResponse.json(
     {
+      actorKey: a.tenantId + ":" + a.id,
       seriesEvents,
       preferences: prefs,
       reminders,
@@ -379,7 +380,9 @@ export async function schedulingWrite(a: Actor, body: unknown) {
             409,
           );
         await d
-          .prepare("INSERT INTO task_occurrences(series_id,day) VALUES(?,?)")
+          .prepare(
+            "INSERT INTO task_occurrences(series_id,day,disposition) VALUES(?,?,'skipped')",
+          )
           .run(s.id, s.next_day);
         await d
           .prepare(
@@ -400,6 +403,36 @@ export async function schedulingWrite(a: Actor, body: unknown) {
             JSON.stringify({ timezone: s.timezone, frequency: s.frequency }),
           );
       } else {
+        // Pausing a routine means those days were intentionally not scheduled.
+        // On resume retain explicit skipped-day evidence instead of manufacturing missed work.
+        if (
+          s.track_occurrences &&
+          s.status === "paused" &&
+          v.status === "active"
+        ) {
+          let next = s.next_day as string;
+          const today = localDay(new Date(), s.timezone as string);
+          for (
+            let i = 0;
+            i < 5000 && next < today && (!s.end_day || next <= s.end_day);
+            i++
+          ) {
+            await d
+              .prepare(
+                "INSERT INTO task_occurrences(series_id,day,disposition) VALUES(?,?,'skipped') ON CONFLICT DO NOTHING",
+              )
+              .run(s.id, next);
+            next = nextDay(
+              next,
+              s.frequency,
+              s.interval_count,
+              Number((s.first_day as string).slice(8)),
+            );
+          }
+          await d
+            .prepare("UPDATE task_recurrences SET next_day=? WHERE id=?")
+            .run(next, s.id);
+        }
         await d
           .prepare(
             "UPDATE task_recurrences SET status=?,revision=revision+1 WHERE id=?",

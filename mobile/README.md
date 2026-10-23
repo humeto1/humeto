@@ -56,3 +56,9 @@ From the repository root, run `npm run test:android` after the Next.js build. It
 The QA build alone allows HTTP to the emulator host `10.0.2.2`; normal builds retain the fixed HTTPS production API and disallow cleartext. The runner restores production assets and rebuilds the normal APK in its cleanup. Logs/screenshots are ignored under `.data/android-acceptance/`. A failed fixture is retained locally for investigation; successful fixtures are dropped.
 
 The October 23 run passed 20 native checks on Android 14 / API 34, including delivered device notifications and a 100-task view. Physical devices and other Android versions still need acceptance testing.
+
+## 0.2.0
+
+The launcher icon now matches the logo's tilted serif h. Run `node scripts/render-mobile-icons.mjs` from the repository root to reproduce Android and iOS source icon assets.
+
+Shared task Calendar, project/goal/area/impact filters, goal deadlines, tracked Operations/Groceries/Subscription routines and weekly missed/done review are documented in [TASK_PLANNING](../docs/TASK_PLANNING.md). Operations can rotate reviewed AI wording without renaming the permanent task identity. Sounds/permissions are under the bell → Sounds, vibration & timing. The test alert fires ten seconds later. Remote push, continuous alarm ringing and iPhone testing remain outside this release.

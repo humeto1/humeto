@@ -25,3 +25,6 @@ mobile/releases/
 mobile/**/*.jks
 mobile/**/*.keystore
 mobile/android/app/release/
+
+# Finder metadata
+**/.DS_Store

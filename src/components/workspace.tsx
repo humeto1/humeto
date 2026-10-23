@@ -88,6 +88,14 @@ import { sections, destinations } from "@/lib/sections";
 import RequestCenter from "./request-center";
 import type { RequestRow } from "@/lib/request-workflow";
 import CrmAssistant from "./crm-assistant";
+import { categories as taskCategories } from "../../shared/planning-hub";
+import {
+  TaskValueFields,
+  TaskValueBadge,
+  valuePayload,
+} from "../../shared/task-value";
+import TaskCalendar from "../../shared/task-calendar";
+import AlertControls from "../../shared/alert-controls";
 import TaskProgress from "./task-progress";
 import TaskLinks from "./task-links";
 import type { Workstream } from "@/lib/types";
@@ -284,6 +292,13 @@ export default function Workspace({
     [toast, setToast] = useState(""),
     [mobileNav, setMobileNav] = useState(false),
     [taskView, setTaskView] = useState("board"),
+    [taskImpact, setTaskImpact] = useState("all"),
+    [taskProject, setTaskProject] = useState("all"),
+    [taskGoal, setTaskGoal] = useState("all"),
+    [taskCategory, setTaskCategory] = useState("all"),
+    [taskNature, setTaskNature] = useState("all"),
+    [taskDateFilter, setTaskDateFilter] = useState("all"),
+    [taskOwnerFilter, setTaskOwnerFilter] = useState("all"),
     [peopleView, setPeopleView] = useState("board"),
     [appsView, setAppsView] = useState("board"),
     [journey, setJourney] = useState<string>(
@@ -524,10 +539,54 @@ export default function Workspace({
       .includes(search.toLowerCase()),
   );
   const [focusOnly, setFocusOnly] = useState(false);
-  const filteredTasks = data.tasks.filter((t) =>
-    (t.title + " " + t.person_name + " " + t.assignee + " " + quadrant(t))
-      .toLowerCase()
-      .includes(search.toLowerCase()),
+  const todayTaskDate = new Date().toLocaleDateString("en-CA");
+  const filteredTasks = data.tasks.filter(
+    (t) =>
+      (taskImpact === "all" || (t.value_type || "none") === taskImpact) &&
+      (taskProject === "all" ||
+        (taskProject === "none"
+          ? !t.project_id
+          : t.project_id === taskProject)) &&
+      (taskGoal === "all" ||
+        (taskGoal === "none"
+          ? !t.goals?.length
+          : t.goals?.some((g) => g.id === taskGoal))) &&
+      (taskCategory === "all" ||
+        (taskCategory === "none"
+          ? !t.category
+          : t.category === taskCategory)) &&
+      (taskNature === "all" || (t.work_kind || "one_off") === taskNature) &&
+      (taskDateFilter === "all" ||
+        (taskDateFilter === "today"
+          ? t.due_date === todayTaskDate
+          : taskDateFilter === "none"
+            ? !t.due_date
+            : !!t.due_date &&
+              t.due_date < todayTaskDate &&
+              t.stage !== "Done")) &&
+      (taskOwnerFilter === "all" ||
+        (taskOwnerFilter === "mine"
+          ? t.assignee === actor.name
+          : !t.assignee)) &&
+      (
+        (t.display_title || "") +
+        " " +
+        t.title +
+        " " +
+        t.project_title +
+        " " +
+        (t.goals || []).map((g) => g.title).join(" ") +
+        " " +
+        t.person_name +
+        " " +
+        t.assignee +
+        " " +
+        t.category +
+        " " +
+        quadrant(t)
+      )
+        .toLowerCase()
+        .includes(search.toLowerCase()),
   );
   const filteredApps = data.applications.filter((a) =>
     (
@@ -757,9 +816,17 @@ export default function Workspace({
           onClick={() => showModal("task-details:" + t.id)}
           aria-label={`Open task: ${t.title}`}
         >
-          <strong>{t.title}</strong>
+          <strong>{t.display_title || t.title}</strong>
+          {t.display_title && <small>Original: {t.title}</small>}
+          <TaskValueBadge task={t} />
           <span className="compact-task-context">
             {t.project_title || t.person_name || "Team task"}
+            {t.category && " · " + t.category}
+            {t.work_kind === "routine" && " · Routine"}
+            {t.due_date &&
+              t.due_date < todayTaskDate &&
+              t.stage !== "Done" &&
+              " · Overdue"}
           </span>
           <span className="compact-task-bottom">
             <span>
@@ -801,7 +868,7 @@ export default function Workspace({
           </Badge>
           <span>•••</span>
         </div>
-        <h3>{t.title}</h3>
+        <h3>{t.display_title || t.title}</h3>
         <p>{t.person_name || "Team task"}</p>
         {staff && (
           <div className="task-assignment-actions">
@@ -1094,6 +1161,16 @@ export default function Workspace({
             now={entitlementNow}
           />
         )}
+        <datalist id="web-task-categories">
+          {[
+            ...new Set([
+              ...taskCategories,
+              ...data.tasks.map((t) => t.category || "").filter(Boolean),
+            ]),
+          ].map((c) => (
+            <option key={c}>{c}</option>
+          ))}
+        </datalist>
         <header className="app-topbar">
           <button
             className="icon-btn mobile-menu"
@@ -1454,7 +1531,7 @@ export default function Workspace({
                           >
                             <span className="task-checkbox" />
                             <span>
-                              <strong>{t.title}</strong>
+                              <strong>{t.display_title || t.title}</strong>
                               <small>
                                 {t.person_name} · {dateLabel(t.due_date)}
                               </small>
@@ -1970,6 +2047,7 @@ export default function Workspace({
                       ["board", "Board", Columns3],
                       ["matrix", "Priority matrix", Grid2X2],
                       ["list", "List", List],
+                      ["calendar", "Calendar", Calendar],
                     ].map(([key, label, Icon]) => {
                       const I = Icon as LucideIcon;
                       return (
@@ -1989,7 +2067,150 @@ export default function Workspace({
                     independent
                   </span>
                 </div>
-                {taskView === "board" ? (
+                <details className="task-filter-panel">
+                  <summary>
+                    Filters ·{" "}
+                    {
+                      [
+                        taskImpact,
+                        taskProject,
+                        taskGoal,
+                        taskCategory,
+                        taskNature,
+                        taskDateFilter,
+                        taskOwnerFilter,
+                      ].filter((v) => v !== "all").length
+                    }{" "}
+                    active
+                  </summary>
+                  <div
+                    className="filter-bar"
+                    style={{ flexWrap: "wrap", gap: 12 }}
+                  >
+                    <label>
+                      Expected impact
+                      <select
+                        aria-label="Task impact filter"
+                        value={taskImpact}
+                        onChange={(e) => setTaskImpact(e.target.value)}
+                      >
+                        <option value="all">Any impact</option>
+                        <option value="profit">Potential profit</option>
+                        <option value="avoid_loss">Avoid loss</option>
+                        <option value="none">No estimate</option>
+                      </select>
+                    </label>
+                    <label>
+                      Project
+                      <select
+                        aria-label="Task project filter"
+                        value={taskProject}
+                        onChange={(e) => setTaskProject(e.target.value)}
+                      >
+                        <option value="all">All projects</option>
+                        <option value="none">No project</option>
+                        {data.projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Goal
+                      <select
+                        aria-label="Task goal filter"
+                        value={taskGoal}
+                        onChange={(e) => setTaskGoal(e.target.value)}
+                      >
+                        <option value="all">All goals</option>
+                        <option value="none">No goal</option>
+                        {data.goals.map((g) => (
+                          <option key={g.id} value={g.id}>
+                            {g.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Category
+                      <select
+                        aria-label="Task category filter"
+                        value={taskCategory}
+                        onChange={(e) => setTaskCategory(e.target.value)}
+                      >
+                        <option value="all">All categories</option>
+                        <option value="none">Uncategorized</option>
+                        {[
+                          ...new Set([
+                            ...taskCategories,
+                            ...data.tasks
+                              .map((t) => t.category || "")
+                              .filter(Boolean),
+                          ]),
+                        ]
+                          .sort()
+                          .map((c) => (
+                            <option key={c}>{c}</option>
+                          ))}
+                      </select>
+                    </label>
+                    <label>
+                      Task type
+                      <select
+                        value={taskNature}
+                        onChange={(e) => setTaskNature(e.target.value)}
+                      >
+                        <option value="all">All work</option>
+                        <option value="one_off">One-off tasks</option>
+                        <option value="routine">Routine occurrences</option>
+                      </select>
+                    </label>
+                    <label>
+                      Due date
+                      <select
+                        value={taskDateFilter}
+                        onChange={(e) => setTaskDateFilter(e.target.value)}
+                      >
+                        <option value="all">Any date</option>
+                        <option value="today">Today</option>
+                        <option value="overdue">Overdue</option>
+                        <option value="none">No due date</option>
+                      </select>
+                    </label>
+                    <label>
+                      Assignment
+                      <select
+                        value={taskOwnerFilter}
+                        onChange={(e) => setTaskOwnerFilter(e.target.value)}
+                      >
+                        <option value="all">Everyone</option>
+                        <option value="mine">Assigned to me</option>
+                        <option value="none">Unassigned</option>
+                      </select>
+                    </label>
+                    <button
+                      className="btn secondary"
+                      onClick={() => {
+                        setTaskImpact("all");
+                        setTaskProject("all");
+                        setTaskGoal("all");
+                        setTaskCategory("all");
+                        setTaskNature("all");
+                        setTaskDateFilter("all");
+                        setTaskOwnerFilter("all");
+                      }}
+                    >
+                      Clear task filters
+                    </button>
+                  </div>
+                </details>
+                {taskView === "calendar" ? (
+                  <TaskCalendar
+                    tasks={filteredTasks}
+                    openTask={(t) => showModal("task-details:" + t.id)}
+                  />
+                ) : taskView === "board" ? (
                   <div className="kanban-board">
                     {taskStageKeys.map((s) => (
                       <section
@@ -2119,8 +2340,16 @@ export default function Workspace({
                     {filteredTasks.map((t) => (
                       <div className="task-list-row" key={t.id}>
                         <span>
-                          {t.title}
-                          <small>{t.person_name || "Team task"}</small>
+                          {t.display_title || t.title}
+                          {t.display_title && (
+                            <small>Original: {t.title}</small>
+                          )}
+                          <small>
+                            {t.person_name || "Team task"}
+                            {t.category ? " · " + t.category : ""}
+                            {t.work_kind === "routine" ? " · Routine" : ""}
+                          </small>
+                          <TaskValueBadge task={t} />
                         </span>
                         <Badge>{quadrant(t)}</Badge>
                         <span>{dateLabel(t.due_date)}</span>
@@ -2215,11 +2444,14 @@ export default function Workspace({
             />
           )}
           {view === "notifications" && (
-            <Announcements
-              key={`announcement-center:${actor.tenantId}:${actor.id}:${actor.role}`}
-              actor={actor}
-              center
-            />
+            <>
+              {staff && <AlertControls writable={writable} />}
+              <Announcements
+                key={`announcement-center:${actor.tenantId}:${actor.id}:${actor.role}`}
+                actor={actor}
+                center
+              />
+            </>
           )}
           {view === "settings" && (
             <>
@@ -3064,7 +3296,9 @@ export default function Workspace({
                       "tasks",
                       "POST",
                       {
+                        ...valuePayload(f),
                         title: f.get("title"),
+                        category: f.get("category") || "",
                         projectId: f.get("projectId"),
                         goalIds: f.getAll("goalIds"),
                         personId: f.get("personId"),
@@ -3081,6 +3315,16 @@ export default function Workspace({
                     Task title
                     <input name="title" required minLength={2} />
                   </label>
+                  <label>
+                    Category
+                    <input
+                      name="category"
+                      list="web-task-categories"
+                      maxLength={60}
+                      placeholder="Choose or type your own"
+                    />
+                  </label>
+                  <TaskValueFields />
                   <label>
                     Applicant
                     <select name="personId">
@@ -3149,7 +3393,8 @@ export default function Workspace({
                   t && (
                     <>
                       <span className="eyebrow">MAKE THE PRIORITY CLEAR</span>
-                      <h2 id="modal-title">{t.title}</h2>
+                      <h2 id="modal-title">{t.display_title || t.title}</h2>
+                      {t.display_title && <p>Original: {t.title}</p>}
                       <form
                         onSubmit={async (e) => {
                           e.preventDefault();
@@ -3158,7 +3403,9 @@ export default function Workspace({
                             "tasks/" + t.id,
                             "PATCH",
                             {
+                              ...valuePayload(f),
                               stage: t.stage,
+                              category: f.get("category") || "",
                               revision: t.revision,
                               important: f.get("important") === "on",
                               urgent: f.get("urgent") === "on",
@@ -3167,6 +3414,16 @@ export default function Workspace({
                           );
                         }}
                       >
+                        <label>
+                          Category
+                          <input
+                            name="category"
+                            list="web-task-categories"
+                            maxLength={60}
+                            defaultValue={t.category || ""}
+                          />
+                        </label>
+                        <TaskValueFields task={t} />
                         <div className="checkbox-options">
                           <label>
                             <input

@@ -1,3 +1,4 @@
+import { runTaskScheduler } from "@/lib/task-scheduler.mjs";
 import { actor, isStaff, canMutate } from "@/lib/auth";
 import { hasFeature } from "@/lib/feature-guard";
 import { tasks, subscription } from "@/lib/repository";
@@ -21,6 +22,13 @@ export async function GET() {
       { error: "Tasks is not included in your workspace access." },
       { status: 403 },
     );
+  await runTaskScheduler({
+    d: db(),
+    tenantId: a.tenantId,
+    userId: a.id,
+    routineOnly: true,
+    heartbeat: false,
+  });
   const [taskRows, projects, goals, members, sub, pipelines, writable] =
     await Promise.all([
       tasks(a),

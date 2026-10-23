@@ -1,3 +1,6 @@
+import { wordingWrite } from "@/lib/routine-wording";
+import { impactFields, impactValues } from "@/lib/task-value";
+import { planningRead, planningWrite } from "@/lib/planning";
 import { industryKeys, legacyIndustryKeys } from "@/lib/industries.mjs";
 import { voucherRead, voucherWrite } from "@/lib/vouchers";
 import { hasFeature, requestFeature } from "@/lib/feature-guard";
@@ -76,6 +79,7 @@ const string = z.string().trim().max(500),
 async function handle(req: Request, parts: string[], a: Actor) {
   const [resource, rid, action] = parts;
   if (req.method === "GET") {
+    if (resource === "planning") return planningRead(req, a);
     if (resource === "vouchers") return voucherRead(a);
     if (resource === "reading") return readingRead(req, parts, a);
     if (resource === "finance")
@@ -605,6 +609,15 @@ async function handle(req: Request, parts: string[], a: Actor) {
         "Your activation request is saved for the platform administrator. No payment has been taken.",
     });
   }
+  if (
+    resource === "planning" &&
+    req.method === "POST" &&
+    typeof body.action === "string" &&
+    body.action.startsWith("wording-")
+  )
+    return wordingWrite(a, body);
+  if (resource === "planning" && req.method === "POST")
+    return planningWrite(a, body);
   if (resource === "reading" && req.method === "POST")
     return readingWrite(a, body);
   if (resource === "finance" && req.method === "POST")
@@ -1044,6 +1057,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail("Task management is not permitted.", 403);
     const input = z
       .object({
+        ...impactFields,
         title: string.min(2).max(200),
         category: z.string().trim().max(60).default(""),
         personId: optionalString,
@@ -1076,7 +1090,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       const tid = id();
       await db()
         .prepare(
-          "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category,value_type,value_minor,value_currency,value_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .run(
           tid,
@@ -1090,6 +1104,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           a.id,
           input.projectId,
           input.category,
+          ...impactValues(input),
         );
       for (const gid of goalIds)
         await db()
@@ -1106,6 +1121,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail("Task management is not permitted.", 403);
     const input = z
       .object({
+        ...impactFields,
         stage: z.string().min(1).max(100),
         revision: z.number().int().positive(),
         title: z.string().trim().min(2).max(200).optional(),
@@ -1122,6 +1138,10 @@ async function handle(req: Request, parts: string[], a: Actor) {
       .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=?")
       .get(rid, a.tenantId)) as
       | {
+          value_type: string;
+          value_minor: number | null;
+          value_currency: string;
+          value_note: string;
           title: string;
           category: string;
           due_date: string;
@@ -1142,12 +1162,13 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail("Choose a team member from this workspace.", 400);
     const result = await db()
       .prepare(
-        "UPDATE tasks SET stage=?,title=?,category=?,due_date=?,assignee=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+        "UPDATE tasks SET stage=?,title=?,category=?,value_type=?,value_minor=?,value_currency=?,value_note=?,due_date=?,assignee=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
       )
       .run(
         input.stage,
         input.title ?? task.title,
         input.category ?? task.category,
+        ...impactValues(input, task),
         input.dueDate ?? task.due_date,
         input.assignee ?? task.assignee,
         input.important === undefined
