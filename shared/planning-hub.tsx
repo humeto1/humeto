@@ -1,4 +1,5 @@
 "use client";
+import { TaskDetailGroup } from "./task-detail-group";
 import { PlanFinancial } from "./plan-financial";
 import { PlanTeam } from "./plan-team";
 import { nextDay } from "../src/lib/scheduling-clock.mjs";
@@ -367,30 +368,6 @@ export default function PlanningHub({
                 />
               </label>
               <label>
-                Routine type
-                <select
-                  aria-label="Routine kind"
-                  value={routineKind}
-                  onChange={(e) => setRoutineKind(e.target.value)}
-                >
-                  <option value="operations">Operations / daily routine</option>
-                  <option value="groceries">Groceries / replenishment</option>
-                  <option value="subscription">Subscription / renewal</option>
-                </select>
-              </label>
-              <label>
-                Life / work category
-                <input
-                  name="category"
-                  list="planning-categories"
-                  defaultValue={
-                    routineKind === "operations" ? "Work" : "Personal"
-                  }
-                  key={routineKind}
-                  maxLength={60}
-                />
-              </label>
-              <label>
                 Repeats
                 <select
                   aria-label="Routine frequency"
@@ -408,17 +385,6 @@ export default function PlanningHub({
                 </select>
               </label>
               <label>
-                Every
-                <input
-                  type="number"
-                  name="interval"
-                  min={1}
-                  max={12}
-                  defaultValue={1}
-                  required
-                />
-              </label>
-              <label>
                 First occurrence
                 <input
                   type="date"
@@ -428,35 +394,82 @@ export default function PlanningHub({
                   required
                 />
               </label>
-              <label>
-                Reminder time ({zone})
-                <input type="time" name="time" defaultValue="09:00" required />
-              </label>
-              <label>
-                Project
-                <select name="projectId">
-                  <option value="">No project</option>
-                  {projects
-                    .filter((p) => p.status !== "Archived")
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.title}
-                      </option>
+              <TaskDetailGroup
+                title="More options"
+                hint="Reminder time, category, team links & value"
+              >
+                <label>
+                  Routine type
+                  <select
+                    aria-label="Routine kind"
+                    value={routineKind}
+                    onChange={(e) => setRoutineKind(e.target.value)}
+                  >
+                    <option value="operations">
+                      Operations / daily routine
+                    </option>
+                    <option value="groceries">Groceries / replenishment</option>
+                    <option value="subscription">Subscription / renewal</option>
+                  </select>
+                </label>
+                <label>
+                  Life / work category
+                  <input
+                    name="category"
+                    list="planning-categories"
+                    defaultValue={
+                      routineKind === "operations" ? "Work" : "Personal"
+                    }
+                    key={routineKind}
+                    maxLength={60}
+                  />
+                </label>
+                <label>
+                  Every
+                  <input
+                    type="number"
+                    name="interval"
+                    min={1}
+                    max={12}
+                    defaultValue={1}
+                    required
+                  />
+                </label>
+                <label>
+                  Reminder time ({zone})
+                  <input
+                    type="time"
+                    name="time"
+                    defaultValue="09:00"
+                    required
+                  />
+                </label>
+                <label>
+                  Project
+                  <select name="projectId">
+                    <option value="">No project</option>
+                    {projects
+                      .filter((p) => p.status !== "Archived")
+                      .map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.title}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <fieldset>
+                  <legend>Supports goals</legend>
+                  {goals
+                    .filter((g) => g.status !== "Archived")
+                    .map((g) => (
+                      <label className="planning-check" key={g.id}>
+                        <input type="checkbox" name="goalIds" value={g.id} />
+                        {g.title}
+                      </label>
                     ))}
-                </select>
-              </label>
-              <fieldset>
-                <legend>Supports goals</legend>
-                {goals
-                  .filter((g) => g.status !== "Archived")
-                  .map((g) => (
-                    <label className="planning-check" key={g.id}>
-                      <input type="checkbox" name="goalIds" value={g.id} />
-                      {g.title}
-                    </label>
-                  ))}
-              </fieldset>
-              <TaskValueFields />
+                </fieldset>
+                <TaskValueFields />
+              </TaskDetailGroup>
               <button disabled={busy || !writable}>Save routine</button>
               <button
                 type="button"
@@ -492,122 +505,152 @@ export default function PlanningHub({
           <h3>
             Weekly routine review · {report?.week} – {report?.weekEnd}
           </h3>
-          <div className="routine-stats">
-            {["done", "missed", "pending", "upcoming", "skipped"].map((s) => (
-              <div key={s}>
-                <strong>{counter(s)}</strong>
-                <small>{s}</small>
-              </div>
-            ))}
-          </div>
-          <p>
-            Missed means a past scheduled day is still not marked done. Today
-            stays pending. Skipped days are separate. Late completion changes a
-            missed occurrence to done; its original due date remains.
+          <p className="routine-week-summary">
+            {counter("done")} done · {counter("missed")} missed
           </p>
-          {occurrences.map((o: any) => (
-            <div
-              className={"planning-row occurrence-" + o.state}
-              key={o.series_id + o.day}
-            >
-              <div>
-                <strong>{o.title}</strong>
-                <small>
-                  {o.day} · {o.routine_kind} · {o.state}
-                </small>
-              </div>
-              {o.task_id && o.state !== "done" && o.state !== "skipped" && (
-                <button
-                  disabled={busy || !writable}
-                  onClick={() =>
-                    void run(async () => {
-                      await request(
-                        "/api/workspace/tasks/" + o.task_id,
-                        { stage: "Done", revision: o.task_revision },
-                        "PATCH",
-                      );
-                    })
-                  }
-                >
-                  Mark done
-                </button>
-              )}
-            </div>
-          ))}
-          {!occurrences.length && <p>No expected occurrences for this week.</p>}
-          <h3>Your repeating plans</h3>
+          {!routines.length && (
+            <p>No routines yet. Add a repeating task to start your week.</p>
+          )}
           {routines.map((r: any) => (
-            <div className="planning-row" key={r.id}>
+            <div className="planning-row routine-plan" key={r.id}>
               <div>
                 <strong>{r.title}</strong>
                 <small>
-                  {r.routine_kind} · every {r.interval_count} {r.frequency} ·{" "}
-                  {r.status} · next {r.next_day}
+                  {r.frequency} ·{" "}
+                  {r.status === "active" ? "Next " + r.next_day : r.status}
                 </small>
-                <PlanFinancial
-                  type="routine"
-                  id={r.id}
-                  request={request}
-                  writable={writable}
-                />
-                <PlanTeam
-                  type="routine"
-                  id={r.id}
-                  request={request}
-                  writable={writable}
-                />
-                {r.routine_kind === "operations" && (
-                  <RoutineWording
-                    routine={r}
+                <div
+                  className="routine-week-grid"
+                  aria-label={`Weekly tracker for ${r.title}`}
+                >
+                  {Array.from({ length: 7 }, (_, i) => {
+                    const date = plus(report?.week || week, i);
+                    const occurrence = occurrences.find(
+                      (o: any) => o.series_id === r.id && o.day === date,
+                    );
+                    const state = occurrence?.state || "unscheduled";
+                    const label =
+                      state === "done"
+                        ? "Done"
+                        : state === "missed"
+                          ? "Missed"
+                          : state === "pending"
+                            ? "To do"
+                            : state === "upcoming"
+                              ? "Next"
+                              : state === "skipped"
+                                ? "Skipped"
+                                : "—";
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        className={"routine-day routine-day-" + state}
+                        aria-label={`${r.title}, ${date}: ${label}`}
+                        title={date + ": " + label}
+                        disabled={
+                          busy ||
+                          !writable ||
+                          !occurrence?.task_id ||
+                          ["done", "skipped", "upcoming"].includes(state)
+                        }
+                        onClick={() =>
+                          void run(async () => {
+                            await request(
+                              "/api/workspace/tasks/" + occurrence.task_id,
+                              {
+                                stage: "Done",
+                                revision: occurrence.task_revision,
+                              },
+                              "PATCH",
+                            );
+                          })
+                        }
+                      >
+                        <span>
+                          {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i]}
+                        </span>
+                        <strong>
+                          {state === "done"
+                            ? "✓"
+                            : state === "missed"
+                              ? "×"
+                              : state === "pending"
+                                ? "○"
+                                : "·"}
+                        </strong>
+                        <small>{label}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+                <TaskDetailGroup
+                  title="Routine settings"
+                  hint="Team, reminders & extras"
+                >
+                  <PlanFinancial
+                    type="routine"
+                    id={r.id}
                     request={request}
                     writable={writable}
-                    refresh={load}
-                    history={report?.occurrences || []}
                   />
-                )}
-              </div>
-              <div>
-                <button
-                  disabled={
-                    busy ||
-                    !writable ||
-                    ["ended", "cancelled"].includes(r.status)
-                  }
-                  onClick={() =>
-                    void run(async () => {
-                      await request("/api/workspace/scheduling", {
-                        action: "series-state",
-                        id: r.id,
-                        revision: r.revision,
-                        status: r.status === "active" ? "paused" : "active",
-                      });
-                    })
-                  }
-                >
-                  {r.status === "active" ? "Pause" : "Resume"}
-                </button>
-                <button
-                  disabled={busy || !writable || r.status !== "active"}
-                  onClick={() =>
-                    void run(async () => {
-                      await request("/api/workspace/scheduling", {
-                        action: "series-skip",
-                        id: r.id,
-                        revision: r.revision,
-                      });
-                    })
-                  }
-                >
-                  Skip next
-                </button>
+                  <PlanTeam
+                    type="routine"
+                    id={r.id}
+                    request={request}
+                    writable={writable}
+                  />
+                  {r.routine_kind === "operations" && (
+                    <RoutineWording
+                      routine={r}
+                      request={request}
+                      writable={writable}
+                      refresh={load}
+                      history={report?.occurrences || []}
+                    />
+                  )}
+                  <div className="routine-setting-actions">
+                    <button
+                      disabled={
+                        busy ||
+                        !writable ||
+                        ["ended", "cancelled"].includes(r.status)
+                      }
+                      onClick={() =>
+                        void run(async () => {
+                          await request("/api/workspace/scheduling", {
+                            action: "series-state",
+                            id: r.id,
+                            revision: r.revision,
+                            status: r.status === "active" ? "paused" : "active",
+                          });
+                        })
+                      }
+                    >
+                      {r.status === "active" ? "Pause" : "Resume"}
+                    </button>
+                    <button
+                      disabled={busy || !writable || r.status !== "active"}
+                      onClick={() =>
+                        void run(async () => {
+                          await request("/api/workspace/scheduling", {
+                            action: "series-skip",
+                            id: r.id,
+                            revision: r.revision,
+                          });
+                        })
+                      }
+                    >
+                      Skip next
+                    </button>
+                  </div>
+                </TaskDetailGroup>
               </div>
             </div>
           ))}
           <p>
-            New occurrences are generated while Humeto is opened, or by the
-            background scheduler when running. Recurrence is based on calendar
-            dates, not on completing the previous occurrence. Subscriptions are
-            reminders; Humeto does not charge or renew payments.
+            Each scheduled day keeps its own record. Complete today; the next
+            occurrence stays scheduled.
           </p>
         </>
       ) : null}

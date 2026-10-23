@@ -52,3 +52,5 @@ Task details now put essentials first, with expandable Team & plans, Reminders &
 
 ### Keyboard-safe chat (0.2.5 / Android version code 7)
 The chat message list now takes the remaining visible screen height and scrolls independently. The composer stays in the layout above the keyboard, and bottom navigation temporarily hides when the keyboard reduces the viewport. Closing the keyboard restores navigation and preserves the draft. Android explicitly requests window resize for the keyboard; the shared visual-viewport hook also handles mobile browsers. Mobile web chat uses the same viewport behavior while typing. No backend or account changes.
+
+0.2.6 / version code 8: clearer Move grip with 44px touch target; drag to a column or the destination tray that appears above navigation. Priority tray includes all four quadrants. Routine cards now show a compact weekly completion/missed tracker; optional setup and controls are collapsed. Same routine UI and drag behavior are shared with mobile web.

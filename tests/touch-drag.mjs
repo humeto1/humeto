@@ -9,7 +9,7 @@ assert.equal(
   "Touch QA requires the disposable release harness",
 );
 const base = process.env.HUMETO_TEST_URL;
-test("phone touch gestures persist stages and priority, auto-scroll boards and cancel safely", async () => {
+test("phone touch gestures persist stages and priority, reach off-screen destinations and cancel safely", async () => {
   const browser = await chromium.launch(),
     context = await browser.newContext({
       baseURL: base,
@@ -58,23 +58,12 @@ test("phone touch gestures persist stages and priority, auto-scroll boards and c
     await page.goto(base + "/workspace/tasks");
     await page.getByRole("button", { name: "Board", exact: true }).click();
     const before = await read();
-    const source = await hold();
-    const board = await page.locator(".kanban-board").boundingBox();
-    await touch(
-      "touchMove",
-      Math.min(380, board.x + board.width - 8),
-      source.y + 18,
+    await hold();
+    const target = page.locator(
+      '.touch-drop-tray [data-touch-drop="stage:In progress"]',
     );
-    await page.waitForFunction(
-      () => document.querySelector(".kanban-board").scrollLeft > 60,
-    );
-    const target = page.locator('[data-touch-drop="stage:In progress"]');
     const b = await target.boundingBox();
-    await touch(
-      "touchMove",
-      Math.min(345, Math.max(40, b.x + b.width / 2)),
-      Math.max(90, Math.min(650, source.y + 18)),
-    );
+    await touch("touchMove", b.x + b.width / 2, b.y + b.height / 2);
     await page.waitForTimeout(70);
     await touch("touchEnd");
     await page.waitForFunction(
@@ -100,14 +89,11 @@ test("phone touch gestures persist stages and priority, auto-scroll boards and c
       .getByRole("button", { name: "Priority matrix", exact: true })
       .click();
     const grip = await hold();
-    const schedule = page.locator('[data-touch-drop="priority:Schedule"]');
-    await schedule.scrollIntoViewIfNeeded();
-    const s = await schedule.boundingBox();
-    await touch(
-      "touchMove",
-      Math.min(350, s.x + s.width / 2),
-      Math.max(90, Math.min(650, s.y + 60)),
+    const schedule = page.locator(
+      '.touch-drop-tray [data-touch-drop="priority:Schedule"]',
     );
+    const s = await schedule.boundingBox();
+    await touch("touchMove", s.x + s.width / 2, s.y + s.height / 2);
     await page.waitForTimeout(70);
     await touch("touchEnd");
     for (let i = 0; i < 40 && (await read()).urgent; i++)

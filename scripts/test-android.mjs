@@ -373,46 +373,41 @@ try {
               ? []
               : [{ x: p.x, y: p.y, id: 1, radiusX: 3, radiusY: 3 }],
         });
-      let start = await point(gripSelector);
-      await touch("touchStart", start);
-      await cdp.wait("!!document.querySelector('.touch-drag-ghost')");
-      const edge = await cdp.evaluate(
-        `(()=>{const r=document.querySelector('.board').getBoundingClientRect();return {x:Math.min(innerWidth-8,r.right-8),y:${start.y}};})()`,
-      );
-      await touch("touchMove", edge);
-      await cdp.wait("document.querySelector('.board').scrollLeft>70");
-      let destination = await cdp.evaluate(
-        `(()=>{const r=document.querySelector('[data-touch-drop="stage:In progress"]').getBoundingClientRect();return {x:Math.max(30,Math.min(innerWidth-55,r.x+r.width/2)),y:${start.y}};})()`,
-      );
-      await touch("touchMove", destination);
-      await new Promise((r) => setTimeout(r, 90));
-      await touch("touchEnd");
+      async function dragTo(zone) {
+        const start = await point(gripSelector);
+        await touch("touchStart", start);
+        // Real users often start moving immediately, rather than holding still.
+        await touch("touchMove", { x: start.x + 8, y: start.y });
+        await cdp.wait("!!document.querySelector('.touch-drop-tray')");
+        const dest = await point(
+          '.touch-drop-tray [data-touch-drop="' + zone + '"]',
+        );
+        await touch("touchMove", dest);
+        await cdp.wait(
+          `document.querySelector('.touch-drop-tray .touch-drop-over')?.dataset.touchDrop === ${JSON.stringify(zone)}`,
+        );
+        await touch("touchEnd");
+        await cdp.wait(
+          "!document.querySelector('.touch-drop-tray') && !document.querySelector('.touch-drag-ghost')",
+        );
+      }
+      await dragTo("stage:In progress");
       await cdp.wait(
         `document.querySelector('[data-touch-drop="stage:In progress"]')?.textContent.includes(${JSON.stringify(title + " updated")})`,
       );
-      let task = (await nativeApi("/api/mobile")).data.tasks.find(
-        (t) => t.id === taskId,
-      );
-      assert.equal(task.stage, "In progress");
       await cdp.click("Priority");
-      start = await point(gripSelector);
-      await touch("touchStart", start);
-      await cdp.wait("!!document.querySelector('.touch-drag-ghost')");
-      destination = await cdp.evaluate(
-        `(()=>{const e=document.querySelector('[data-touch-drop="priority:0"]');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:Math.min(innerWidth-40,r.x+r.width/2),y:Math.max(100,Math.min(innerHeight-110,r.y+60))};})()`,
-      );
-      await touch("touchMove", destination);
-      await new Promise((r) => setTimeout(r, 90));
-      await touch("touchEnd");
-      await cdp.wait(
-        `document.querySelector('[data-touch-drop="priority:0"]')?.textContent.includes(${JSON.stringify(title + " updated")})`,
-      );
-      task = (await nativeApi("/api/mobile")).data.tasks.find(
-        (t) => t.id === taskId,
-      );
-      assert.equal(task.stage, "In progress");
-      assert.equal(task.important, 1);
-      assert.equal(task.urgent, 1);
+      for (const n of [0, 1, 2, 3]) {
+        await dragTo("priority:" + n);
+        await cdp.wait(
+          `document.querySelector('[data-touch-drop="priority:${n}"]')?.textContent.includes(${JSON.stringify(title + " updated")})`,
+        );
+        const task = (await nativeApi("/api/mobile")).data.tasks.find(
+          (t) => t.id === taskId,
+        );
+        assert.equal(task.stage, "In progress");
+        assert.equal(task.important, n < 2 ? 1 : 0);
+        assert.equal(task.urgent, n === 0 || n === 2 ? 1 : 0);
+      }
       assert.equal(
         await cdp.evaluate("!!document.querySelector('[role=dialog]')"),
         false,
@@ -1151,6 +1146,9 @@ try {
       await cdp.fill(
         "form.planning-form input[name=title]",
         "Android annual renewal",
+      );
+      await cdp.evaluate(
+        `document.querySelector(".planning-form .task-detail-group > summary").click()`,
       );
       await cdp.select('select[aria-label="Routine kind"]', "subscription");
       await cdp.select('select[aria-label="Routine frequency"]', "yearly");

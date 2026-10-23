@@ -258,4 +258,167 @@
   color: #8a6131;
 }
 
-.planning-deadlines-only{padding:0;border:0;background:transparent;margin:14px 0}.planning-deadlines-only>details{background:#fff;border:1px solid #dce5d3;border-radius:12px;padding:12px 14px}.plans-page-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:20px 0}.plans-page-heading h1{font-size:28px;color:#294737;margin:0;font-weight:500}.plans-page-actions{display:flex;align-items:center;gap:8px}.plan-add select{border:1px solid #244b3a;border-radius:10px;background:#244b3a;color:#fff;padding:11px 14px;font:inherit;font-size:12px;min-height:42px;cursor:pointer}.plan-add option{background:#fff;color:#294737}.plan-sections{display:flex;gap:5px;padding:5px;background:#eef3e4;border:1px solid #dce5d3;border-radius:12px;overflow-x:auto;margin:16px 0}.plan-sections button{border:0;border-radius:8px;background:transparent;padding:10px 11px;color:#536449;font:inherit;font-size:12px;white-space:nowrap}.plan-sections button.active{background:#fff;color:#294737;box-shadow:0 1px 4px #2947370b}.plan-sections button:focus-visible,.plan-add select:focus-visible{outline:2px solid #527c60;outline-offset:2px}.sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.planning-deadlines-only {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin: 14px 0;
+}
+.planning-deadlines-only > details {
+  background: #fff;
+  border: 1px solid #dce5d3;
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.plans-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0;
+}
+.plans-page-heading h1 {
+  font-size: 28px;
+  color: #294737;
+  margin: 0;
+  font-weight: 500;
+}
+.plans-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-add select {
+  border: 1px solid #244b3a;
+  border-radius: 10px;
+  background: #244b3a;
+  color: #fff;
+  padding: 11px 14px;
+  font: inherit;
+  font-size: 12px;
+  min-height: 42px;
+  cursor: pointer;
+}
+.plan-add option {
+  background: #fff;
+  color: #294737;
+}
+.plan-sections {
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  background: #eef3e4;
+  border: 1px solid #dce5d3;
+  border-radius: 12px;
+  overflow-x: auto;
+  margin: 16px 0;
+}
+.plan-sections button {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 10px 11px;
+  color: #536449;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.plan-sections button.active {
+  background: #fff;
+  color: #294737;
+  box-shadow: 0 1px 4px #2947370b;
+}
+.plan-sections button:focus-visible,
+.plan-add select:focus-visible {
+  outline: 2px solid #527c60;
+  outline-offset: 2px;
+}
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+.routine-plan {
+  padding: 16px;
+  border: 1px solid #dce5cf;
+  border-radius: 14px;
+  background: #fff;
+  margin: 12px 0;
+  display: block;
+}
+.routine-plan > div:first-child {
+  width: 100%;
+}
+.routine-week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+  margin: 16px 0;
+}
+.routine-week-grid .routine-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 2px;
+  min-width: 0;
+  min-height: 76px;
+  border: 1px solid #e1e7d9;
+  border-radius: 10px;
+  background: #f5f7ef;
+  color: #63715b;
+  font-size: 11px;
+}
+.routine-week-grid .routine-day:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.routine-week-grid .routine-day strong {
+  font-size: 20px;
+  line-height: 1;
+}
+.routine-week-grid .routine-day small {
+  font-size: 9px;
+  margin: 0;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+.routine-week-grid .routine-day-done {
+  background: #e4efd8;
+  border-color: #bad2a5;
+  color: #315d36;
+}
+.routine-week-grid .routine-day-missed {
+  background: #f9ebe6;
+  border-color: #edcdc1;
+  color: #994c36;
+}
+.routine-week-grid .routine-day-pending {
+  background: #fff8e2;
+  border-color: #d8b95d;
+  color: #725819;
+}
+.routine-setting-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.planning-form > .task-detail-group {
+  grid-column: 1/-1;
+  margin: 0;
+}
+.planning-form > .task-detail-group .task-group-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+.routine-week-summary {
+  font-size: 13px;
+  color: #536849;
+}

@@ -42,6 +42,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       frame = 0,
       over: HTMLElement | null = null,
       ghost: HTMLDivElement | null = null,
+      dock: HTMLDivElement | null = null,
       finished = false;
     const clear = () => {
       if (finished) return;
@@ -54,14 +55,20 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       window.removeEventListener("keydown", key);
       window.removeEventListener("blur", cancel);
       document.removeEventListener("visibilitychange", hidden);
-      node.removeEventListener("lostpointercapture", cancel);
+      node.removeEventListener("lostpointercapture", lost);
       over?.classList.remove("touch-drop-over");
       ghost?.remove();
+      dock?.remove();
       document.body.classList.remove("touch-dragging");
       node.classList.remove("touch-grip-active");
       if (node.hasPointerCapture(pointer)) node.releasePointerCapture(pointer);
       cleanupRef.current = null;
     };
+    function lost(event: PointerEvent) {
+      // Android initially captures the SVG/text child. Transferring that capture
+      // to the handle bubbles a child lost event; it is not a cancelled drag.
+      if (event.target === node && !node.hasPointerCapture(pointer)) cancel();
+    }
     function cancel() {
       if (active) setStatus("Move cancelled");
       clear();
@@ -146,10 +153,8 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       if (event.pointerId !== pointer) return;
       x = event.clientX;
       y = event.clientY;
-      if (!active) {
-        if (Math.hypot(x - initial.x, y - initial.y) > 12) clear();
-        return;
-      }
+      if (!active && Math.hypot(x - initial.x, y - initial.y) > 6) activate();
+      if (!active) return;
       event.preventDefault();
       target();
     }
@@ -161,6 +166,8 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       }
       event.preventDefault();
       event.stopPropagation();
+      x = event.clientX;
+      y = event.clientY;
       target();
       const zone = over?.dataset.touchDrop;
       clear();
@@ -186,8 +193,10 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
     window.addEventListener("keydown", key);
     window.addEventListener("blur", cancel);
     document.addEventListener("visibilitychange", hidden);
-    node.addEventListener("lostpointercapture", cancel);
-    const timer = setTimeout(() => {
+    node.addEventListener("lostpointercapture", lost);
+    function activate() {
+      if (active) return;
+      clearTimeout(timer);
       if (finished || !latest.current.enabled) return;
       try {
         node.setPointerCapture(pointer);
@@ -203,9 +212,35 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       ghost.setAttribute("aria-hidden", "true");
       ghost.textContent = title;
       document.body.append(ghost);
-      setStatus("Moving " + title + ". Release over a column.");
+      if (matchMedia("(pointer: coarse), (max-width: 700px)").matches) {
+        dock = document.createElement("div");
+        dock.className = "touch-drop-tray";
+        dock.setAttribute("aria-label", "Drop task on a destination");
+        const heading = document.createElement("strong");
+        heading.textContent = "Drop here to move";
+        dock.append(heading);
+        for (const zone of boardRef.current?.querySelectorAll<HTMLElement>(
+          "[data-touch-drop]",
+        ) || []) {
+          if (
+            zone.dataset.touchOwner !== owner ||
+            !zone.getClientRects().length
+          )
+            continue;
+          const item = document.createElement("div");
+          item.dataset.touchDrop = zone.dataset.touchDrop;
+          item.dataset.touchOwner = owner;
+          item.dataset.touchLabel = zone.dataset.touchLabel;
+          item.textContent =
+            zone.dataset.touchLabel || zone.dataset.touchDrop || "";
+          dock.append(item);
+        }
+        boardRef.current?.append(dock);
+      }
+      setStatus("Moving " + title + ". Release over a column or destination.");
       animate();
-    }, 280);
+    }
+    const timer = setTimeout(activate, 180);
     cleanupRef.current = clear;
   }
   return {
@@ -223,7 +258,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
         draggable={false}
         disabled={!enabled}
         aria-label={"Drag: " + title}
-        title="Hold to drag. Stage and priority controls are also available."
+        title="Drag Move to a column or a destination below."
         onPointerDown={(e) => begin(e, id, title)}
         onClick={(e) => {
           e.preventDefault();
@@ -236,6 +271,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
         }}
       >
         <GripVertical size={17} aria-hidden="true" />
+        <span>Move</span>
       </button>
     ),
   };

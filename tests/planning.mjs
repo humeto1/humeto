@@ -312,10 +312,26 @@ test("web calendar edits a deadline and routine interface shares the weekly repo
     await page
       .getByRole("heading", { name: /Weekly routine review/ })
       .waitFor();
+    const tracker = page.getByLabel("Weekly tracker for QA daily operations", {
+      exact: true,
+    });
+    await tracker.waitFor();
+    assert.equal(await tracker.locator(".routine-day").count(), 7);
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok(
+      await tracker.evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+    );
+    assert.equal(
+      await tracker
+        .locator("xpath=following-sibling::details")
+        .getAttribute("open"),
+      null,
+    );
     await page.getByLabel("Add plan", { exact: true }).selectOption("routines");
     await page
       .getByRole("textbox", { name: "Name", exact: true })
       .fill("UI routine preview");
+    await page.locator(".planning-form .task-detail-group > summary").click();
     await page
       .getByRole("combobox", { name: "Routine kind", exact: true })
       .last()
@@ -571,6 +587,10 @@ test("web wording review explicitly enables rotation and cards keep their origin
     const wording = page
       .locator(".routine-wording")
       .filter({ hasText: "Review 5 pending enquiries" });
+    await wording
+      .locator("xpath=ancestor::details[contains(@class,'task-detail-group')]")
+      .locator(":scope > summary")
+      .click();
     await wording.locator("summary").click();
     await wording
       .locator("textarea")
