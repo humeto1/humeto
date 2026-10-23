@@ -1,6 +1,6 @@
-# Latest Android build: 0.2.3 (version code 5)
+# Latest Android build: 0.2.4 (version code 6)
 
-Plans now opens Projects, Goals and Routines as peer sections with one Add menu; Assistant is renamed Chat. Focus has one task selector, Start/Pause/Stop, hold-or-confirm completion, compact break/reset panels and recent history. Tasks use an eye icon for the overview and a due-date calendar. The same backend/authentication/database remain in use. See [task interaction notes](TASK_PLANNING.md). Android emulator: 25 checks passed; both builds and focused web/mobile UI checks pass. Earlier release counts below are historical.
+Hold the task grip to drag between board stages or priority quadrants; edge scrolling and cancellation are supported. Plans opens Projects, Goals and Routines as peer sections with one Add menu; Assistant is renamed Chat. Focus has one task selector, Start/Pause/Stop, hold-or-confirm completion, compact break/reset panels and recent history. Tasks use an eye icon for the overview and a due-date calendar. The same backend/authentication/database remain in use. See [task interaction notes](TASK_PLANNING.md). Android emulator: 26 checks passed; both builds and focused web/mobile UI checks pass. Earlier release counts below are historical.
 
 # Humeto mobile testing build · 2026-10-23
 
@@ -24,7 +24,7 @@ Today dashboard; compact priority quadrants, board and list; task creation/editi
 
 ## Testing
 
-`mobile/releases/Humeto-0.2.3-testing.apk` is a debug-signed APK for sideload testing, not a signed Play Store release. Build products and signing material stay outside Git. See [mobile README](../mobile/README.md) for builds. Use your regular workspace account. Platform-admin-only accounts do not manage tasks through this client; workspace owners, individuals (owner role) and consultants retain existing task permissions. Verification and password-reset emails use current web flows, after which users sign in on mobile.
+`mobile/releases/Humeto-0.2.4-testing.apk` is a debug-signed APK for sideload testing, not a signed Play Store release. Build products and signing material stay outside Git. See [mobile README](../mobile/README.md) for builds. Use your regular workspace account. Platform-admin-only accounts do not manage tasks through this client; workspace owners, individuals (owner role) and consultants retain existing task permissions. Verification and password-reset emails use current web flows, after which users sign in on mobile.
 
 ## Remaining before store release
 
@@ -47,3 +47,5 @@ See [shared task planning](TASK_PLANNING.md) for the current data model, filters
 Android versionCode 3 uses the same accounts, backend and database as the website. Includes 30-message assistant history pages; an explicit random focus suggestion; optional transition resets and timed breaks; cumulative work-session totals; separate Mark task complete; background activity/status check-ins; parent teams with task overrides; project client sharing and quarantined uploads; native sharing and private-cache downloads; project/goal/routine financial targets and task context badges; and a compact bird's-eye task view. Project/goal selection state is preserved while editing.
 
 The shared UX audit found no automated WCAG-rule violations across 12 web viewports and five mobile tabs. 156 release checks and 25 Android simulator checks passed; private file downloads and the native notification/permission paths were exercised. Real antivirus scanning still requires the separate ClamAV worker. The test APK is debug-signed, with package `com.humeto.tasks`, and remains a testing build rather than a Play Store release.
+
+Task details now put essentials first, with expandable Team & plans, Reminders & repeat, and Links & activity sections. Financial impact is folded inside the essentials edit form and retains its values when closed. Android testing build 0.2.4 also includes touch drag handles for task stages and priority quadrants.

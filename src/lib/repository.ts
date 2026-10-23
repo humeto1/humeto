@@ -132,33 +132,49 @@ export async function bootstrap(a: Actor) {
       routineOnly: true,
       heartbeat: false,
     });
-  const result = {
-    projects: ["owner", "consultant"].includes(a.role)
-      ? await db()
-          .prepare(
-            "SELECT * FROM projects WHERE tenant_id=? ORDER BY created_at DESC,_rowid DESC",
-          )
-          .all(a.tenantId)
-      : [],
-    goals: ["owner", "consultant"].includes(a.role)
-      ? await db()
-          .prepare(
-            "SELECT * FROM goals WHERE tenant_id=? ORDER BY created_at DESC,_rowid DESC",
-          )
-          .all(a.tenantId)
-      : [],
-    leads: ["owner", "consultant"].includes(a.role)
-      ? (
-          await db()
+  const [
+    loadedProjects,
+    loadedGoals,
+    loadedLeads,
+    loadedPipelines,
+    loadedFinance,
+    loadedPeople,
+    loadedApplications,
+    loadedTasks,
+    loadedDocuments,
+    loadedRequests,
+    loadedActivity,
+    loadedSubscription,
+  ] = await Promise.all([
+    (async () =>
+      ["owner", "consultant"].includes(a.role)
+        ? await db()
             .prepare(
-              "SELECT * FROM leads WHERE tenant_id=? ORDER BY created_at DESC,_rowid DESC",
+              "SELECT * FROM projects WHERE tenant_id=? ORDER BY created_at DESC,_rowid DESC",
             )
             .all(a.tenantId)
-        ).map((r) => ({ ...r, extras: JSON.parse(String(r.extras)) }))
-      : [],
-    pipelines:
-      a.role === "platform_admin" ? {} : await pipelineSettings(a.tenantId),
-    finance:
+        : [])(),
+    (async () =>
+      ["owner", "consultant"].includes(a.role)
+        ? await db()
+            .prepare(
+              "SELECT * FROM goals WHERE tenant_id=? ORDER BY created_at DESC,_rowid DESC",
+            )
+            .all(a.tenantId)
+        : [])(),
+    (async () =>
+      ["owner", "consultant"].includes(a.role)
+        ? (
+            await db()
+              .prepare(
+                "SELECT * FROM leads WHERE tenant_id=? ORDER BY created_at DESC,_rowid DESC",
+              )
+              .all(a.tenantId)
+          ).map((r) => ({ ...r, extras: JSON.parse(String(r.extras)) }))
+        : [])(),
+    (async () =>
+      a.role === "platform_admin" ? {} : await pipelineSettings(a.tenantId))(),
+    (async () =>
       a.role === "platform_admin" || a.role === "student"
         ? []
         : (
@@ -170,14 +186,28 @@ export async function bootstrap(a: Actor) {
           ).map((r) => ({
             ...r,
             pending: Math.max(0, Number(r.expected_fee) - Number(r.paid)),
-          })),
-    people: await people(a),
-    applications: await applications(a),
-    tasks: await tasks(a),
-    documents: await documents(a),
-    requests: await requests(a),
-    activity: await activity(a),
-    subscription: await subscription(a),
+          })))(),
+    (async () => await people(a))(),
+    (async () => await applications(a))(),
+    (async () => await tasks(a))(),
+    (async () => await documents(a))(),
+    (async () => await requests(a))(),
+    (async () => await activity(a))(),
+    (async () => await subscription(a))(),
+  ]);
+  const result = {
+    projects: loadedProjects,
+    goals: loadedGoals,
+    leads: loadedLeads,
+    pipelines: loadedPipelines,
+    finance: loadedFinance,
+    people: loadedPeople,
+    applications: loadedApplications,
+    tasks: loadedTasks,
+    documents: loadedDocuments,
+    requests: loadedRequests,
+    activity: loadedActivity,
+    subscription: loadedSubscription,
   };
   if (a.role !== "platform_admin") {
     if (!featureAllowed(result.subscription, "crm")) {

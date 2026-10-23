@@ -1,3 +1,11 @@
+# Phone drag-and-drop — October 24, 2026
+
+Hold the grip for about 0.3 seconds, drag to a column or priority quadrant, then release. Phone web supports lead, applicant, application and task boards; the Android task client supports task stages and priority quadrants. Desktop HTML drag remains available.
+
+A stage drop changes only stage; a quadrant drop changes only importance/urgency. Moves use the existing scoped APIs, optimistic revisions and permission checks. Registration and external-submission review flows remain intact. Normal card scrolling/taps are retained outside the grip. Board edges scroll while dragging; release outside, pointer cancellation, Escape, hiding/leaving the page or losing access cancels an active gesture. Existing dropdown/detail controls remain the keyboard alternative. No within-column manual ordering is claimed.
+
+Validation: 159-check release baseline, two real-touch browser gesture cases (tasks plus independent CRM boards), Android emulator 26 checks including native touch stage/priority moves, and desktop/narrow accessibility checks. Generated evidence remains in ignored `.data/touch-*.log`. Android 0.2.4 is debug-signed for testing; physical phones and iPhone acceptance remain separate.
+
 # Plans and Chat — October 24, 2026
 
 Projects, Goals and Routines are peers in one Plans screen and one Add menu. Their sections appear first, followed by Calendar and reports. Operations, groceries and subscriptions remain routine types, without a second navigation tab. The explanatory “How to structure your work” disclosure is removed; “Plans needing a deadline” remains visible. Existing schedules, completion history, teams and financial targets are preserved. The calendar and routine tools now share the main navigation instead of introducing nested tabs.
@@ -101,3 +109,20 @@ The break coach uses recorded continuous time and the expected check-in, not key
 Task details → Activity timers & status check-ins records delegated team work, an already-running AI/automation process, or waiting work while the user focuses elsewhere. Enter what is happening, who/what is performing it, and when an update is expected. Check-ins use existing reminder delivery, and updates can request a new interval. These clocks track activity elapsed time separately from personal focused time; they do not launch jobs, bill hours or complete tasks. Each member still controls their own private focus. Task completion explicitly closes remaining activity timers and cancels their reminders.
 
 Deadline distinction: project target dates and individual task due dates are separate. Focus minutes and activity check-in intervals are work/check-in estimates, not delivery-date replacements.
+
+### Task detail sections (24 October 2026)
+- Web and Android task details use themed, keyboard-accessible disclosure groups.
+- Task essentials open first: stage, date and priority. Android also edits title/category and offers focus before secondary settings.
+- Team and project/goal assignments are grouped together; resources and activity are folded away.
+- Android reminders and recurrence have a separate group; financial impact is folded within the edit form.
+- Collapsing preserves mounted inputs and unsaved values. Saving an edit includes hidden financial fields.
+
+### Project chat verification
+- Shared project conversation works across workspace staff and client contribution links; view-only links cannot reply and restricted client links require email verification.
+- Open conversations refresh every 10 seconds while visible, on web and Android. Messages persist in PostgreSQL; successful sending clears the composer.
+- Staff access currently follows workspace permissions, not an assigned-project-only policy. This is a comment thread (100-comment cap), not yet a full messenger with pagination, read receipts, typing, or remote chat push.
+- Regression QA posts from a second staff session and verifies automatic appearance on a client's browser plus persistence in the owner's view.
+
+### Performance audit, 24 October 2026
+Confirmed avoidable work: mobile root had an unconditional one-second timer (including Tasks/Chat/Plans); mobile refresh serialized bootstrap before its other three requests; web bootstrap serialized independent repository reads. Fixes restrict ticking to visible Today/Focus with an active session, suspend it behind sheets/in background, deduplicate background refresh, start mobile refresh requests concurrently, and parallelize independent web bootstrap reads. Existing PostgreSQL pools are cached correctly.
+Remaining scale work: bootstrap still returns full workspace collections; task query has per-row correlated lookups; large task/history collections need server pagination and viewport virtualization. Local compiled timings are not production/network load measurements. Do not claim a production speed multiplier without remote traces.

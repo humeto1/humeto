@@ -1,5 +1,7 @@
 "use client";
+import { TaskDetailGroup } from "../../shared/task-detail-group";
 import { TaskActivity } from "../../shared/task-activity";
+import { useTouchDrag } from "../../shared/touch-drag";
 import BirdsEye from "../../shared/birds-eye";
 import { TaskLinks as TaskReferenceLinks } from "../../shared/task-links";
 import { webApi } from "../../shared/planning-hub";
@@ -543,6 +545,40 @@ export default function Workspace({
       .includes(search.toLowerCase()),
   );
   const [focusOnly, setFocusOnly] = useState(false);
+  const touchTasks = useTouchDrag({
+    enabled: staff && writable && !busy && view === "tasks",
+    onDrop: async (id, zone) => {
+      const task = data.tasks.find((t) => t.id === id);
+      if (!task) return;
+      if (zone.startsWith("stage:")) {
+        const stage = zone.slice(6);
+        if (taskStageKeys.includes(stage) && task.stage !== stage)
+          await mutate(
+            "tasks/" + id,
+            "PATCH",
+            { stage, revision: task.revision },
+            "Task moved. Priority preserved.",
+          );
+      } else if (zone.startsWith("priority:")) {
+        const q = zone.slice(9);
+        if (
+          ["Do now", "Schedule", "Delegate", "Later"].includes(q) &&
+          quadrant(task) !== q
+        )
+          await mutate(
+            "tasks/" + id,
+            "PATCH",
+            {
+              stage: task.stage,
+              revision: task.revision,
+              important: q === "Do now" || q === "Schedule",
+              urgent: q === "Do now" || q === "Delegate",
+            },
+            "Priority changed. Stage preserved.",
+          );
+      }
+    },
+  });
   const todayTaskDate = new Date().toLocaleDateString("en-CA");
   const filteredTasks = data.tasks.filter(
     (t) =>
@@ -814,6 +850,9 @@ export default function Workspace({
           e.dataTransfer.effectAllowed = "move";
         }}
       >
+        {staff &&
+          writable &&
+          touchTasks.handle(t.id, t.display_title || t.title)}
         <button
           type="button"
           className="compact-task-open"
@@ -2034,7 +2073,10 @@ export default function Workspace({
                   onFocusChange={setFocusOnly}
                 />
               )}
-              <div hidden={focusOnly}>
+              <div ref={touchTasks.boardRef} hidden={focusOnly}>
+                <span className="touch-drag-status" role="status">
+                  {touchTasks.status}
+                </span>
                 {staff && (
                   <TaskSchedules
                     tasks={data.tasks}
@@ -2236,6 +2278,7 @@ export default function Workspace({
                       <section
                         className="kanban-column"
                         key={s}
+                        {...touchTasks.zone("stage:" + s)}
                         onDragOver={(e) => {
                           if (
                             staff &&
@@ -2294,6 +2337,7 @@ export default function Workspace({
                     ].map(([q, desc]) => (
                       <section
                         key={q}
+                        {...touchTasks.zone("priority:" + q)}
                         onDragOver={(e) => {
                           if (
                             staff &&
@@ -2785,13 +2829,89 @@ export default function Workspace({
                   <>
                     <span className="eyebrow">TASK DETAILS</span>
                     <h2 id="modal-title">Review your task</h2>
-                    {taskCard(task)}
-                    <TaskReferenceLinks taskId={task.id} request={webApi} />
-                    <TaskActivity
-                      taskId={task.id}
-                      request={webApi}
-                      onChange={refresh}
-                    />
+                    <h3>{task.display_title || task.title}</h3>
+                    <TaskDetailGroup
+                      title="Task essentials"
+                      hint="Stage, date & priority"
+                      open
+                    >
+                      <p className="muted">
+                        {dateLabel(task.due_date)} · {quadrant(task)}
+                      </p>
+                      {staff && writable && (
+                        <>
+                          <label>
+                            Stage
+                            <select
+                              aria-label={`Stage for ${task.title}`}
+                              value={task.stage}
+                              disabled={busy}
+                              onChange={(e) =>
+                                void mutate(
+                                  "tasks/" + task.id,
+                                  "PATCH",
+                                  {
+                                    stage: e.target.value,
+                                    revision: task.revision,
+                                  },
+                                  "Task moved. Priority preserved.",
+                                )
+                              }
+                            >
+                              {taskStageKeys.map((s) => (
+                                <option key={s} value={s}>
+                                  {stageTitle("tasks", s)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            className="btn secondary small"
+                            aria-label={`Change importance / urgency for ${task.title}`}
+                            onClick={() =>
+                              showModal("task-priority:" + task.id)
+                            }
+                          >
+                            <Grid2X2 size={14} /> Change priority
+                          </button>
+                        </>
+                      )}
+                    </TaskDetailGroup>
+                    <TaskDetailGroup
+                      title="Team & plans"
+                      hint="Assignments, project & goals"
+                    >
+                      {staff && (
+                        <WorkAssignment
+                          type="task"
+                          id={task.id}
+                          writable={writable}
+                        />
+                      )}
+                      <TaskLinks
+                        task={task}
+                        projects={data.projects || []}
+                        goals={data.goals || []}
+                        onChange={refresh}
+                        writable={staff && writable}
+                      />
+                    </TaskDetailGroup>
+                    <TaskDetailGroup
+                      title="Reference links"
+                      hint="Drive links & resources"
+                    >
+                      <TaskReferenceLinks taskId={task.id} request={webApi} />
+                    </TaskDetailGroup>
+                    <TaskDetailGroup
+                      title="Work activity"
+                      hint="Updates & history"
+                    >
+                      <TaskActivity
+                        taskId={task.id}
+                        request={webApi}
+                        onChange={refresh}
+                      />
+                    </TaskDetailGroup>
                   </>
                 ) : (
                   <h2 id="modal-title">Task no longer available</h2>

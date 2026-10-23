@@ -38,7 +38,7 @@ export function ParentControls({
       />
       {type === "project" && (
         <details onToggle={(e) => setCollaborating(e.currentTarget.open)}>
-          <summary>Client collaboration · chat, files & sharing</summary>
+          <summary>Team & client collaboration · chat, files & sharing</summary>
           {collaborating && (
             <ProjectCollaboration
               projectId={id}

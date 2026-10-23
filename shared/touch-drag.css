@@ -1,0 +1,95 @@
+.touch-drag-handle {
+  display: none !important;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: grab;
+}
+.touch-dragging {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+.touch-drag-ghost {
+  position: fixed;
+  z-index: 10000;
+  width: 220px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid #78936a;
+  border-radius: 12px;
+  background: #f7faf0;
+  color: #294737;
+  box-shadow: 0 10px 32px #183e2c30;
+  pointer-events: none;
+  font: 500 13px/1.45 system-ui;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.touch-drop-over {
+  outline: 2px solid #527c60 !important;
+  outline-offset: -2px;
+  background-color: #e5efda !important;
+}
+.touch-drag-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+@media (pointer: coarse), (max-width: 700px) {
+  .touch-drag-handle {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    min-height: 36px;
+    padding: 6px !important;
+    border: 1px solid #d5dfce !important;
+    border-radius: 9px !important;
+    background: #f7faf0 !important;
+    color: #536c46 !important;
+    flex: 0 0 34px;
+  }
+  .touch-grip-active {
+    background: #dce9cd !important;
+    color: #294737 !important;
+  }
+  .compact-task {
+    position: relative;
+  }
+  .compact-task > .touch-drag-handle {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+  }
+  .compact-task-open {
+    padding-right: 52px !important;
+  }
+  .pipeline-item > .touch-drag-handle {
+    margin: 0 0 7px auto;
+    display: flex !important;
+  }
+  .touch-task-card {
+    position: relative;
+  }
+  .touch-task-card.has-touch-handle > .task {
+    padding-right: 52px;
+  }
+  .touch-task-card > .touch-drag-handle {
+    position: absolute;
+    right: 10px;
+    top: 14px;
+  }
+  .touch-task-card.has-touch-handle > .task > svg:last-child {
+    display: none;
+  }
+}
+.touch-dragging .board,
+.touch-dragging .pipeline-board,
+.touch-dragging .kanban-board {
+  scroll-snap-type: none !important;
+  scroll-behavior: auto !important;
+}

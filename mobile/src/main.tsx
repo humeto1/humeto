@@ -1,3 +1,5 @@
+import { TaskDetailGroup } from "../../shared/task-detail-group";
+import { useTouchDrag } from "../../shared/touch-drag";
 import { ParentControls } from "../../shared/parent-controls";
 import { TaskActivity } from "../../shared/task-activity";
 import { HoldToComplete } from "../../shared/focus-controls";
@@ -396,8 +398,8 @@ function App() {
   dataRef.current = data;
   async function refresh() {
     const sequence = ++refreshSequence.current;
-    const d = await api<Bootstrap>("/api/mobile");
-    const [f, s, h] = await Promise.all([
+    const [d, f, s, h] = await Promise.all([
+      api<Bootstrap>("/api/mobile"),
       api("/api/workspace/focus"),
       api("/api/workspace/scheduling"),
       api(
@@ -411,13 +413,17 @@ function App() {
     setHistory(h);
     await syncNotifications(s.reminders, f.active, s.preferences, s.series);
   }
+  const loadingRequest = useRef(false);
   async function load() {
+    if (loadingRequest.current) return;
+    loadingRequest.current = true;
     try {
       await refresh();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setData(null);
       else setError((e as Error).message);
     } finally {
+      loadingRequest.current = false;
       setLoading(false);
     }
   }
@@ -444,9 +450,15 @@ function App() {
     };
   }, []);
   useEffect(() => {
-    const t = setInterval(() => setTick(Date.now()), 1000);
+    // Only the visible focus surfaces need second-by-second updates.
+    if (!focus?.active || (tab !== "today" && tab !== "focus") || sheet) return;
+    const update = () => {
+      if (!document.hidden) setTick(Date.now());
+    };
+    update();
+    const t = setInterval(update, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [focus?.active?.id, tab, sheet]);
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const listener = NativeApp.addListener("backButton", () => {
@@ -492,6 +504,38 @@ function App() {
     const t = setTimeout(() => setNotice(""), 4000);
     return () => clearTimeout(t);
   }, [notice]);
+  const touchTasks = useTouchDrag({
+    enabled:
+      !!data?.writable &&
+      online &&
+      !busy &&
+      tab === "tasks" &&
+      ["board", "priority"].includes(view),
+    onDrop: async (id, zone) => {
+      const t = data?.tasks.find((t) => t.id === id);
+      if (!t) return;
+      if (zone.startsWith("stage:")) {
+        const stage = zone.slice(6);
+        if (
+          !data?.stages.stages.some((s) => s.key === stage) ||
+          stage === t.stage
+        )
+          return;
+        await run(() => patch(t, { stage }), "Task moved.");
+      } else if (zone.startsWith("priority:")) {
+        const n = Number(zone.slice(9));
+        if (!Number.isInteger(n) || n < 0 || n > 3 || priority(t) === n) return;
+        await run(
+          () =>
+            patch(t, {
+              important: n === 0 || n === 1,
+              urgent: n === 0 || n === 2,
+            }),
+          "Priority updated.",
+        );
+      }
+    },
+  });
   if (loading)
     return (
       <div className="loading">
@@ -573,39 +617,52 @@ function App() {
         .includes(query.toLowerCase()),
   );
   const card = (t: Task) => (
-    <button
-      className="task"
+    <div
+      className={
+        "touch-task-card" +
+        (writable && ["board", "priority"].includes(view)
+          ? " has-touch-handle"
+          : "")
+      }
       key={t.id}
-      onClick={() => {
-        setSelected(t.id);
-        setSheet("task");
-      }}
     >
-      <span className={"task-mark p" + priority(t)}>
-        {t.stage === "Done" ? <Check size={15} /> : <span />}
-      </span>
-      <span className="task-copy">
-        <strong>{t.display_title || t.title}</strong>
-        {t.display_title && <small>Original: {t.title}</small>}
-        <small>
-          {t.project_title || "No project"} · {formatDate(t.due_date)}
-        </small>
-        <span className="task-tags">
-          {t.work_kind === "routine" && (
-            <span className="task-tag">Routine</span>
-          )}
-          {t.category && <span className="task-tag">{t.category}</span>}
-          {active?.task_id === t.id && (
-            <span className="task-tag focusing">In focus</span>
-          )}
-          {t.stage !== "Done" && t.due_date && t.due_date < todayDate && (
-            <span className="task-tag overdue">Overdue</span>
-          )}
+      <button
+        className="task"
+        key={t.id}
+        onClick={() => {
+          setSelected(t.id);
+          setSheet("task");
+        }}
+      >
+        <span className={"task-mark p" + priority(t)}>
+          {t.stage === "Done" ? <Check size={15} /> : <span />}
         </span>
-        <TaskValueBadge task={t} />
-      </span>
-      <ChevronRight size={16} />
-    </button>
+        <span className="task-copy">
+          <strong>{t.display_title || t.title}</strong>
+          {t.display_title && <small>Original: {t.title}</small>}
+          <small>
+            {t.project_title || "No project"} · {formatDate(t.due_date)}
+          </small>
+          <span className="task-tags">
+            {t.work_kind === "routine" && (
+              <span className="task-tag">Routine</span>
+            )}
+            {t.category && <span className="task-tag">{t.category}</span>}
+            {active?.task_id === t.id && (
+              <span className="task-tag focusing">In focus</span>
+            )}
+            {t.stage !== "Done" && t.due_date && t.due_date < todayDate && (
+              <span className="task-tag overdue">Overdue</span>
+            )}
+          </span>
+          <TaskValueBadge task={t} />
+        </span>
+        <ChevronRight size={16} />
+      </button>
+      {writable &&
+        ["board", "priority"].includes(view) &&
+        touchTasks.handle(t.id, t.display_title || t.title)}
+    </div>
   );
   async function patch(t: Task, body: unknown) {
     await api(
@@ -789,7 +846,10 @@ function App() {
           </>
         )}
         {tab === "tasks" && (
-          <>
+          <div ref={touchTasks.boardRef}>
+            <span className="touch-drag-status" role="status">
+              {touchTasks.status}
+            </span>
             <div className="section-title">
               <div>
                 <span className="eyebrow">SMALL STEPS. REAL PROGRESS.</span>
@@ -1024,7 +1084,11 @@ function App() {
             ) : view === "priority" ? (
               <div className="matrix">
                 {priorities.map(([name, description], i) => (
-                  <section key={name} className={"quadrant q" + i}>
+                  <section
+                    key={name}
+                    className={"quadrant q" + i}
+                    {...touchTasks.zone("priority:" + i, name)}
+                  >
                     <header>
                       <h3>{name}</h3>
                       <span>
@@ -1046,7 +1110,7 @@ function App() {
             ) : view === "board" ? (
               <div className="board">
                 {data.stages.stages.map((s) => (
-                  <section key={s.key}>
+                  <section key={s.key} {...touchTasks.zone("stage:" + s.key)}>
                     <header>
                       <h2>{s.title}</h2>
                       <span>
@@ -1072,7 +1136,7 @@ function App() {
                 )}
               </>
             )}
-          </>
+          </div>
         )}
         {tab === "focus" && (
           <>
@@ -1855,13 +1919,6 @@ function App() {
                   {task.display_title || task.title}
                 </h2>
                 {task.display_title && <p>Original: {task.title}</p>}
-                <TaskLinks taskId={task.id} request={api} />
-                <TaskActivity
-                  taskId={task.id}
-                  request={api}
-                  onChange={refresh}
-                />
-
                 {task.stage !== "Done" && active?.task_id !== task.id && (
                   <button
                     className="secondary"
@@ -1879,205 +1936,241 @@ function App() {
                   {task.project_title || "No project"} ·{" "}
                   {formatDate(task.due_date)}
                 </p>
-                <form
-                  key={task.revision}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const f = new FormData(e.currentTarget);
-                    void run(async () => {
-                      await patch(task, {
-                        ...valuePayload(f),
-                        stage: f.get("stage"),
-                        title: f.get("title"),
-                        category: f.get("category") || "",
-                        dueDate: f.get("dueDate") || "",
-                        assignee: f.get("assignee") || "",
-                        important: f.get("important") === "on",
-                        urgent: f.get("urgent") === "on",
-                      });
-                    }, "Task updated.");
-                  }}
+                <TaskDetailGroup
+                  title="Task essentials"
+                  hint="Title, date, stage & priority"
+                  open
                 >
-                  <label>
-                    Task title
-                    <input
-                      name="title"
-                      defaultValue={task.title}
-                      required
-                      minLength={2}
-                      maxLength={200}
-                    />
-                  </label>
-                  <label>
-                    Category
-                    <input
-                      name="category"
-                      list="task-categories"
-                      maxLength={60}
-                      defaultValue={task.category || ""}
-                      placeholder="Choose or type your own"
-                    />
-                  </label>
-                  <TaskValueFields task={task} />
-                  <label>
-                    Due date
-                    <input
-                      name="dueDate"
-                      type="date"
-                      defaultValue={task.due_date || ""}
-                    />
-                  </label>
-                  <label>
-                    Assigned to
-                    <select name="assignee" defaultValue={task.assignee || ""}>
-                      <option value="">Unassigned</option>
-                      {data.members.map((m) => (
-                        <option key={m.id} value={m.name}>
-                          {m.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Workflow stage
-                    <select name="stage" defaultValue={task.stage}>
-                      {data.stages.stages.map((s) => (
-                        <option value={s.key} key={s.key}>
-                          {s.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="checks">
+                  <form
+                    key={task.revision}
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const f = new FormData(e.currentTarget);
+                      void run(async () => {
+                        await patch(task, {
+                          ...valuePayload(f),
+                          stage: f.get("stage"),
+                          title: f.get("title"),
+                          category: f.get("category") || "",
+                          dueDate: f.get("dueDate") || "",
+                          assignee: f.get("assignee") || "",
+                          important: f.get("important") === "on",
+                          urgent: f.get("urgent") === "on",
+                        });
+                      }, "Task updated.");
+                    }}
+                  >
                     <label>
+                      Task title
                       <input
-                        type="checkbox"
-                        name="important"
-                        defaultChecked={!!task.important}
+                        name="title"
+                        defaultValue={task.title}
+                        required
+                        minLength={2}
+                        maxLength={200}
                       />
-                      Important
                     </label>
                     <label>
+                      Category
                       <input
-                        type="checkbox"
-                        name="urgent"
-                        defaultChecked={!!task.urgent}
+                        name="category"
+                        list="task-categories"
+                        maxLength={60}
+                        defaultValue={task.category || ""}
+                        placeholder="Choose or type your own"
                       />
-                      Urgent
                     </label>
-                  </div>
-                  <button className="primary full" disabled={!writable}>
-                    Save changes <Check size={17} />
-                  </button>
-                </form>
-                <TaskRelations
-                  task={task}
-                  projects={data.projects}
-                  goals={data.goals}
-                  writable={writable}
-                  save={run}
-                />
 
-                <Team
-                  task={task}
-                  writable={writable}
-                  save={run}
-                  members={data.members}
-                />
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const f = new FormData(e.currentTarget);
-                    void run(async () => {
-                      await api("/api/workspace/scheduling", {
-                        action: "remind",
-                        taskId: task.id,
-                        taskRevision: task.revision,
-                        day: f.get("day"),
-                        time: f.get("time"),
-                        timezone,
-                      });
-                    }, "Reminder saved.");
-                  }}
-                >
-                  <h3>A timely nudge</h3>
-                  <div className="two">
                     <label>
-                      Day
-                      <input type="date" name="day" required />
-                    </label>
-                    <label>
-                      Time
+                      Due date
                       <input
-                        type="time"
-                        name="time"
-                        defaultValue="09:00"
-                        required
+                        name="dueDate"
+                        type="date"
+                        defaultValue={task.due_date || ""}
                       />
                     </label>
-                  </div>
-                  <button
-                    className="secondary full"
-                    disabled={!writable || task.stage === "Done"}
-                  >
-                    <Bell size={16} /> Set reminder
-                  </button>
-                </form>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const f = new FormData(e.currentTarget);
-                    void run(async () => {
-                      await api("/api/workspace/scheduling", {
-                        action: "series",
-                        taskId: task.id,
-                        taskRevision: task.revision,
-                        frequency: f.get("frequency"),
-                        interval: 1,
-                        firstDay: f.get("firstDay"),
-                        time: f.get("time"),
-                        timezone,
-                        endDay: "",
-                      });
-                    }, "Recurring series created.");
-                  }}
+                    <label>
+                      Assigned to
+                      <select
+                        name="assignee"
+                        defaultValue={task.assignee || ""}
+                      >
+                        <option value="">Unassigned</option>
+                        {data.members.map((m) => (
+                          <option key={m.id} value={m.name}>
+                            {m.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Workflow stage
+                      <select name="stage" defaultValue={task.stage}>
+                        {data.stages.stages.map((s) => (
+                          <option value={s.key} key={s.key}>
+                            {s.title}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="checks">
+                      <label>
+                        <input
+                          type="checkbox"
+                          name="important"
+                          defaultChecked={!!task.important}
+                        />
+                        Important
+                      </label>
+                      <label>
+                        <input
+                          type="checkbox"
+                          name="urgent"
+                          defaultChecked={!!task.urgent}
+                        />
+                        Urgent
+                      </label>
+                    </div>
+                    <TaskDetailGroup
+                      title="Financial impact"
+                      hint="Expected reward & loss"
+                    >
+                      <TaskValueFields task={task} />
+                    </TaskDetailGroup>
+                    <button className="primary full" disabled={!writable}>
+                      Save changes <Check size={17} />
+                    </button>
+                  </form>
+                </TaskDetailGroup>
+                <TaskDetailGroup
+                  title="Team & plans"
+                  hint="Assignments, project & goals"
                 >
-                  <h3>Make it a habit</h3>
-                  <label>
-                    Repeat
-                    <select name="frequency">
-                      <option value="daily">Daily</option>
-                      <option value="weekdays">Weekdays</option>
-                      <option value="weekly">Weekly</option>
-                      <option value="monthly">Monthly</option>
-                      <option value="yearly">Yearly</option>
-                    </select>
-                  </label>
-                  <div className="two">
-                    <label>
-                      First day
-                      <input type="date" name="firstDay" required />
-                    </label>
-                    <label>
-                      Time
-                      <input
-                        type="time"
-                        name="time"
-                        defaultValue="09:00"
-                        required
-                      />
-                    </label>
-                  </div>
-                  <button
-                    className="secondary full"
-                    disabled={!writable || task.stage === "Done"}
+                  <TaskRelations
+                    task={task}
+                    projects={data.projects}
+                    goals={data.goals}
+                    writable={writable}
+                    save={run}
+                  />
+
+                  <Team
+                    task={task}
+                    writable={writable}
+                    save={run}
+                    members={data.members}
+                  />
+                </TaskDetailGroup>
+                <TaskDetailGroup
+                  title="Reminders & repeat"
+                  hint="Nudges & recurring tasks"
+                >
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const f = new FormData(e.currentTarget);
+                      void run(async () => {
+                        await api("/api/workspace/scheduling", {
+                          action: "remind",
+                          taskId: task.id,
+                          taskRevision: task.revision,
+                          day: f.get("day"),
+                          time: f.get("time"),
+                          timezone,
+                        });
+                      }, "Reminder saved.");
+                    }}
                   >
-                    Create recurring series
-                  </button>
-                  <small className="muted">
-                    Future occurrences are generated by your server scheduler.
-                  </small>
-                </form>
+                    <h3>A timely nudge</h3>
+                    <div className="two">
+                      <label>
+                        Day
+                        <input type="date" name="day" required />
+                      </label>
+                      <label>
+                        Time
+                        <input
+                          type="time"
+                          name="time"
+                          defaultValue="09:00"
+                          required
+                        />
+                      </label>
+                    </div>
+                    <button
+                      className="secondary full"
+                      disabled={!writable || task.stage === "Done"}
+                    >
+                      <Bell size={16} /> Set reminder
+                    </button>
+                  </form>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const f = new FormData(e.currentTarget);
+                      void run(async () => {
+                        await api("/api/workspace/scheduling", {
+                          action: "series",
+                          taskId: task.id,
+                          taskRevision: task.revision,
+                          frequency: f.get("frequency"),
+                          interval: 1,
+                          firstDay: f.get("firstDay"),
+                          time: f.get("time"),
+                          timezone,
+                          endDay: "",
+                        });
+                      }, "Recurring series created.");
+                    }}
+                  >
+                    <h3>Make it a habit</h3>
+                    <label>
+                      Repeat
+                      <select name="frequency">
+                        <option value="daily">Daily</option>
+                        <option value="weekdays">Weekdays</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="yearly">Yearly</option>
+                      </select>
+                    </label>
+                    <div className="two">
+                      <label>
+                        First day
+                        <input type="date" name="firstDay" required />
+                      </label>
+                      <label>
+                        Time
+                        <input
+                          type="time"
+                          name="time"
+                          defaultValue="09:00"
+                          required
+                        />
+                      </label>
+                    </div>
+                    <button
+                      className="secondary full"
+                      disabled={!writable || task.stage === "Done"}
+                    >
+                      Create recurring series
+                    </button>
+                    <small className="muted">
+                      Future occurrences are generated by your server scheduler.
+                    </small>
+                  </form>
+                </TaskDetailGroup>
+                <TaskDetailGroup
+                  title="Links & activity"
+                  hint="Resources & work updates"
+                >
+                  <TaskLinks taskId={task.id} request={api} />
+                  <TaskActivity
+                    taskId={task.id}
+                    request={api}
+                    onChange={refresh}
+                  />
+                </TaskDetailGroup>
                 {task.stage !== "Done" && (
                   <button
                     className="primary full"

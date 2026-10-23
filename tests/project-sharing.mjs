@@ -166,6 +166,12 @@ test("task sharing scopes client data, accepts limited contributions, quarantine
       .getByRole("heading", { name: "Client collaboration QA", exact: true })
       .waitFor();
     await page.getByText("Here are my details", { exact: true }).waitFor();
+    const teammate = await ctx("consultant");
+    await post(teammate, path, {operation: "comment", content: "Team reply from another account"});
+    await page.getByText("Team reply from another account", {exact: true}).waitFor({timeout: 16000});
+    const ownerView = await (await c.get(path)).json();
+    assert.ok(ownerView.comments.some((m) => m.content === "Team reply from another account"));
+
     assert.ok(
       await page
         .getByRole("button", { name: "Add comment", exact: true })

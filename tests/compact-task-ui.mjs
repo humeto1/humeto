@@ -77,6 +77,24 @@ test("100 tasks remain in bounded quadrants and open full editable details", asy
         .isVisible(),
       true,
     );
+    const groups = page.getByRole("dialog").locator(".task-detail-group");
+    assert.deepEqual(
+      await groups
+        .locator(":scope > summary > span:first-child")
+        .allTextContents(),
+      [
+        "Task essentialsStage, date & priority",
+        "Team & plansAssignments, project & goals",
+        "Reference linksDrive links & resources",
+        "Work activityUpdates & history",
+      ],
+    );
+    assert.equal(await groups.nth(0).getAttribute("open"), "");
+    assert.equal(await groups.nth(1).getAttribute("open"), null);
+    await groups.nth(1).locator(":scope > summary").click();
+    assert.equal(await groups.nth(1).getAttribute("open"), "");
+    await groups.nth(1).locator(":scope > summary").click();
+    assert.equal(await groups.nth(1).getAttribute("open"), null);
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("dialog").count(), 0);
     const overview = page.getByRole("button", {

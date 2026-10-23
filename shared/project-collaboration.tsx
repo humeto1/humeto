@@ -38,11 +38,25 @@ export function ProjectCollaboration({
       .catch((e) => {
         if (live) setError(e.message);
       });
+    let polling = false;
+    const timer = setInterval(async () => {
+      if (polling || document.visibilityState === "hidden") return;
+      polling = true;
+      try {
+        const next = await request(path);
+        if (live) setState(next);
+      } catch {
+        /* Keep the current conversation during a transient disconnect. */
+      } finally {
+        polling = false;
+      }
+    }, 10000);
     return () => {
       live = false;
+      clearInterval(timer);
     };
   }, [path]);
-  async function act(body: any) {
+  async function act(body: any): Promise<boolean> {
     setBusy(true);
     setError("");
     try {
@@ -53,11 +67,13 @@ export function ProjectCollaboration({
       if (result.url) setUrl(result.url);
       if (result.sent) setSent(true);
       await load();
+      return true;
     } catch (e) {
       setError((e as Error).message);
       try {
         await load();
       } catch {}
+      return false;
     } finally {
       setBusy(false);
     }
@@ -110,8 +126,8 @@ export function ProjectCollaboration({
       ) : state.locked ? (
         <>
           <p>
-            This project is restricted. Verify the invited email address; no app or
-            account is needed.
+            This project is restricted. Verify the invited email address; no app
+            or account is needed.
           </p>
           <form onSubmit={(e) => form(e, "request-code")}>
             <label>
@@ -214,7 +230,8 @@ export function ProjectCollaboration({
               <input id="guest-author" maxLength={80} defaultValue="Guest" />
             </label>
           )}
-          <h4>Comments</h4>
+          <h4>Project conversation</h4>
+          <small>Team & client replies · refreshes automatically</small>
           {state.comments.map((c: any) => (
             <article key={c.id}>
               <strong>{c.author}</strong>{" "}
@@ -225,7 +242,8 @@ export function ProjectCollaboration({
           {canWrite && (
             <form
               onSubmit={(e) => {
-                const f = new FormData(e.currentTarget);
+                const form = e.currentTarget;
+                const f = new FormData(form);
                 e.preventDefault();
                 void act({
                   operation: "comment",
@@ -237,6 +255,8 @@ export function ProjectCollaboration({
                       ) as HTMLInputElement
                     )?.value || "Guest",
                   website: f.get("website"),
+                }).then((sent) => {
+                  if (sent) form.reset();
                 });
               }}
             >

@@ -1,4 +1,5 @@
 "use client";
+import { useTouchDrag } from "../../shared/touch-drag";
 import { useState } from "react";
 import { StageControls, type StageEditor } from "./stage-controls";
 export default function PipelineBoard<T extends { id: string }>({
@@ -36,12 +37,28 @@ export default function PipelineBoard<T extends { id: string }>({
       setOver("");
     }
   };
+  const touch = useTouchDrag({
+    enabled: editable && !moving,
+    onDrop: async (id, stage) => {
+      const item = items.find((i) => i.id === id);
+      if (item && stages.includes(stage)) await run(item, stage);
+    },
+  });
   return (
-    <div className="pipeline-board" aria-label={label} aria-busy={moving}>
+    <div
+      ref={touch.boardRef}
+      className="pipeline-board"
+      aria-label={label}
+      aria-busy={moving}
+    >
+      <span className="touch-drag-status" role="status">
+        {touch.status}
+      </span>
       {stages.map((stage) => (
         <section
           className={"pipeline-column " + (over === stage ? "drop-over" : "")}
           key={stage}
+          {...touch.zone(stage, titles[stage] || stage)}
           aria-label={(titles[stage] || stage) + " column"}
           onDragOver={(e) => {
             if (editable && dragged) {
@@ -92,6 +109,16 @@ export default function PipelineBoard<T extends { id: string }>({
                   setOver("");
                 }}
               >
+                {editable &&
+                  touch.handle(
+                    item.id,
+                    (item as any).title ||
+                      (item as any).name ||
+                      [(item as any).person_name, (item as any).institution]
+                        .filter(Boolean)
+                        .join(" · ") ||
+                      "Card " + item.id,
+                  )}
                 {render(item)}
                 {editable && (
                   <label className="pipeline-stage">

@@ -354,6 +354,72 @@ try {
     },
   );
   await check(
+    "Touch drag moves task stage and priority on Android without opening details",
+    async () => {
+      await cdp.click("Board");
+      const gripSelector =
+        "button[aria-label=" +
+        JSON.stringify("Drag: " + title + " updated") +
+        "]";
+      const point = async (selector) =>
+        cdp.evaluate(
+          `(()=>{const e=document.querySelector(${JSON.stringify(selector)});e.scrollIntoView({block:'center',inline:'nearest'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`,
+        );
+      const touch = async (type, p) =>
+        cdp.send("Input.dispatchTouchEvent", {
+          type,
+          touchPoints:
+            type === "touchEnd" || type === "touchCancel"
+              ? []
+              : [{ x: p.x, y: p.y, id: 1, radiusX: 3, radiusY: 3 }],
+        });
+      let start = await point(gripSelector);
+      await touch("touchStart", start);
+      await cdp.wait("!!document.querySelector('.touch-drag-ghost')");
+      const edge = await cdp.evaluate(
+        `(()=>{const r=document.querySelector('.board').getBoundingClientRect();return {x:Math.min(innerWidth-8,r.right-8),y:${start.y}};})()`,
+      );
+      await touch("touchMove", edge);
+      await cdp.wait("document.querySelector('.board').scrollLeft>70");
+      let destination = await cdp.evaluate(
+        `(()=>{const r=document.querySelector('[data-touch-drop="stage:In progress"]').getBoundingClientRect();return {x:Math.max(30,Math.min(innerWidth-55,r.x+r.width/2)),y:${start.y}};})()`,
+      );
+      await touch("touchMove", destination);
+      await new Promise((r) => setTimeout(r, 90));
+      await touch("touchEnd");
+      await cdp.wait(
+        `document.querySelector('[data-touch-drop="stage:In progress"]')?.textContent.includes(${JSON.stringify(title + " updated")})`,
+      );
+      let task = (await nativeApi("/api/mobile")).data.tasks.find(
+        (t) => t.id === taskId,
+      );
+      assert.equal(task.stage, "In progress");
+      await cdp.click("Priority");
+      start = await point(gripSelector);
+      await touch("touchStart", start);
+      await cdp.wait("!!document.querySelector('.touch-drag-ghost')");
+      destination = await cdp.evaluate(
+        `(()=>{const e=document.querySelector('[data-touch-drop="priority:0"]');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:Math.min(innerWidth-40,r.x+r.width/2),y:Math.max(100,Math.min(innerHeight-110,r.y+60))};})()`,
+      );
+      await touch("touchMove", destination);
+      await new Promise((r) => setTimeout(r, 90));
+      await touch("touchEnd");
+      await cdp.wait(
+        `document.querySelector('[data-touch-drop="priority:0"]')?.textContent.includes(${JSON.stringify(title + " updated")})`,
+      );
+      task = (await nativeApi("/api/mobile")).data.tasks.find(
+        (t) => t.id === taskId,
+      );
+      assert.equal(task.stage, "In progress");
+      assert.equal(task.important, 1);
+      assert.equal(task.urgent, 1);
+      assert.equal(
+        await cdp.evaluate("!!document.querySelector('[role=dialog]')"),
+        false,
+      );
+    },
+  );
+  await check(
     "Create projects/goals and link native tasks to their shared records",
     async () => {
       await cdp.click("Plans");
@@ -380,6 +446,10 @@ try {
       await cdp.wait(
         `Boolean(document.querySelector('select[name=projectId]'))`,
       );
+      await cdp.evaluate(
+        `Array.from(document.querySelectorAll(".task-detail-group > summary")).find(e=>e.textContent.startsWith("Team & plans")).click()`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
       await cdp.select("select[name=projectId]", project.id);
       await cdp.evaluate(
         `document.querySelector('input[name=goalIds][value="${goal.id}"]').click()`,
@@ -424,6 +494,9 @@ try {
       ]);
       const day = await cdp.evaluate(
         `new Date(Date.now()+86400000).toISOString().slice(0,10)`,
+      );
+      await cdp.evaluate(
+        `Array.from(document.querySelectorAll(".task-detail-group > summary")).find(e=>e.textContent.startsWith("Reminders & repeat")).click()`,
       );
       await cdp.fill("input[name=day]", day);
       await cdp.fill("input[name=time]", "09:30");

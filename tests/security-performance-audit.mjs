@@ -9,7 +9,10 @@ test("compiled security boundaries and bounded local response benchmark", async 
     "true",
     "Only run against disposable QA",
   );
-  const client = await request.newContext({ baseURL: base });
+  const client = await request.newContext({
+    baseURL: base,
+    extraHTTPHeaders: { Origin: base },
+  });
   const results = [];
   try {
     for (const path of ["/", "/login", "/signup"]) {
@@ -31,6 +34,38 @@ test("compiled security boundaries and bounded local response benchmark", async 
         warmMaxMs: sorted.at(-1),
       });
     }
+    assert.equal(
+      (
+        await client.post("/api/auth/demo", { data: { userId: "ayesha" } })
+      ).status(),
+      200,
+    );
+    for (const path of [
+      "/api/mobile",
+      "/api/workspace/bootstrap",
+      "/api/workspace/focus",
+      "/api/workspace/scheduling",
+      "/api/workspace/task-history?timezone=Asia%2FKarachi",
+    ]) {
+      const samples = [];
+      let bytes = 0;
+      for (let i = 0; i < 4; i++) {
+        const start = performance.now();
+        const r = await client.get(path);
+        const body = await r.body();
+        samples.push(Math.round(performance.now() - start));
+        bytes = body.length;
+        assert.equal(r.status(), 200);
+      }
+      results.push({
+        path,
+        coldMs: samples[0],
+        warmMedianMs: samples.slice(1).sort((a, b) => a - b)[1],
+        warmMaxMs: Math.max(...samples.slice(1)),
+        bytes,
+      });
+    }
+    assert.equal((await client.post("/api/auth/logout", { data: {} })).status(), 200);
     for (const path of [
       "/api/task-activities?taskId=audit",
       "/api/project-sharing?projectId=audit",

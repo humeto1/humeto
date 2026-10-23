@@ -1,0 +1,65 @@
+.task-detail-group {
+  border: 1px solid #dce5cf;
+  border-radius: 14px;
+  background: #fff;
+  margin: 12px 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.task-detail-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  cursor: pointer;
+  list-style: none;
+  color: #254336;
+  font-weight: 600;
+  min-height: 54px;
+}
+.task-detail-group > summary::-webkit-details-marker {
+  display: none;
+}
+.task-detail-group > summary small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
+  color: #718268;
+  margin-top: 4px;
+}
+.task-detail-group > summary:focus-visible {
+  outline: 2px solid #577743;
+  outline-offset: -4px;
+  border-radius: 12px;
+}
+.task-group-chevron {
+  transition: transform 0.15s;
+  font-size: 20px;
+}
+.task-detail-group[open] > .task-group-chevron,
+.task-detail-group[open] > summary > .task-group-chevron {
+  transform: rotate(180deg);
+}
+.task-group-content {
+  padding: 0 16px 16px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.task-group-content > .task-card {
+  border: 0;
+  padding: 0;
+  box-shadow: none;
+}
+.task-group-content form {
+  min-width: 0;
+}
+.task-group-content h3 {
+  margin-top: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-group-chevron {
+    transition: none;
+  }
+}
