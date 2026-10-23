@@ -16,6 +16,9 @@ export default function TaskLinks({
 }) {
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const inherited = goals.find(
+    (g) => g.id === projects.find((p) => p.id === task.project_id)?.goal_id,
+  );
   return (
     <details className="task-links">
       <summary>
@@ -63,6 +66,7 @@ export default function TaskLinks({
             ))}
           </select>
         </label>
+        {inherited && <small>Via project: {inherited.title}</small>}
         <fieldset>
           <legend>Contributes to goals</legend>
           {goals.map((g) => (

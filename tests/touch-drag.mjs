@@ -73,8 +73,13 @@ test("phone touch gestures persist stages and priority, reach off-screen destina
       await page.waitForTimeout(100);
     assert.equal((await read()).stage, "In progress");
     assert.equal((await read()).important, before.important);
+    await page
+      .locator('.kanban-column[data-touch-drop="stage:In progress"]')
+      .getByRole("button", { name: "Open task: " + title, exact: true })
+      .waitFor();
     await hold();
     await touch("touchCancel");
+    await page.locator(".touch-drag-ghost").waitFor({ state: "hidden" });
     assert.equal(await page.locator(".touch-drag-ghost").count(), 0);
     assert.equal((await read()).stage, "In progress");
     await hold();

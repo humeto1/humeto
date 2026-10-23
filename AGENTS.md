@@ -15,6 +15,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Repeating tasks use a Repeat option on ordinary tasks. Daily Done/Missed tracking belongs on Today/Home (web Overview). Home also exposes Calendar for upcoming/completed work and plan deadlines. Plans exposes Projects and Goals; do not reintroduce a separate Routine category, tab or Add plan option.
 - iPhone testing is deferred at the user's request. Android emulator tests use disposable local data and a separate QA package; production credentials must not be embedded in a mobile bundle.
 
+- A task contributes to explicit goals plus its project's goal. Use the shared taskGoals helper for live counts/filters; keep explicit task_goals independently editable. Future completion snapshots include the deduplicated union; never rewrite old history when a project is relinked.
 - Task views and filters are independent. Board/List/4Q/Calendar consume the same filtered records. Project and goal are relationship filters, Personal/Work/etc. are area labels, and expected profit/avoided loss is an estimate dimension that must never post real financial ledger entries.
 - Optional Operations wording rotation uses reviewed alternatives only. Keep immutable canonical names/IDs and dated alias history. Do not silently apply fresh AI names or mutate schedule/meaning/assignee/value while varying display text.
 

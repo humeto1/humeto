@@ -1,3 +1,4 @@
+import { taskGoals } from "../../shared/task-relations";
 import { HomeTasks } from "../../shared/home-tasks";
 import { useChatViewport } from "../../shared/chat-viewport";
 import { TaskDetailGroup } from "../../shared/task-detail-group";
@@ -587,8 +588,10 @@ function App() {
           : t.project_id === projectFilter)) &&
       (goalFilter === "all" ||
         (goalFilter === "none"
-          ? !t.goals?.length
-          : t.goals?.some((g) => g.id === goalFilter))) &&
+          ? !taskGoals(t, data.projects, data.goals).length
+          : taskGoals(t, data.projects, data.goals).some(
+              (g) => g.id === goalFilter,
+            ))) &&
       (natureFilter === "all" || (t.work_kind || "one_off") === natureFilter) &&
       (categoryFilter === "all" ||
         (categoryFilter === "uncategorized"
@@ -612,7 +615,7 @@ function App() {
         t.category,
         t.project_title,
         t.assignee,
-        ...(t.goals || []).map((g) => g.title),
+        ...taskGoals(t, data.projects, data.goals).map((g) => g.title),
       ]
         .join(" ")
         .toLowerCase()
@@ -1600,8 +1603,15 @@ function App() {
                         className="project"
                         key={p.id}
                         onClick={() => {
-                          setQuery(p.title);
+                          setQuery("");
                           setFilter("all");
+                          setProjectFilter(kind === "projects" ? p.id : "all");
+                          setGoalFilter(kind === "goals" ? p.id : "all");
+                          setCategoryFilter("all");
+                          setNatureFilter("all");
+                          setImpactFilter("all");
+                          setDueFilter("all");
+                          setOwnerFilter("all");
                           setTab("tasks");
                         }}
                       >
@@ -1614,13 +1624,22 @@ function App() {
                               ? "Deadline " + p.target_date
                               : "Needs a deadline"}
                           </small>
+                          {p.goal_id && (
+                            <small>
+                              Supports{" "}
+                              {data.goals.find((g) => g.id === p.goal_id)
+                                ?.title || "a goal"}
+                            </small>
+                          )}
                           <small>
                             {p.status} ·{" "}
                             {kind === "projects"
                               ? data.tasks.filter((t) => t.project_id === p.id)
                                   .length
                               : data.tasks.filter((t) =>
-                                  t.goals?.some((g) => g.id === p.id),
+                                  taskGoals(t, data.projects, data.goals).some(
+                                    (g) => g.id === p.id,
+                                  ),
                                 ).length}{" "}
                             linked tasks
                           </small>
@@ -2471,7 +2490,7 @@ function App() {
             <LogOut size={16} /> Sign out
           </button>
           <small className="muted">
-            Humeto mobile · 0.2.1 testing build
+            Humeto mobile · 0.2.9 testing build
             <br />
             Cloud sync requires an internet connection. No private documents or
             passwords are stored in the app bundle.
@@ -2530,6 +2549,18 @@ function TaskRelations({
           ))}
         </select>
       </label>
+      {goals.find(
+        (g) => g.id === projects.find((p) => p.id === projectId)?.goal_id,
+      ) && (
+        <small className="muted">
+          Via project:{" "}
+          {
+            goals.find(
+              (g) => g.id === projects.find((p) => p.id === projectId)?.goal_id,
+            )?.title
+          }
+        </small>
+      )}
       <fieldset>
         <legend>Goals</legend>
         {goals.map((g) => (

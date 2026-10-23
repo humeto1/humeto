@@ -1,4 +1,5 @@
 "use client";
+import { taskGoals } from "../../shared/task-relations";
 import { HomeTasks } from "../../shared/home-tasks";
 import { TaskDetailGroup } from "../../shared/task-detail-group";
 import { TaskActivity } from "../../shared/task-activity";
@@ -590,8 +591,10 @@ export default function Workspace({
           : t.project_id === taskProject)) &&
       (taskGoal === "all" ||
         (taskGoal === "none"
-          ? !t.goals?.length
-          : t.goals?.some((g) => g.id === taskGoal))) &&
+          ? !taskGoals(t, data.projects, data.goals).length
+          : taskGoals(t, data.projects, data.goals).some(
+              (g) => g.id === taskGoal,
+            ))) &&
       (taskCategory === "all" ||
         (taskCategory === "none"
           ? !t.category
@@ -616,7 +619,9 @@ export default function Workspace({
         " " +
         t.project_title +
         " " +
-        (t.goals || []).map((g) => g.title).join(" ") +
+        taskGoals(t, data.projects, data.goals)
+          .map((g) => g.title)
+          .join(" ") +
         " " +
         t.person_name +
         " " +
@@ -2047,6 +2052,7 @@ export default function Workspace({
           )}
           {view === "progress" && staff && (
             <TaskProgress
+              onOpenTask={(id) => showModal("task-details:" + id)}
               tasks={data.tasks}
               projects={data.projects || []}
               goals={data.goals || []}

@@ -1,4 +1,5 @@
 "use client";
+import { taskGoals } from "../../shared/task-relations";
 import { ParentControls } from "../../shared/parent-controls";
 import PlanningHub, { categories } from "../../shared/planning-hub";
 import { useState, useEffect } from "react";
@@ -27,12 +28,14 @@ export default function TaskProgress({
   goals,
   refresh,
   writable,
+  onOpenTask,
 }: {
   tasks: Task[];
   projects: Workstream[];
   goals: Workstream[];
   refresh: () => Promise<void>;
   writable: boolean;
+  onOpenTask: (id: string) => void;
 }) {
   const [tab, setTab] = useState("projects"),
     [edit, setEdit] = useState<{
@@ -246,7 +249,7 @@ export default function TaskProgress({
               const related = tasks.filter((t) =>
                 tab === "projects"
                   ? t.project_id === item.id
-                  : t.goals?.some((g) => g.id === item.id),
+                  : taskGoals(t, projects, goals).some((g) => g.id === item.id),
               );
               const done = related.filter((t) => t.stage === "Done").length;
               return (
@@ -315,7 +318,13 @@ export default function TaskProgress({
                     {related.map((t) => (
                       <div className="stream-task" key={t.id}>
                         <span>
-                          {t.title}
+                          <button
+                            type="button"
+                            className="subtle-link"
+                            onClick={() => onOpenTask(t.id)}
+                          >
+                            {t.title}
+                          </button>
                           <small>{t.stage}</small>
                         </span>
                         <TaskLinks

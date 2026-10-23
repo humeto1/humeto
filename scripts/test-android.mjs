@@ -423,8 +423,12 @@ try {
       await cdp.fill("input[name=targetDate]", "2027-03-31");
       await cdp.click("Create");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
+      const createdGoal = (await nativeApi("/api/mobile")).data.goals.find(
+        (g) => g.title === "Android QA goal",
+      );
       await cdp.select('select[aria-label="Add plan"]', "projects");
       await cdp.fill("input[name=title]", "Android QA project");
+      await cdp.select("select[name=goalId]", createdGoal.id);
       await cdp.fill("input[name=targetDate]", "2027-02-28");
       await cdp.click("Create");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
@@ -446,9 +450,7 @@ try {
       );
       await new Promise((resolve) => setTimeout(resolve, 500));
       await cdp.select("select[name=projectId]", project.id);
-      await cdp.evaluate(
-        `document.querySelector('input[name=goalIds][value="${goal.id}"]').click()`,
-      );
+
       await cdp.click("Save project & goals");
       await cdp.wait(
         `document.body.innerText.includes('Project links saved.')`,
@@ -457,7 +459,32 @@ try {
         (t) => t.id === taskId,
       );
       assert.equal(linked.project_id, project.id);
-      assert.ok(linked.goals.some((g) => g.id === goal.id));
+      assert.equal(linked.goals.length, 0);
+      await cdp.click("Close");
+      await cdp.click("Plans");
+      await cdp.click("Goals");
+      await cdp.wait(
+        `Array.from(document.querySelectorAll('.mobile-plan-card')).some(e=>e.textContent.includes('Android QA goal') && e.textContent.includes('1 linked tasks'))`,
+      );
+      await cdp.evaluate(
+        `Array.from(document.querySelectorAll('.mobile-plan-card .project')).find(e=>e.textContent.includes('Android QA goal')).click()`,
+      );
+      await cdp.wait(
+        `document.querySelector('select[aria-label="Goal filter"]')?.value===${JSON.stringify(goal.id)}`,
+      );
+      await cdp.evaluate(
+        `document.querySelector('.task-filter-panel').open = true`,
+      );
+      await cdp.click("Clear filters");
+      await cdp.wait(
+        `Array.from(document.querySelectorAll('.task')).some(e=>e.textContent.includes(${JSON.stringify(title + " updated")}))`,
+      );
+      await cdp.evaluate(
+        `Array.from(document.querySelectorAll('.task')).find(e=>e.textContent.includes(${JSON.stringify(title + " updated")})).click()`,
+      );
+      await cdp.evaluate(
+        `Array.from(document.querySelectorAll(".task-detail-group > summary")).find(e=>e.textContent.startsWith("Team & plans")).click()`,
+      );
     },
   );
   await check(

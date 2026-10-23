@@ -144,3 +144,6 @@ Removed Routine from the Plans tabs and Add plan menus on web and Android. Today
 Home now contains Today and Calendar views on mobile and web Overview. Calendar has month navigation and status filters for Upcoming, To do, Done and Missed work, with tasks and project/goal deadlines together. Existing dated completion records and repeating schedules are preserved. Calendar is removed from Plans; Projects and Goals remain there.
 
 Validation: web and mobile builds passed; 12 targeted browser/API checks passed, including Calendar Done/Upcoming filters and goal deadline editing. Automated layout/accessibility audit passed across 20 web viewports. Android emulator acceptance passed 27 checks, including Home daily-repeat tracking and Calendar. Physical-device testing remains separate.
+
+### Relationship audit follow-up
+A task contributes to directly linked goals and to its project's goal. Counts and filters on both clients use the deduplicated union; direct task links remain independently editable. Future completion snapshots capture this same union, so later changes to a project's goal do not rewrite history. Android project/goal navigation opens an exact ID and clears unrelated filters. Web contributing-task titles open the full task detail. See [connection audit](CONNECTION_AUDIT.md) for the workflow map and external-service limits.
