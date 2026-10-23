@@ -54,38 +54,30 @@ export async function applications(a: Actor) {
 }
 export async function tasks(a: Actor) {
   const s = scope(a, "t.person_id");
-  return (await Promise.all(
-    (
-      await db()
-        .prepare(
-          "SELECT t.*,pf.currency AS project_target_currency,pf.basis AS project_target_basis,pf.upfront AS project_target_upfront,pf.completion AS project_target_completion,pf.conditional AS project_target_conditional,(SELECT o.series_id FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS routine_id,(SELECT CASE WHEN o.canonical_title=t.title THEN o.display_title ELSE '' END FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS display_title,EXISTS(SELECT 1 FROM task_recurrences r WHERE r.template_task_id=t.id AND r.track_occurrences=TRUE) AS routine_template,p.name AS person_name,(SELECT title FROM projects x WHERE x.id=t.project_id AND x.tenant_id=t.tenant_id) AS project_title FROM tasks t LEFT JOIN people p ON p.id=t.person_id AND p.tenant_id=t.tenant_id LEFT JOIN plan_financial_targets pf ON pf.tenant_id=t.tenant_id AND pf.entity_type='project' AND pf.entity_id=t.project_id WHERE t.tenant_id=? AND NOT EXISTS(SELECT 1 FROM task_recurrences r WHERE r.template_task_id=t.id AND r.track_occurrences=TRUE)" +
-            s.sql +
-            " ORDER BY t.created_at DESC",
-        )
-        .all(a.tenantId, ...s.params)
-    ).map(async (t) => ({
-      ...t,
-      ...(!["owner", "consultant"].includes(a.role)
-        ? {
-            project_id: "",
-            project_title: "",
-            last_actor_id: "",
-            project_target_currency: undefined,
-            project_target_basis: undefined,
-            project_target_upfront: undefined,
-            project_target_completion: undefined,
-            project_target_conditional: undefined,
-          }
-        : {}),
-      goals: !["owner", "consultant"].includes(a.role)
-        ? []
-        : await db()
-            .prepare(
-              "SELECT g.id,g.title FROM task_goals l JOIN goals g ON g.id=l.goal_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=? AND l.task_id=?",
-            )
-            .all(a.tenantId, t.id),
-    })),
-  )) as unknown as Task[];
+  return (
+    await db()
+      .prepare(
+        "SELECT t.*,COALESCE((SELECT json_agg(json_build_object('id',g.id,'title',g.title) ORDER BY g.id) FROM task_goals l JOIN goals g ON g.id=l.goal_id AND g.tenant_id=l.tenant_id WHERE l.tenant_id=t.tenant_id AND l.task_id=t.id),'[]'::json) AS goals,pf.currency AS project_target_currency,pf.basis AS project_target_basis,pf.upfront AS project_target_upfront,pf.completion AS project_target_completion,pf.conditional AS project_target_conditional,(SELECT o.series_id FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS routine_id,(SELECT CASE WHEN o.canonical_title=t.title THEN o.display_title ELSE '' END FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS display_title,EXISTS(SELECT 1 FROM task_recurrences r WHERE r.template_task_id=t.id AND r.track_occurrences=TRUE) AS routine_template,p.name AS person_name,(SELECT title FROM projects x WHERE x.id=t.project_id AND x.tenant_id=t.tenant_id) AS project_title FROM tasks t LEFT JOIN people p ON p.id=t.person_id AND p.tenant_id=t.tenant_id LEFT JOIN plan_financial_targets pf ON pf.tenant_id=t.tenant_id AND pf.entity_type='project' AND pf.entity_id=t.project_id WHERE t.tenant_id=? AND NOT EXISTS(SELECT 1 FROM task_recurrences r WHERE r.template_task_id=t.id AND r.track_occurrences=TRUE)" +
+          s.sql +
+          " ORDER BY t.created_at DESC",
+      )
+      .all(a.tenantId, ...s.params)
+  ).map((t) => ({
+    ...t,
+    ...(!["owner", "consultant"].includes(a.role)
+      ? {
+          project_id: "",
+          project_title: "",
+          last_actor_id: "",
+          project_target_currency: undefined,
+          project_target_basis: undefined,
+          project_target_upfront: undefined,
+          project_target_completion: undefined,
+          project_target_conditional: undefined,
+        }
+      : {}),
+    goals: !["owner", "consultant"].includes(a.role) ? [] : t.goals,
+  })) as unknown as Task[];
 }
 export async function documents(a: Actor) {
   const s = scope(a, "d.person_id");

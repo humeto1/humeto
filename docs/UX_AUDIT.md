@@ -1,3 +1,9 @@
+# Follow-up audit — October 23, 2026
+
+Expanded coverage to ten views / 20 desktop and phone viewports, including Leads, Applicants, Applications and Document Reading. The audit now rejects all WCAG-tagged violations. Fixed newly exposed CRM/document text contrast and Settings revoke controls. See [current product audit](PRODUCT_AUDIT_2026-10-23.md) for security, performance, requirement gaps and verification limits.
+
+--- Previous audit scope ---
+
 # UI/UX audit · October 23, 2026
 
 ## Verified scope

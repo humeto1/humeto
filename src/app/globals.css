@@ -225,7 +225,7 @@ textarea {
 }
 .badge.amber {
   background: #f9f1dc;
-  color: #a28b4a;
+  color: #796525;
 }
 .badge.red {
   background: #faeae3;
@@ -976,7 +976,7 @@ textarea {
 }
 .filter-bar > span:first-child {
   font-size: 11px;
-  color: #879a72;
+  color: #536449;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1026,7 +1026,7 @@ textarea {
 }
 .applicant-card > p {
   font-size: 9px;
-  color: #9aa88b;
+  color: #536449;
   margin-bottom: 23px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1036,7 +1036,7 @@ textarea {
   align-items: center;
   gap: 7px;
   font-size: 10px;
-  color: #7f926a;
+  color: #536449;
   min-height: 33px;
   line-height: 1.6;
 }
@@ -1054,7 +1054,7 @@ textarea {
   display: flex;
   gap: 6px;
   align-items: center;
-  color: #a0ad8f;
+  color: #536449;
 }
 .applicant-card-bottom .badge {
   font-size: 7px;
@@ -1480,7 +1480,7 @@ textarea {
 }
 .application-card > p {
   font-size: 10px;
-  color: #95a580;
+  color: #536449;
   margin-bottom: 22px;
 }
 .application-details {
@@ -1489,7 +1489,7 @@ textarea {
 }
 .application-details span {
   font-size: 9px;
-  color: #9ead8c;
+  color: #536449;
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1501,12 +1501,12 @@ textarea {
   border-top: 1px solid #e9eede;
   margin-top: 20px;
   padding-top: 16px;
-  color: #a5b295;
+  color: #536449;
   font-size: 8px;
 }
 .application-footer button {
   font-size: 9px;
-  color: #7b965f;
+  color: #536449;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1662,7 +1662,7 @@ textarea {
 }
 .empty-column {
   font-size: 9px;
-  color: #a8b596;
+  color: #536449;
   text-align: center;
   margin-top: 27px;
   line-height: 1.9;
@@ -3052,8 +3052,10 @@ textarea {
   border-bottom: 1px solid #e3ead9;
 }
 .pairing-row button {
-  font-size: 9px;
-  color: #ba886b;
+  font-size: 12px;
+  color: #815037;
+  min-height: 32px;
+  padding: 6px 10px;
 }
 .pairing-secret {
   width: 100%;
@@ -3572,7 +3574,7 @@ textarea {
   gap: 8px;
   padding: 0 12px 12px;
   margin: 0 !important;
-  color: #768073;
+  color: #536449;
   font-size: 10px;
 }
 .pipeline-stage select {
@@ -3621,7 +3623,7 @@ textarea {
   background: #fff;
 }
 .crm-stats small {
-  color: #778373;
+  color: #536449;
   font-size: 11px;
 }
 .crm-stats strong {
@@ -3650,7 +3652,7 @@ textarea {
 .crm-command p {
   font-size: 12px;
   margin: 6px 0 14px;
-  color: #67765e;
+  color: #536449;
 }
 .crm-command form {
   display: flex;
@@ -3679,7 +3681,7 @@ textarea {
   display: flex;
   gap: 8px;
   justify-content: space-between;
-  color: #7c8877;
+  color: #536449;
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -3711,10 +3713,10 @@ textarea {
 }
 .person-indicators small {
   font-size: 9px;
-  color: #7e887a;
+  color: #536449;
 }
 .paid {
-  color: #218350 !important;
+  color: #19693f !important;
   background: #edf6ed !important;
 }
 .pending {
@@ -3733,7 +3735,7 @@ textarea {
   font-size: 9px;
   padding: 7px 0;
   border-top: 1px solid #edf0e7;
-  color: #7c8678;
+  color: #536449;
 }
 .application-mini-list b {
   color: #52694b;
@@ -4053,7 +4055,7 @@ textarea {
   display: block;
   font-size: 9px;
   line-height: 1.6;
-  color: #7b8b70;
+  color: #536449;
 }
 .task-links button {
   margin-top: 9px;
@@ -4412,7 +4414,7 @@ textarea {
   padding: 16px 20px;
   border-radius: 13px;
   margin: 15px 0 22px;
-  color: #5c7a48;
+  color: #536449;
 }
 .lead-followups > summary {
   display: flex;
@@ -4430,12 +4432,12 @@ textarea {
 .lead-followups summary > span {
   margin-left: auto;
   font-size: 10px;
-  color: #8b9d78;
+  color: #536449;
 }
 .lead-followups p {
   font-size: 11px;
   line-height: 1.8;
-  color: #8b9d78;
+  color: #536449;
 }
 .lead-followups h3 {
   font-size: 13px;

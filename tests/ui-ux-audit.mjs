@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 import AxeBuilder from "@axe-core/playwright";
 import { mkdirSync, writeFileSync } from "node:fs";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
-test("workspace UX audit checks desktop/mobile layout, keyboard access, crashes and accessibility across six views", async () => {
+test("workspace UX audit checks desktop/mobile layout, keyboard access, crashes and accessibility across ten views", async () => {
   const browser = await chromium.launch(),
     context = await browser.newContext({ baseURL: base }),
     reports = [];
@@ -32,6 +32,10 @@ test("workspace UX audit checks desktop/mobile layout, keyboard access, crashes 
         "assistant",
         "finance",
         "settings",
+        "leads",
+        "students",
+        "applications",
+        "reading",
       ]) {
         await page.goto(
           base + (view === "overview" ? "/workspace" : "/workspace/" + view),
@@ -75,16 +79,20 @@ test("workspace UX audit checks desktop/mobile layout, keyboard access, crashes 
         });
         assert.equal(overflow, false, view + " global overflow at " + width);
         assert.ok(keyboard, view + " keyboard access");
-        assert.deepEqual(
-          axe.violations
-            .filter((v) => v.impact === "critical")
-            .map((v) => v.id),
-          [],
-          view + " critical accessibility",
-        );
       }
     }
     assert.deepEqual(errors, []);
+    assert.deepEqual(
+      reports
+        .filter((r) => r.violations.length)
+        .map((r) => ({
+          view: r.view,
+          width: r.width,
+          violations: r.violations,
+        })),
+      [],
+      "Accessibility findings across all audited views",
+    );
   } finally {
     writeFileSync(directory + "/report.json", JSON.stringify(reports, null, 2));
     console.log(

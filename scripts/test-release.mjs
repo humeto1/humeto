@@ -100,6 +100,8 @@ try {
           process.env.HUMETO_QA_FILES.split(",").includes(f)),
     )
     .map((f) => "tests/" + f);
+  if (!files.length)
+    throw new Error("No QA test files matched HUMETO_QA_FILES.");
   result = await run(["--test", "--test-concurrency=1", ...files]);
 } catch (e) {
   console.error(e.message);
