@@ -1,3 +1,4 @@
+import { useChatViewport } from "../../shared/chat-viewport";
 import { TaskDetailGroup } from "../../shared/task-detail-group";
 import { useTouchDrag } from "../../shared/touch-drag";
 import { ParentControls } from "../../shared/parent-controls";
@@ -392,6 +393,7 @@ function App() {
   const chatHistory = useChatHistory(agent, setAgentRaw, (query) =>
     api("/api/agent" + query),
   );
+  useChatViewport(tab === "assistant");
   const busyLock = useRef(false);
   const refreshSequence = useRef(0);
   const dataRef = useRef(data);
@@ -699,7 +701,7 @@ function App() {
         : 0)
     : 0;
   return (
-    <div className="app">
+    <div className={"app" + (tab === "assistant" ? " chat-screen" : "")}>
       <header className="top">
         <div className="brand">
           <b>h</b> humeto.
@@ -1392,7 +1394,6 @@ function App() {
               ref={chatHistory.scroller}
               onScroll={chatHistory.onScroll}
               style={{
-                maxHeight: "60dvh",
                 overflowY: "auto",
                 overflowAnchor: "none",
               }}

@@ -15,6 +15,7 @@
             android:name=".MainActivity"
             android:label="${humetoLabel}"
             android:theme="@style/AppTheme.NoActionBarLaunch"
+            android:windowSoftInputMode="adjustResize"
             android:launchMode="singleTask"
             android:exported="true">
 

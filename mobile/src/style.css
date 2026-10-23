@@ -1128,6 +1128,116 @@ legend {
   margin-top: 12px;
 }
 
-.focus-intro{margin-bottom:18px}.focus-intro h1{font-size:34px;margin-top:6px}.focus-session .timer{font-size:58px;margin:18px 0 6px}.focus-session .pill{margin:4px 0}.focus-session .focus-toolbar{justify-content:center}.focus-session .focus-time-meta{margin-bottom:12px;color:#536449}.focus-session .focus-switch-notice{font-size:12px;color:#536449;margin:10px 0}.focus-session .focus-more{text-align:left}.focus-session .focus-more>.focus-ui-button{margin:12px 8px 0 0}.focus-start-row>.focus-task-select{flex:1;margin:0}.focus-start-row{margin-top:14px}.focus-session .focus-random{text-align:left}
+.focus-intro {
+  margin-bottom: 18px;
+}
+.focus-intro h1 {
+  font-size: 34px;
+  margin-top: 6px;
+}
+.focus-session .timer {
+  font-size: 58px;
+  margin: 18px 0 6px;
+}
+.focus-session .pill {
+  margin: 4px 0;
+}
+.focus-session .focus-toolbar {
+  justify-content: center;
+}
+.focus-session .focus-time-meta {
+  margin-bottom: 12px;
+  color: #536449;
+}
+.focus-session .focus-switch-notice {
+  font-size: 12px;
+  color: #536449;
+  margin: 10px 0;
+}
+.focus-session .focus-more {
+  text-align: left;
+}
+.focus-session .focus-more > .focus-ui-button {
+  margin: 12px 8px 0 0;
+}
+.focus-start-row > .focus-task-select {
+  flex: 1;
+  margin: 0;
+}
+.focus-start-row {
+  margin-top: 14px;
+}
+.focus-session .focus-random {
+  text-align: left;
+}
 
-.secondary[aria-pressed="true"]{background:#e5edd7;border-color:#789463;color:#294737}
+.secondary[aria-pressed="true"] {
+  background: #e5edd7;
+  border-color: #789463;
+  color: #294737;
+}
+
+/* The conversation scrolls; the composer always occupies visible space. */
+.app.chat-screen {
+  position: fixed;
+  inset-inline: 0;
+  top: var(--chat-viewport-top, 0px);
+  height: var(--chat-viewport-height, 100dvh);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chat-screen > .top {
+  flex-shrink: 0;
+}
+.chat-screen > .content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: 14px;
+  padding-bottom: calc(94px + var(--safe-bottom));
+}
+.chat-screen .section-title,
+.chat-screen .assistant-note {
+  flex-shrink: 0;
+}
+.chat-screen .messages {
+  flex: 1;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+.chat-screen .chat-welcome {
+  overflow: auto;
+  min-height: 0;
+  flex: 1;
+}
+.chat-screen .chat-welcome + .messages:empty {
+  flex: 0;
+}
+.chat-screen .composer {
+  flex-shrink: 0;
+  margin-top: 10px;
+}
+.chat-screen .composer textarea {
+  font-size: 16px;
+  min-height: 44px;
+  max-height: 120px;
+  resize: none;
+  scroll-margin-bottom: 12px;
+  min-width: 0;
+  flex: 1;
+}
+:root[data-chat-keyboard="true"] .chat-screen > .bottom {
+  display: none;
+}
+:root[data-chat-keyboard="true"] .chat-screen > .content {
+  padding-bottom: 8px;
+  padding-top: 8px;
+}
+:root[data-chat-keyboard="true"] .chat-screen .section-title,
+:root[data-chat-keyboard="true"] .chat-screen .assistant-note {
+  display: none;
+}

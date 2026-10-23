@@ -1,4 +1,5 @@
 "use client";
+import { useChatViewport } from "../../shared/chat-viewport";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowUp,
@@ -71,6 +72,7 @@ export default function TaskAssistant({
   actor: Actor;
   onChange: () => Promise<void>;
 }) {
+  useChatViewport();
   const [data, setData] = useState<AgentState>(empty),
     [timezone, setTimezone] = useState<string | null>(null),
     [draft, setDraft] = useState(""),

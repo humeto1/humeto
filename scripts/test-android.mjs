@@ -544,6 +544,58 @@ try {
     },
   );
   await check(
+    "Android keyboard keeps chat composer and Send visible without manual scrolling",
+    async () => {
+      await cdp.click("Chat");
+      adbRun([
+        "shell",
+        "settings",
+        "put",
+        "secure",
+        "show_ime_with_hard_keyboard",
+        "1",
+      ]);
+      const before = await cdp.evaluate(`window.visualViewport.height`);
+      const point = await cdp.evaluate(
+        `(()=>{const r=document.querySelector('textarea[aria-label="Message Humeto"]').getBoundingClientRect();return {x:r.x+30,y:r.y+20};})()`,
+      );
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [point],
+      });
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchEnd",
+        touchPoints: [],
+      });
+      await cdp.wait(`window.visualViewport.height < ${before} - 100`);
+      await cdp.wait(
+        `document.documentElement.dataset.chatKeyboard === 'true'`,
+      );
+      await cdp.fill(
+        'textarea[aria-label="Message Humeto"]',
+        "Visible keyboard draft",
+      );
+      const bounds = await cdp.evaluate(
+        `(()=>{const v=window.visualViewport;const r=document.querySelector('.composer').getBoundingClientRect();const b=document.querySelector('button[aria-label="Send message"]').getBoundingClientRect();return {top:r.top,bottom:r.bottom,sendBottom:b.bottom,height:v.height+v.offsetTop,nav:getComputedStyle(document.querySelector('.bottom')).display};})()`,
+      );
+      assert.ok(
+        bounds.top >= 0 &&
+          bounds.bottom <= bounds.height + 2 &&
+          bounds.sendBottom <= bounds.height + 2,
+        JSON.stringify(bounds),
+      );
+      assert.equal(bounds.nav, "none");
+      adbRun(["shell", "input", "keyevent", "KEYCODE_BACK"]);
+      await cdp.wait(`window.visualViewport.height > ${before} - 50`);
+      assert.equal(
+        await cdp.evaluate(
+          `document.querySelector('textarea[aria-label="Message Humeto"]').value`,
+        ),
+        "Visible keyboard draft",
+      );
+    },
+  );
+  await check(
     "Assistant prepares and cancels a proposal without applying it",
     async () => {
       await cdp.click("Chat");

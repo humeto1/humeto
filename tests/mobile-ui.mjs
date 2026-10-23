@@ -145,6 +145,42 @@ test(
         "Done",
       );
       await page.getByRole("button", { name: "Chat", exact: true }).click();
+      await page.getByLabel("Message Humeto").focus();
+      await page.setViewportSize({ width: 390, height: 430 });
+      await page.waitForFunction(
+        () => document.documentElement.dataset.chatKeyboard === "true",
+      );
+      const keyboardBounds = await page.locator(".composer").boundingBox();
+      assert.ok(
+        keyboardBounds.y >= 0 &&
+          keyboardBounds.y + keyboardBounds.height <= 431,
+        "composer stays above keyboard without scrolling",
+      );
+      assert.equal(
+        await page
+          .getByRole("navigation", { name: "Main navigation" })
+          .isVisible(),
+        false,
+      );
+      await page
+        .getByLabel("Message Humeto")
+        .fill("Draft survives keyboard close");
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByLabel("Message Humeto").blur();
+      await page.waitForFunction(
+        () => document.documentElement.dataset.chatKeyboard === "false",
+      );
+      assert.equal(
+        await page.getByLabel("Message Humeto").inputValue(),
+        "Draft survives keyboard close",
+      );
+      assert.equal(
+        await page
+          .getByRole("navigation", { name: "Main navigation" })
+          .isVisible(),
+        true,
+      );
+
       await page
         .getByLabel("Message Humeto")
         .fill("Create a task to review mobile testing tomorrow");
