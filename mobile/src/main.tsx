@@ -435,7 +435,12 @@ function App() {
     (t) =>
       (filter === "all" ||
         (filter === "done" ? t.stage === "Done" : t.stage !== "Done")) &&
-      [t.title, t.project_title, t.assignee]
+      [
+        t.title,
+        t.project_title,
+        t.assignee,
+        ...(t.goals || []).map((g) => g.title),
+      ]
         .join(" ")
         .toLowerCase()
         .includes(query.toLowerCase()),
@@ -669,6 +674,7 @@ function App() {
                 </button>
                 <button
                   className={view === "list" ? "selected" : ""}
+                  aria-label="List view"
                   onClick={() => setView("list")}
                 >
                   <List size={15} />

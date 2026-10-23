@@ -13,7 +13,7 @@ Today dashboard; compact priority quadrants, board and list; task creation/editi
 - Mobile TypeScript/Vite build and Next.js build passed.
 - 141 release checks passed with fictional data in disposable PostgreSQL.
 - New mobile UI test exercised shared session auth, task-only data, create/sync/complete, assistant proposal/cancel, goals navigation and narrow-screen overflow.
-- Android Gradle assembleDebug succeeded and the APK installed/launched in an Android emulator.
+- Android Gradle assembleDebug succeeded and the APK installed/launched in an Android emulator. The native HTTPS client reached production and received the expected authenticated-route 401 while signed out. APK v2 signature verified.
 - iOS source/SPM project generated. iPhone work deferred at user request; no IPA, archive or signed iPhone binary built.
 
 ## Testing

@@ -79,7 +79,9 @@ test(
       const task = state.tasks.find((t) => t.title === title);
       assert.ok(task);
       id = task.id;
-      await page.getByRole("button", { name: "List", exact: true }).count();
+      await page
+        .getByRole("button", { name: "List view", exact: true })
+        .click();
       await page.getByRole("button").filter({ hasText: title }).first().click();
       await page.getByRole("dialog").waitFor();
       await page.getByLabel("Workflow stage").selectOption("Done");
