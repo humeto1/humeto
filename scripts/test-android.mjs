@@ -607,18 +607,21 @@ try {
     "Focus session starts, pauses, resumes and records completion",
     async () => {
       await cdp.click("Focus");
-      await cdp.click("🎲 Pick a random task");
+      await cdp.click("Pick a random task");
       await cdp.wait(
         "[...document.querySelectorAll('button')].some(b=>b.textContent==='Choose this task'&&!b.disabled)",
       );
       assert.equal((await nativeApi("/api/workspace/focus")).data.active, null);
+      await cdp.evaluate(
+        `(()=>{const e=document.querySelector('select[aria-label="Focus task selector"]');const set=Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set;set.call(e,${JSON.stringify(taskId)});e.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+      );
+      await cdp.click("Start");
       await cdp.wait(
-        `Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes(${JSON.stringify(title + " updated")})&&!e.disabled)`,
+        `document.querySelector('.focus-session .pill')?.textContent.includes('Focusing')`,
       );
       await cdp.evaluate(
-        `Array.from(document.querySelectorAll('button')).find(e=>e.textContent.includes(${JSON.stringify(title + " updated")})&&!e.disabled).click()`,
+        `document.querySelector('.focus-transition > summary').click()`,
       );
-      await cdp.wait(`document.body.innerText.includes('Time spent')`);
       await cdp.click("Take a 10-second reset");
       await cdp.wait("!!document.querySelector('[role=timer]')");
       assert.equal(
@@ -628,16 +631,16 @@ try {
       await cdp.evaluate(
         "[...document.querySelectorAll('.focus-rest summary')].find(e=>e.textContent==='Take a break').click()",
       );
-      await cdp.click("Start break · pause work timer");
+      await cdp.click("Start break");
       const onBreak = (await nativeApi("/api/workspace/focus")).data.active;
       assert.equal(onBreak.state, "paused");
       assert.ok(onBreak.break_until);
-      await cdp.click("Resume");
+      await cdp.click("Start");
       await cdp.click("Pause");
       await cdp.wait(
-        `Array.from(document.querySelectorAll('button')).some(e=>e.textContent.trim()==='Resume')`,
+        `Array.from(document.querySelectorAll('button')).some(e=>e.textContent.trim()==='Start'&&!e.disabled)`,
       );
-      await cdp.click("Resume");
+      await cdp.click("Start");
       await cdp.wait(
         `document.querySelector('.focus-session .pill')?.textContent.includes('Focusing')`,
       );
@@ -658,7 +661,7 @@ try {
           `document.querySelector('.focus-picker-list .task').click()`,
         );
         await cdp.wait(
-          `!document.querySelector('[role=dialog]') && document.querySelector('.focus-session h2')?.textContent===${JSON.stringify(name)}`,
+          `!document.querySelector('[role=dialog]') && document.querySelector('select[aria-label="Focus task selector"]')?.selectedOptions[0]?.textContent===${JSON.stringify(name)}`,
         );
       };
       await pick(other.title);
@@ -678,8 +681,9 @@ try {
       );
       await pick(title + " updated");
       await cdp.click("Mark task complete");
+      await cdp.click("Confirm");
       await cdp.wait(
-        `document.body.innerText.includes('What would you like to move forward?')`,
+        `document.querySelector('.focus-session h2')?.textContent==='Choose a task'`,
       );
       assert.equal(
         (await nativeApi("/api/mobile")).data.tasks.find((t) => t.id === taskId)

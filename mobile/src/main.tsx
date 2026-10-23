@@ -1,5 +1,6 @@
 import { ParentControls } from "../../shared/parent-controls";
 import { TaskActivity } from "../../shared/task-activity";
+import { HoldToComplete } from "../../shared/focus-controls";
 import { FocusRest } from "../../shared/focus-rest";
 import BirdsEye from "../../shared/birds-eye";
 import { TaskLinks } from "../../shared/task-links";
@@ -40,6 +41,8 @@ import {
   Pause,
   Target,
   Calendar,
+  Eye,
+  Square,
   Users,
   WifiOff,
   Folder,
@@ -370,6 +373,7 @@ function App() {
     [categoryFilter, setCategoryFilter] = useState("all"),
     [dueFilter, setDueFilter] = useState("all"),
     [ownerFilter, setOwnerFilter] = useState("all"),
+    [focusSelection, setFocusSelection] = useState(""),
     [focusQuery, setFocusQuery] = useState(""),
     [focus, setFocus] = useState<any>(null),
     [schedule, setSchedule] = useState<any>(null),
@@ -506,6 +510,10 @@ function App() {
     pending = data.tasks.filter((t) => t.stage !== "Done"),
     completed = data.tasks.filter((t) => t.stage === "Done");
   const focusTask = data.tasks.find((t) => t.id === active?.task_id);
+  const focusChoice =
+    pending.find((t) => t.id === focusSelection) || focusTask || pending[0];
+  const switchPending =
+    !!active && !!focusChoice && focusChoice.id !== active.task_id;
   const focusTitle =
     focusTask?.display_title ||
     focusTask?.title ||
@@ -614,6 +622,7 @@ function App() {
           minutes,
           ...extras,
         });
+        setFocusSelection("");
       },
       action === "complete"
         ? "Task completed. A step forward."
@@ -826,6 +835,8 @@ function App() {
               <button
                 className="secondary"
                 aria-label="Calendar view"
+                aria-pressed={view === "calendar"}
+                title="Tasks by due date"
                 onClick={() => setView("calendar")}
               >
                 <Calendar size={15} />
@@ -833,9 +844,11 @@ function App() {
               <button
                 className="secondary"
                 aria-label="Bird’s-eye view"
+                title="All tasks at a glance"
+                aria-pressed={view === "birds"}
                 onClick={() => setView("birds")}
               >
-                Bird’s-eye
+                <Eye size={16} />
               </button>
               <select
                 aria-label="Task filter"
@@ -1060,179 +1073,185 @@ function App() {
         )}
         {tab === "focus" && (
           <>
-            <div className="page-intro">
+            <div className="page-intro focus-intro">
               <span className="eyebrow">ONE THING AT A TIME</span>
-              <h1>
-                Make space.
-                <br />
-                <em>For this moment.</em>
-              </h1>
+              <h1>Focus</h1>
             </div>
-            {active ? (
-              <section className="focus-session">
-                <span className="pill">
-                  {active.state === "running" ? "● Focusing" : "Paused"}
-                </span>
-                <h2>{focusTitle}</h2>
-                <button
-                  className="secondary"
-                  disabled={!writable}
-                  onClick={() => setSheet("focus-picker")}
+            <section className="focus-session">
+              {!active && <h2>Choose a task</h2>}
+              <label className="focus-task-select">
+                Select task
+                <select
+                  aria-label="Focus task selector"
+                  disabled={!writable || !pending.length}
+                  value={focusChoice?.id || ""}
+                  onChange={(e) => setFocusSelection(e.target.value)}
                 >
-                  Switch focus task
-                </button>
-                <FocusRest
-                  key={active.id}
-                  active={active}
-                  now={tick}
-                  totalSeconds={
-                    Number(
+                  {!pending.length && <option value="">No open tasks</option>}
+                  {pending.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.display_title || t.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {active ? (
+                <>
+                  <span className="pill">
+                    {active.state === "running" ? "● Focusing" : "Paused"}
+                  </span>
+                  {switchPending && (
+                    <p className="focus-switch-notice">
+                      Start to switch · Current: {focusTitle}
+                    </p>
+                  )}
+                  <div className="timer" aria-label="Elapsed focus time">
+                    {String(Math.floor(elapsed / 60)).padStart(2, "0")}
+                    <span>:</span>
+                    {String(elapsed % 60).padStart(2, "0")}
+                  </div>
+                  <p className="focus-time-meta">
+                    {active.target_minutes} min estimate
+                  </p>
+                  <div className="focus-toolbar">
+                    <button
+                      className="focus-ui-button focus-ui-primary"
+                      disabled={
+                        !writable ||
+                        (active.state === "running" && !switchPending)
+                      }
+                      onClick={() =>
+                        void focusAction(
+                          switchPending ? "switch" : "resume",
+                          switchPending
+                            ? {
+                                taskId: focusChoice.id,
+                                nextTaskRevision: focusChoice.revision,
+                              }
+                            : {},
+                        )
+                      }
+                    >
+                      <Play size={15} />
+                      Start
+                    </button>
+                    <button
+                      className="focus-ui-button"
+                      disabled={!writable || active.state !== "running"}
+                      onClick={() => void focusAction("pause")}
+                    >
+                      <Pause size={15} />
+                      Pause
+                    </button>
+                    <button
+                      className="focus-ui-button"
+                      disabled={!writable}
+                      onClick={() => void focusAction("stop")}
+                    >
+                      <Square size={14} />
+                      Stop
+                    </button>
+                    <HoldToComplete
+                      key={active.id}
+                      disabled={!writable || switchPending}
+                      onComplete={() => void focusAction("complete")}
+                    />
+                  </div>
+                  <FocusRest
+                    key={active.id}
+                    active={active}
+                    now={tick}
+                    totalSeconds={
+                      Number(
+                        focus?.taskTotals?.find(
+                          (t: any) => t.task_id === active.task_id,
+                        )?.seconds || 0,
+                      ) + Math.max(0, elapsed - Number(active.total_seconds))
+                    }
+                    sessions={
                       focus?.taskTotals?.find(
                         (t: any) => t.task_id === active.task_id,
-                      )?.seconds || 0,
-                    ) + Math.max(0, elapsed - Number(active.total_seconds))
-                  }
-                  sessions={
-                    focus?.taskTotals?.find(
-                      (t: any) => t.task_id === active.task_id,
-                    )?.sessions || 1
-                  }
-                  onAction={(action, extra) => void focusAction(action, extra)}
-                  busy={busy || !writable}
-                />
-                <FocusTransition onReady={() => setSheet("focus-picker")} />
-                <div className="timer">
-                  {String(Math.floor(elapsed / 60)).padStart(2, "0")}
-                  <span>:</span>
-                  {String(elapsed % 60).padStart(2, "0")}
-                </div>
-                <p>{active.target_minutes} minute session · Time spent</p>
-                <p>
-                  {Math.max(
-                    0,
-                    Math.ceil((active.target_minutes * 60 - elapsed) / 60),
-                  )}{" "}
-                  minutes left in your estimate · Timer keeps tracking until you
-                  pause or end this work session.
-                </p>
-                {active.check_in_at &&
-                  new Date(active.check_in_at).getTime() <= tick && (
-                    <div className="check-in">
-                      <h3>How is it going?</h3>
-                      <p>
-                        Keep going, take a break, or choose a smaller next step.
-                      </p>
-                    </div>
-                  )}
-                <div className="button-row">
-                  <button
-                    className="secondary"
-                    disabled={!writable}
-                    onClick={() =>
-                      void focusAction(
-                        active.state === "running" ? "pause" : "resume",
-                      )
+                      )?.sessions || 1
                     }
-                  >
-                    {active.state === "running" ? (
-                      <Pause size={17} />
-                    ) : (
-                      <Play size={17} />
-                    )}{" "}
-                    {active.state === "running" ? "Pause" : "Resume"}
-                  </button>
-                  <button
-                    className="secondary"
-                    disabled={!writable}
-                    onClick={() => void focusAction("complete")}
-                  >
-                    Mark task complete <Check size={17} />
-                  </button>
-                </div>
-                <button
-                  className="text"
-                  disabled={!writable}
-                  onClick={() => void focusAction("extend", { minutes: 10 })}
-                >
-                  Give me 10 more minutes
-                </button>
-                <button
-                  className="text muted"
-                  disabled={!writable}
-                  onClick={() =>
-                    void focusAction("blocked", {
-                      blocker: "other",
-                      note: "I need a different approach.",
-                    })
-                  }
-                >
-                  I'm stuck · take a pause
-                </button>
-              </section>
-            ) : (
-              <>
-                <section className="panel">
-                  <h2>What would you like to move forward?</h2>
-                  <p>Pick one task. Everything else can wait.</p>
+                    onAction={(action, extra) =>
+                      void focusAction(action, extra)
+                    }
+                    busy={busy || !writable}
+                  />
+                  <FocusTransition onReady={() => setSheet("focus-picker")} />
+                  <details className="focus-more">
+                    <summary>Check-in options</summary>
+                    <button
+                      className="focus-ui-button"
+                      disabled={!writable}
+                      onClick={() =>
+                        void focusAction("extend", { minutes: 10 })
+                      }
+                    >
+                      +10 min
+                    </button>
+                    <button
+                      className="focus-ui-button"
+                      disabled={!writable}
+                      onClick={() =>
+                        void focusAction("blocked", {
+                          blocker: "other",
+                          note: "I need a different approach.",
+                        })
+                      }
+                    >
+                      I'm stuck
+                    </button>
+                  </details>
+                </>
+              ) : (
+                <>
+                  <div className="focus-start-row">
+                    <label className="focus-task-select">
+                      Check-in
+                      <select
+                        aria-label="Expected focus time"
+                        value={minutes}
+                        onChange={(e) => setMinutes(Number(e.target.value))}
+                      >
+                        {[10, 15, 25, 45, 60, 90].map((m) => (
+                          <option key={m} value={m}>
+                            {m} min
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      className="focus-ui-button focus-ui-primary"
+                      disabled={!writable || !focusChoice}
+                      onClick={() =>
+                        void focusAction("start", {
+                          taskId: focusChoice?.id,
+                          taskRevision: focusChoice?.revision,
+                        })
+                      }
+                    >
+                      <Play size={16} />
+                      Start
+                    </button>
+                  </div>
                   <RandomTaskPicker
                     tasks={pending}
-                    onChoose={(id) => {
-                      const task = pending.find((t) => t.id === id);
-                      if (task) {
-                        setFocusQuery(task.title);
-                        setSheet("focus-picker");
-                      }
-                    }}
+                    onChoose={setFocusSelection}
                   />
-                  <label>
-                    Expected focus time
-                    <select
-                      value={minutes}
-                      onChange={(e) => setMinutes(Number(e.target.value))}
-                    >
-                      {[10, 15, 25, 45, 60, 90].map((m) => (
-                        <option value={m} key={m}>
-                          {m} minutes
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </section>
-                {pending.map((t) => (
-                  <button
-                    className="task"
-                    disabled={!writable}
-                    key={t.id}
-                    onClick={() =>
-                      void focusAction("start", {
-                        taskId: t.id,
-                        taskRevision: t.revision,
-                      })
-                    }
-                  >
-                    <Play size={18} />
-                    <span className="task-copy">
-                      <strong>{t.display_title || t.title}</strong>
-                      {t.display_title && <small>Original: {t.title}</small>}
-                      <small>{t.project_title || "Your next step"}</small>
-                    </span>
-                  </button>
-                ))}
-                {!pending.length && (
-                  <div className="empty">
-                    <Target />
-                    <h3>A clean slate.</h3>
+                  {!pending.length && (
                     <button
-                      className="primary"
+                      className="focus-ui-button"
                       disabled={!writable}
                       onClick={() => setSheet("create")}
                     >
-                      Create a task
+                      <Plus size={15} />
+                      New task
                     </button>
-                  </div>
-                )}
-              </>
-            )}
+                  )}
+                </>
+              )}
+            </section>
             <h2 className="spaced">Recent focus</h2>
             {focus?.history?.slice(0, 5).map((s: any) => (
               <div className="history" key={s.id}>
@@ -1585,11 +1604,6 @@ function App() {
           title={active ? "Switch focus task" : "Choose a focus task"}
           close={() => setSheet(null)}
         >
-          <p>
-            {active
-              ? "Your tracked time is saved. The previous task stays open."
-              : "Choose one task to give your full attention."}
-          </p>
           <label>
             Find a task
             <input

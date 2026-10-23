@@ -592,3 +592,6 @@
     transition: none;
   }
 }
+
+.grid>div:first-child{min-width:0}.grid .eyebrow{margin-bottom:6px}.shell :global(.focus-task-select){max-width:650px}.shell :global(.focus-task-select select){font-size:15px;padding:13px}.pick>:global(.focus-random){flex-basis:100%;margin:0;padding:0!important}.pick label:first-child{flex:1;min-width:min(100%,240px)}.shell :global(.focus-ui-button.focus-ui-primary){background:#244b3a;color:#fff;border-color:#244b3a}.shell :global(.focus-toolbar){margin:18px 0}.shell :global(.focus-more)>summary{font-weight:500}.hint{color:#536449}.history>details{margin:8px 0}.shell :global(.focus-transition){margin-bottom:14px}
+@media(max-width:650px){.top{flex-direction:row;align-items:center;gap:8px;margin-bottom:16px}.topActions{gap:10px}.grid{gap:14px}.timer{padding:16px 20px}.shell .topActions button{font-size:11px}}

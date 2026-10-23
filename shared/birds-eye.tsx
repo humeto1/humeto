@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import "./birds-eye.css";
 export default function BirdsEye({
   tasks,
@@ -29,6 +30,9 @@ export default function BirdsEye({
             : stageTitle(t.stage);
     groups.set(key, [...(groups.get(key) || []), t]);
   }
+  const allCollapsed =
+    groups.size > 0 &&
+    [...groups.keys()].every((key) => collapsed.includes(key));
   const done = tasks.filter((t) => t.stage === "Done").length;
   const today = new Date();
   const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -36,7 +40,7 @@ export default function BirdsEye({
     <section className="birds-eye" aria-label="Bird’s-eye task view">
       <header>
         <div>
-          <h2>Your whole workload, at a glance.</h2>
+          <h2>All tasks</h2>
           <p>
             {tasks.length} tasks · {done} done ·{" "}
             {
@@ -65,14 +69,19 @@ export default function BirdsEye({
           </select>
         </label>
         <button
-          onClick={() =>
-            setCollapsed(collapsed.length ? [] : [...groups.keys()])
-          }
+          className="birds-collapse"
+          disabled={!groups.size}
+          onClick={() => setCollapsed(allCollapsed ? [] : [...groups.keys()])}
         >
-          {collapsed.length ? "Expand groups" : "Collapse groups"}
+          {allCollapsed ? (
+            <ChevronsUpDown size={14} />
+          ) : (
+            <ChevronsDownUp size={14} />
+          )}
+          {allCollapsed ? "Expand groups" : "Collapse groups"}
         </button>
       </header>
-      <p>Uses your current filters. Tap any row for full details.</p>
+
       <div className="birds-groups">
         {[...groups].map(([name, items]) => (
           <section key={name}>

@@ -23,17 +23,37 @@ export default function TaskCalendar({
   return (
     <section className="planning-hub" aria-label="Filtered task calendar">
       <div className="planning-controls">
-        <h2>Task calendar</h2>
+        <h2>Due dates</h2>
         <label>
           Month
           <input
             type="month"
             value={month}
-            onChange={(e) => e.target.value && setMonth(e.target.value)}
+            onChange={(e) => {
+              if (!e.target.value) return;
+              setMonth(e.target.value);
+              setSelected(
+                date().startsWith(e.target.value)
+                  ? date()
+                  : e.target.value + "-01",
+              );
+            }}
           />
         </label>
+        <button
+          type="button"
+          onClick={() => {
+            setMonth(date().slice(0, 7));
+            setSelected(date());
+          }}
+        >
+          Today
+        </button>
         <span>{tasks.length} filtered tasks</span>
       </div>
+      <p style={{ fontSize: 12, color: "#536449" }}>
+        Select a date to see tasks due.
+      </p>
       <div className="planning-calendar">
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((n) => (
           <span className="calendar-weekday" key={n}>
@@ -76,7 +96,7 @@ export default function TaskCalendar({
           </button>
         ))}
       {!tasks.some((t) => t.due_date === selected) && (
-        <p>No matching tasks on this date.</p>
+        <p>No tasks due on this date.</p>
       )}
       <details>
         <summary>

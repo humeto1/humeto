@@ -107,17 +107,34 @@ test(
       );
       await page.reload();
       await page.getByRole("button", { name: "Focus", exact: true }).click();
-      await page.getByRole("button").filter({ hasText: title }).click();
+      await page.getByLabel("Focus task selector").selectOption(id);
+      await page.getByRole("button", { name: "Start", exact: true }).click();
       await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
       await page.getByRole("button", { name: "Pause", exact: true }).click();
-      await page.getByRole("button", { name: "Resume", exact: true }).click();
+      await page.getByRole("button", { name: "Start", exact: true }).click();
       await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
+      mkdirSync(".data/focus-redesign", { recursive: true });
+      await page.screenshot({
+        path: ".data/focus-redesign/mobile-active.png",
+        fullPage: true,
+      });
+      const focusAudit = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+        .analyze();
+      assert.deepEqual(
+        focusAudit.violations.map((v) => ({
+          id: v.id,
+          nodes: v.nodes.map((n) => n.target),
+        })),
+        [],
+      );
       await page
         .getByRole("button", { name: "Mark task complete", exact: true })
         .click();
+      await page.getByRole("button", { name: "Confirm", exact: true }).click();
       await page
         .getByRole("heading", {
-          name: "What would you like to move forward?",
+          name: "Choose a task",
           exact: true,
         })
         .waitFor();

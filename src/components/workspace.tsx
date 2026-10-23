@@ -2004,21 +2004,25 @@ export default function Workspace({
           )}
           {view === "tasks" && (
             <>
-              {title(
-                "Busy isn’t the goal. Progress is.",
-                "Choose one thing. Make room for progress, with a little help from Humeto.",
-                staff && writable ? (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <a href="/workspace/assistant" className="btn secondary">
-                      <Sparkles size={14} /> Ask Humeto
+              <div className="task-page-heading">
+                <h1>Tasks to-do</h1>
+                {staff && writable && (
+                  <div>
+                    <a
+                      href="/workspace/assistant"
+                      className="btn secondary"
+                      aria-label="Ask Humeto"
+                      title="Ask Humeto"
+                    >
+                      <Sparkles size={15} />
                     </a>
-                    <a className="btn secondary" href="/workspace/progress">
-                      Projects & progress
+                    <a href="/workspace/progress" className="btn secondary">
+                      Projects
                     </a>
                     {button("Add task", () => showModal("task"))}
                   </div>
-                ) : undefined,
-              )}
+                )}
+              </div>
               {staff && (
                 <TaskFocus
                   memberKey={`${actor.tenantId}:${actor.id}`}
@@ -2051,18 +2055,21 @@ export default function Workspace({
                       ["board", "Board", Columns3],
                       ["matrix", "Priority matrix", Grid2X2],
                       ["list", "List", List],
-                      ["calendar", "Calendar", Calendar],
-                      ["birds", "Bird’s-eye", Grid2X2],
+                      ["calendar", "Due dates", Calendar],
+                      ["birds", "Bird’s-eye view", Eye],
                     ].map(([key, label, Icon]) => {
                       const I = Icon as LucideIcon;
                       return (
                         <button
                           key={String(key)}
+                          aria-label={String(label)}
+                          aria-pressed={taskView === key}
+                          title={String(label)}
                           className={taskView === key ? "active" : ""}
                           onClick={() => setTaskView(String(key))}
                         >
                           <I size={14} />
-                          {String(label)}
+                          {key !== "birds" && String(label)}
                         </button>
                       );
                     })}

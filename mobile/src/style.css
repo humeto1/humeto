@@ -623,7 +623,7 @@ small {
   padding: 7px 11px;
   border-radius: 20px;
   background: #eaf2df;
-  color: #668148;
+  color: #44603b;
   margin-bottom: 18px;
 }
 .focus-session h2 {
@@ -638,7 +638,7 @@ small {
   margin: 26px 0 8px;
 }
 .timer span {
-  color: #b1bf9d;
+  color: #7b8c6a;
 }
 .focus-session > p {
   font-size: 12px;
@@ -1127,3 +1127,7 @@ legend {
   display: block;
   margin-top: 12px;
 }
+
+.focus-intro{margin-bottom:18px}.focus-intro h1{font-size:34px;margin-top:6px}.focus-session .timer{font-size:58px;margin:18px 0 6px}.focus-session .pill{margin:4px 0}.focus-session .focus-toolbar{justify-content:center}.focus-session .focus-time-meta{margin-bottom:12px;color:#536449}.focus-session .focus-switch-notice{font-size:12px;color:#536449;margin:10px 0}.focus-session .focus-more{text-align:left}.focus-session .focus-more>.focus-ui-button{margin:12px 8px 0 0}.focus-start-row>.focus-task-select{flex:1;margin:0}.focus-start-row{margin-top:14px}.focus-session .focus-random{text-align:left}
+
+.secondary[aria-pressed="true"]{background:#e5edd7;border-color:#789463;color:#294737}

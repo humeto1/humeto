@@ -1,3 +1,15 @@
+# Focus and task views — UI update, October 23, 2026
+
+Web and mobile now use a compact task selector with Start, Pause and Stop. Selecting a different task does not switch immediately: Start saves the current session and starts the chosen task. Stop ends the work session without completing its task. Hold Complete for one second to finish, or tap/press Enter and confirm; movement or cancellation stops a hold. Completion is disabled while a different task is selected but has not started.
+
+Break type/duration sit inside a themed Take a break panel. Starting a break pauses work; Start resumes when ready. Reset & switch, coaching and notes are collapsed by default. Recent sessions remain available, with older web history under More sessions. Core timer controls remain visible.
+
+The task overview uses an eye icon with an accessible label. Group collapse/expand controls match the theme. Due dates is the calendar view: choose a day to see tasks due that day, using the current task filters. Undated tasks remain separately available. Changing month selects a date in that month; Today returns to the current day.
+
+Validation: both builds pass; full release baseline 157/157; focused UI/interaction checks 7/7; date/overview regression 1/1; Android emulator 25/25. Active Focus was checked with Axe on desktop, narrow web and the mobile preview. APK 0.2.2 is debug-signed for testing; physical device behavior still needs acceptance.
+
+--- Existing feature reference ---
+
 # Shared task planning · web and mobile
 
 Web and mobile are clients of the same product: identical users/authentication, workspace boundaries, PostgreSQL records and backend task mutations. Shared planning/calendar/alert/impact UI is in `shared/`. Platform permission and battery settings remain local to each device. Future changes must account for both clients (also recorded in AGENTS.md).

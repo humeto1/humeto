@@ -27,7 +27,7 @@ test("100 tasks remain in bounded quadrants and open full editable details", asy
           title: title + " " + i,
           important: true,
           urgent: true,
-          dueDate: "",
+          dueDate: "2027-11-02",
           assignee: "",
         },
       });
@@ -79,7 +79,16 @@ test("100 tasks remain in bounded quadrants and open full editable details", asy
     );
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("dialog").count(), 0);
-    await page.getByRole("button", { name: "Bird’s-eye", exact: true }).click();
+    const overview = page.getByRole("button", {
+      name: "Bird’s-eye view",
+      exact: true,
+    });
+    assert.equal(
+      (await overview.innerText()).trim(),
+      "",
+      "Overview uses an eye icon",
+    );
+    await overview.click();
     await page.locator(".birds-task").first().waitFor();
     assert.ok((await page.locator(".birds-task").count()) >= 100);
     await page
@@ -89,11 +98,41 @@ test("100 tasks remain in bounded quadrants and open full editable details", asy
     await page
       .getByRole("button", { name: "Expand groups", exact: true })
       .click();
+    assert.equal(await page.locator(".birds-collapse").count(), 1);
     await page.setViewportSize({ width: 390, height: 844 });
     assert.ok(
       await page
         .locator(".birds-eye")
         .evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+    );
+    await page.getByRole("button", { name: "Due dates", exact: true }).click();
+    const calendar = page.getByRole("region", {
+      name: "Filtered task calendar",
+    });
+    await calendar.getByLabel("Month", { exact: true }).fill("2027-11");
+    await calendar
+      .getByRole("button", { name: "Task day 2027-11-02", exact: true })
+      .click();
+    assert.equal(
+      await calendar
+        .locator(".planning-row")
+        .filter({ hasText: title + " 0" })
+        .count(),
+      1,
+    );
+    await calendar
+      .getByRole("button", { name: "Task day 2027-11-03", exact: true })
+      .click();
+    await calendar
+      .getByText("No tasks due on this date.", { exact: true })
+      .waitFor();
+    await calendar.getByRole("button", { name: "Today", exact: true }).click();
+    const today = new Date().toLocaleDateString("en-CA");
+    assert.equal(
+      await calendar
+        .getByRole("button", { name: "Task day " + today, exact: true })
+        .getAttribute("aria-pressed"),
+      "true",
     );
   } finally {
     await context.close();

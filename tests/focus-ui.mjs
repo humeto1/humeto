@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { database } from "../src/lib/postgres.mjs";
+import AxeBuilder from "@axe-core/playwright";
+import { mkdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
 test("focus UI hides the board, restores a paused timer and completes the chosen task", async () => {
@@ -55,11 +57,10 @@ test("focus UI hides the board, restores a paused timer and completes the chosen
       .getByRole("button", { name: "Choose this task", exact: true })
       .click();
     await page.getByLabel("Focus task", { exact: true }).selectOption(taskId);
-    await page
-      .getByRole("button", { name: "Let’s begin", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.getByText("Tracking time", { exact: true }).waitFor();
     assert.equal(await page.locator(".kanban-board").isVisible(), false);
+    await page.locator(".focus-transition > summary").click();
     await page
       .getByRole("button", { name: "Take a 10-second reset", exact: true })
       .click();
@@ -78,22 +79,97 @@ test("focus UI hides the board, restores a paused timer and completes the chosen
       .click();
     await page
       .getByRole("button", {
-        name: "Start break · pause work timer",
+        name: "Start break",
         exact: true,
       })
       .click();
     await page.getByText("Paused · timer stopped", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Resume", exact: true }).click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.getByRole("button", { name: "Pause", exact: true }).click();
     await page.getByText("Paused · timer stopped", { exact: true }).waitFor();
     await page.reload();
     await page.getByText("Paused · timer stopped", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Stop", exact: true }).click();
     await page
-      .getByRole("button", { name: "Mark task complete", exact: true })
+      .getByRole("heading", { name: "Choose a task", exact: true })
+      .waitFor();
+    const stopped = await (
+      await context.request.get("/api/workspace/focus")
+    ).json();
+    assert.equal(stopped.active, null);
+    assert.ok(
+      stopped.history.some(
+        (s) => s.task_id === taskId && s.state === "stopped",
+      ),
+    );
+    const bootstrap = await (
+      await context.request.get("/api/workspace/bootstrap")
+    ).json();
+    assert.notEqual(
+      bootstrap.tasks.find((t) => t.id === taskId).stage,
+      "Done",
+      "Stop preserves unfinished work",
+    );
+    await page.getByLabel("Focus task", { exact: true }).selectOption(taskId);
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.getByText("Tracking time", { exact: true }).waitFor();
+    mkdirSync(".data/focus-redesign", { recursive: true });
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      const audit = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+        .analyze();
+      assert.deepEqual(
+        audit.violations.map((v) => ({
+          id: v.id,
+          nodes: v.nodes.map((n) => n.target),
+        })),
+        [],
+      );
+      assert.ok(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth + 1,
+        ),
+      );
+      await page.screenshot({ path: `.data/focus-redesign/web-${width}.png` });
+    }
+    const cancelledHold = page.getByRole("button", {
+      name: "Mark task complete",
+      exact: true,
+    });
+    const box = await cancelledHold.boundingBox();
+    await page.mouse.move(box.x + 10, box.y + 10);
+    await page.mouse.down();
+    await page.waitForTimeout(350);
+    await page.mouse.move(box.x + 40, box.y + 10);
+    await page.mouse.up();
+    assert.equal(
+      await page.getByRole("group", { name: "Confirm completion" }).count(),
+      0,
+      "Moving cancels a hold",
+    );
+    await cancelledHold.focus();
+    await cancelledHold.press("Enter");
+
+    assert.notEqual(
+      (await (await context.request.get("/api/workspace/focus")).json()).active,
+      null,
+      "Tap only asks for confirmation",
+    );
+    await page
+      .getByRole("button", { name: "Cancel completion", exact: true })
       .click();
+    const complete = page.getByRole("button", {
+      name: "Mark task complete",
+      exact: true,
+    });
+    await complete.hover();
+    await page.mouse.down();
+    await page.waitForTimeout(1150);
+    await page.mouse.up();
     await page
       .getByRole("heading", {
-        name: "What would you like to move forward first?",
+        name: "Choose a task",
       })
       .waitFor();
     assert.equal(await page.locator(".kanban-board").isVisible(), true);

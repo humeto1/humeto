@@ -332,9 +332,7 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
     });
     await page.goto(base + "/workspace/tasks");
     await page.getByLabel("Focus task", { exact: true }).selectOption(a.id);
-    await page
-      .getByRole("button", { name: "Let’s begin", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.getByText("Tracking time", { exact: true }).waitFor();
     await page.getByRole("link", { name: /^Task reminders/ }).click();
     await page
@@ -346,6 +344,7 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
     await page.locator(".kanban-board").waitFor({ state: "hidden" });
     assert.equal(new URL(page.url()).hash, "");
 
+    await page.locator(".focus-more > summary").click();
     await page
       .getByLabel("Tell your task companion", { exact: true })
       .fill("50% done, need 15 minutes");
@@ -365,12 +364,32 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
       "50",
     );
     await page.reload();
+    await page.locator(".focus-more > summary").click();
     await page
       .getByText("50% done, need 15 minutes", { exact: true })
       .waitFor();
-    await page
-      .getByRole("button", { name: "Enable check-in alerts", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Alerts", exact: true }).click();
+    const scheduling = await (
+      await context.request.get("/api/workspace/scheduling")
+    ).json();
+    assert.equal(
+      (
+        await context.request.post("/api/workspace/scheduling", {
+          data: {
+            action: "preferences",
+            revision: scheduling.preferences.revision,
+            enabled: true,
+            timezone: "UTC",
+            quietEnabled: false,
+            quietStart: "22:00",
+            quietEnd: "08:00",
+            dailyLimit: 5,
+            followupMinutes: 0,
+          },
+        })
+      ).status(),
+      200,
+    );
     const current = (await read(context.request)).active;
     await d
       .prepare(
@@ -378,17 +397,18 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
       )
       .run(current.id);
     await page.reload();
-    await page.getByText("How is it going?", { exact: true }).waitFor();
+    await page.getByText("Check-in due", { exact: true }).waitFor();
     await page.waitForFunction(
       () => sessionStorage.getItem("qa-alert-count") === "1",
     );
     await page.reload();
-    await page.getByText("How is it going?", { exact: true }).waitFor();
+    await page.getByText("Check-in due", { exact: true }).waitFor();
     assert.equal(
       await page.evaluate(() => sessionStorage.getItem("qa-alert-count")),
       "1",
       "refresh does not repeat the same alert",
     );
+    await page.locator(".focus-more > summary").click();
     await page
       .getByRole("button", { name: "Waiting for someone", exact: true })
       .click();
@@ -396,15 +416,21 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
     await page
       .getByLabel("Switch focus task", { exact: true })
       .selectOption(b.id);
-    await page
-      .getByRole("button", { name: "Save & switch task", exact: true })
-      .click();
-    await page.getByRole("heading", { name: b.title, exact: true }).waitFor();
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await page.waitForFunction(
+      (id) =>
+        document.querySelector('select[aria-label="Switch focus task"]')
+          ?.options[0]?.value === id,
+      b.id,
+    );
     assert.equal(await page.locator(".kanban-board").isVisible(), false);
-    await page.getByRole("button", { name: "Mark task complete", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Mark task complete", exact: true })
+      .click();
+    await page.getByRole("button", { name: "Confirm", exact: true }).click();
     await page
       .getByRole("heading", {
-        name: "What would you like to move forward first?",
+        name: "Choose a task",
         exact: true,
       })
       .waitFor();

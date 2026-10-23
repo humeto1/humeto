@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { Shuffle, Wind } from "lucide-react";
+import "./focus-controls.css";
 
 export function RandomTaskPicker({
   tasks,
@@ -40,17 +42,17 @@ export function RandomTaskPicker({
   return (
     <section
       aria-label="Random focus task"
-      style={{
-        padding: 16,
-        border: "1px solid #dce5ce",
-        borderRadius: 14,
-        marginBlock: 12,
-      }}
+      className="focus-random"
+      style={{ padding: 10, border: 0, background: "transparent" }}
     >
-      <strong>A little surprise. One next step.</strong>
-      <p>Shuffle your available tasks. You choose whether to start.</p>
-      <button type="button" disabled={!tasks.length || rolling} onClick={spin}>
-        {rolling ? "Shuffling…" : "🎲 Pick a random task"}
+      <button
+        type="button"
+        aria-label="Pick a random task"
+        disabled={!tasks.length || rolling}
+        onClick={spin}
+      >
+        <Shuffle size={14} />
+        {rolling ? "Shuffling…" : "Shuffle"}
       </button>
       {available && (
         <>
@@ -79,38 +81,28 @@ export function FocusTransition({ onReady }: { onReady: () => void }) {
     return () => clearTimeout(timer);
   }, [remaining]);
   return (
-    <section
-      aria-label="Gentle task transition"
-      style={{
-        padding: 16,
-        borderRadius: 14,
-        background: "#eef3e3",
-        marginBlock: 12,
-      }}
-    >
-      <strong>Ready to switch mode?</strong>
-      <p>
-        Save one sentence about where you stopped. Relax your shoulders, look
-        away from the screen, and take a breath. Close your eyes if comfortable.
-      </p>
-      {remaining === null ? (
-        <button type="button" onClick={() => setRemaining(10)}>
-          Take a 10-second reset
+    <details className="focus-transition" aria-label="Gentle task transition">
+      <summary>
+        <Wind size={15} />
+        Reset & switch
+      </summary>
+      <div>
+        <p>Look away. Breathe. Ready for the next task?</p>
+        {remaining === null ? (
+          <button type="button" onClick={() => setRemaining(10)}>
+            Take a 10-second reset
+          </button>
+        ) : (
+          <p role="timer">
+            {remaining > 0
+              ? `${remaining} seconds · a moment to reset`
+              : "Ready when you are."}
+          </p>
+        )}
+        <button type="button" onClick={onReady}>
+          Select task
         </button>
-      ) : (
-        <p role="timer">
-          {remaining > 0
-            ? `${remaining} seconds · a moment to reset`
-            : "Ready when you are."}
-        </p>
-      )}
-      <button type="button" onClick={onReady}>
-        Choose my next task
-      </button>
-      <small style={{ display: "block", marginTop: 8 }}>
-        Your current timer and task stay unchanged until you choose. You can
-        also finish, pause, or give yourself more time.
-      </small>
-    </section>
+      </div>
+    </details>
   );
 }
