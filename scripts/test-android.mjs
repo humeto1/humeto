@@ -354,7 +354,7 @@ try {
     },
   );
   await check(
-    "Touch drag moves task stage and priority on Android without opening details",
+    "Long-press task card moves stage and all four quadrants without opening details",
     async () => {
       await cdp.click("Board");
       const gripSelector =
@@ -374,10 +374,10 @@ try {
               : [{ x: p.x, y: p.y, id: 1, radiusX: 3, radiusY: 3 }],
         });
       async function dragTo(zone) {
-        const start = await point(gripSelector);
+        const source = ".touch-task-card:has(" + gripSelector + ") .task-copy";
+        const start = await point(source);
         await touch("touchStart", start);
-        // Real users often start moving immediately, rather than holding still.
-        await touch("touchMove", { x: start.x + 8, y: start.y });
+        // Hold the card itself; no Move handle and no immediate movement.
         await cdp.wait("!!document.querySelector('.touch-drop-tray')");
         const dest = await point(
           '.touch-drop-tray [data-touch-drop="' + zone + '"]',

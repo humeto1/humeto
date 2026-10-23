@@ -45,13 +45,13 @@ test("phone touch gestures persist stages and priority, reach off-screen destina
       ).tasks.find((t) => t.id === id);
     const hold = async () => {
       const grip = page.getByRole("button", {
-        name: "Drag: " + title,
+        name: "Open task: " + title,
         exact: true,
       });
       await grip.scrollIntoViewIfNeeded();
       const b = await grip.boundingBox();
       await touch("touchStart", b.x + b.width / 2, b.y + b.height / 2);
-      await page.waitForTimeout(340);
+      await page.waitForTimeout(470);
       await page.locator(".touch-drag-ghost").waitFor();
       return b;
     };

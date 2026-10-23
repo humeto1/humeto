@@ -844,6 +844,7 @@ export default function Workspace({
       <article
         className="compact-task"
         key={t.id}
+        {...touchTasks.card(t.id, t.display_title || t.title)}
         draggable={staff && writable && !busy}
         onDragStart={(e) => {
           e.dataTransfer.setData("application/humeto-task", t.id);

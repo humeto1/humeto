@@ -1,6 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { GripVertical } from "lucide-react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type {
+  PointerEvent as ReactPointerEvent,
+  MouseEvent as ReactMouseEvent,
+} from "react";
 import "./touch-drag.css";
 
 type Options = {
@@ -14,15 +17,17 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
   latest.current = { enabled, onDrop };
   const [status, setStatus] = useState("");
   const cleanupRef = useRef<(() => void) | null>(null),
-    pending = useRef(false);
+    pending = useRef(false),
+    suppressClickUntil = useRef(0);
   useEffect(() => () => cleanupRef.current?.(), []);
   useEffect(() => {
     if (!enabled) cleanupRef.current?.();
   }, [enabled]);
   function begin(
-    e: ReactPointerEvent<HTMLButtonElement>,
+    e: ReactPointerEvent<HTMLElement>,
     id: string,
     title: string,
+    wholeCard = false,
   ) {
     if (
       !latest.current.enabled ||
@@ -50,6 +55,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       clearTimeout(timer);
       cancelAnimationFrame(frame);
       window.removeEventListener("pointermove", move);
+      window.removeEventListener("touchmove", touchMove);
       window.removeEventListener("pointerup", end);
       window.removeEventListener("pointercancel", cancel);
       window.removeEventListener("keydown", key);
@@ -57,6 +63,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       document.removeEventListener("visibilitychange", hidden);
       node.removeEventListener("lostpointercapture", lost);
       over?.classList.remove("touch-drop-over");
+      if (active) suppressClickUntil.current = Date.now() + 600;
       ghost?.remove();
       dock?.remove();
       document.body.classList.remove("touch-dragging");
@@ -149,11 +156,34 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       target();
       frame = requestAnimationFrame(animate);
     }
+    function touchMove(event: TouchEvent) {
+      if (event.touches.length !== 1) {
+        cancel();
+        return;
+      }
+      const touch = event.touches[0];
+      x = touch.clientX;
+      y = touch.clientY;
+      if (active) {
+        event.preventDefault();
+        target();
+      } else if (wholeCard && Math.hypot(x - initial.x, y - initial.y) > 12)
+        clear();
+    }
     function move(event: PointerEvent) {
       if (event.pointerId !== pointer) return;
       x = event.clientX;
       y = event.clientY;
-      if (!active && Math.hypot(x - initial.x, y - initial.y) > 6) activate();
+      if (
+        !active &&
+        wholeCard &&
+        Math.hypot(x - initial.x, y - initial.y) > 12
+      ) {
+        clear();
+        return;
+      }
+      if (!active && !wholeCard && Math.hypot(x - initial.x, y - initial.y) > 6)
+        activate();
       if (!active) return;
       event.preventDefault();
       target();
@@ -188,6 +218,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       } else setStatus("Move cancelled");
     }
     window.addEventListener("pointermove", move, { passive: false });
+    window.addEventListener("touchmove", touchMove, { passive: false });
     window.addEventListener("pointerup", end, { passive: false });
     window.addEventListener("pointercancel", cancel);
     window.addEventListener("keydown", key);
@@ -205,6 +236,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
         return;
       }
       active = true;
+      if (wholeCard) navigator.vibrate?.(20);
       node.classList.add("touch-grip-active");
       document.body.classList.add("touch-dragging");
       ghost = document.createElement("div");
@@ -240,7 +272,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       setStatus("Moving " + title + ". Release over a column or destination.");
       animate();
     }
-    const timer = setTimeout(activate, 180);
+    const timer = setTimeout(activate, wholeCard ? 400 : 180);
     cleanupRef.current = clear;
   }
   return {
@@ -250,6 +282,26 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       "data-touch-drop": key,
       "data-touch-label": label,
       "data-touch-owner": owner,
+    }),
+    card: (id: string, title: string) => ({
+      onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
+        if (e.pointerType !== "touch" || !latest.current.enabled) return;
+        const target = e.target as HTMLElement;
+        if (target.closest("input,select,textarea,a,.touch-drag-handle"))
+          return;
+        const button = target.closest("button");
+        if (button && !button.matches(".task,.compact-task-open")) return;
+        begin(e, id, title, true);
+      },
+      onClickCapture: (e: ReactMouseEvent<HTMLElement>) => {
+        if (Date.now() < suppressClickUntil.current) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      },
+      onContextMenu: (e: ReactMouseEvent<HTMLElement>) => {
+        if (latest.current.enabled) e.preventDefault();
+      },
     }),
     handle: (id: string, title: string) => (
       <button

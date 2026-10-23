@@ -142,3 +142,14 @@
     padding-right: 86px;
   }
 }
+@media (pointer: coarse), (max-width: 700px) {
+  .touch-task-card,
+  .compact-task {
+    -webkit-touch-callout: none;
+  }
+  .touch-dragging .touch-task-card,
+  .touch-dragging .compact-task {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+}

@@ -627,6 +627,7 @@ function App() {
           : "")
       }
       key={t.id}
+      {...touchTasks.card(t.id, t.display_title || t.title)}
     >
       <button
         className="task"
