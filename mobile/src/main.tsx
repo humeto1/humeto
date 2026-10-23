@@ -126,8 +126,11 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [type, setType] = useState("individual");
+  const authLock = useRef(false);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (authLock.current) return;
+    authLock.current = true;
     const f = new FormData(e.currentTarget);
     setBusy(true);
     setError("");
@@ -155,6 +158,7 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      authLock.current = false;
       setBusy(false);
     }
   }
@@ -311,11 +315,13 @@ function App() {
     [draft, setDraft] = useState(""),
     [minutes, setMinutes] = useState(25),
     [tick, setTick] = useState(Date.now());
+  const busyLock = useRef(false);
+  const refreshSequence = useRef(0);
   const dataRef = useRef(data);
   dataRef.current = data;
   async function refresh() {
+    const sequence = ++refreshSequence.current;
     const d = await api<Bootstrap>("/api/mobile");
-    setData(d);
     const [f, s, h] = await Promise.all([
       api("/api/workspace/focus"),
       api("/api/workspace/scheduling"),
@@ -323,13 +329,14 @@ function App() {
         "/api/workspace/task-history?timezone=" + encodeURIComponent(timezone),
       ),
     ]);
+    if (sequence !== refreshSequence.current) return;
+    setData(d);
     setFocus(f);
     setSchedule(s);
     setHistory(h);
     await syncNotifications(s.reminders, f.active);
   }
   async function load() {
-    setError("");
     try {
       await refresh();
     } catch (e) {
@@ -389,7 +396,8 @@ function App() {
     msg = "Saved.",
     refreshAfter = true,
   ) {
-    if (busy) return;
+    if (busyLock.current) return;
+    busyLock.current = true;
     setBusy(true);
     setError("");
     try {
@@ -400,6 +408,7 @@ function App() {
       if (e instanceof ApiError && e.status === 401) setData(null);
       setError((e as Error).message);
     } finally {
+      busyLock.current = false;
       setBusy(false);
     }
   }
@@ -480,6 +489,7 @@ function App() {
           action,
           sessionId: active?.id,
           revision: active?.revision,
+          taskRevision: active?.task_revision,
           minutes,
           ...extras,
         });
@@ -1710,6 +1720,7 @@ function App() {
                 async () => {
                   await api("/api/auth/logout", {});
                   await clearNotifications();
+                  refreshSequence.current++;
                   setData(null);
                   setSheet(null);
                 },

@@ -92,6 +92,37 @@ test(
       await page.getByRole("button", { name: "Close", exact: true }).click();
       state = await (await context.request.get("/api/mobile")).json();
       assert.equal(state.tasks.find((t) => t.id === id).stage, "Done");
+      // Reopen and finish the same task through the focus UI: completion requires
+      // both session and task revisions, even after pause/resume.
+      const current = state.tasks.find((t) => t.id === id);
+      assert.equal(
+        (
+          await context.request.patch("/api/workspace/tasks/" + id, {
+            data: { stage: "To do", revision: current.revision },
+          })
+        ).status(),
+        200,
+      );
+      await page.reload();
+      await page.getByRole("button", { name: "Focus", exact: true }).click();
+      await page.getByRole("button").filter({ hasText: title }).click();
+      await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
+      await page.getByRole("button", { name: "Pause", exact: true }).click();
+      await page.getByRole("button", { name: "Resume", exact: true }).click();
+      await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
+      await page.getByRole("button", { name: "Finished", exact: true }).click();
+      await page
+        .getByRole("heading", {
+          name: "What would you like to move forward?",
+          exact: true,
+        })
+        .waitFor();
+      assert.equal(
+        (await (await context.request.get("/api/mobile")).json()).tasks.find(
+          (t) => t.id === id,
+        ).stage,
+        "Done",
+      );
       await page
         .getByRole("button", { name: "Assistant", exact: true })
         .click();
@@ -124,6 +155,7 @@ test(
       child.kill("SIGTERM");
       if (id) {
         const d = database();
+        await d.prepare("DELETE FROM focus_sessions WHERE task_id=?").run(id);
         await d.prepare("DELETE FROM task_events WHERE task_id=?").run(id);
         await d.prepare("DELETE FROM tasks WHERE id=?").run(id);
         await d.close();

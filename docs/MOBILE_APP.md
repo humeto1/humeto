@@ -13,6 +13,8 @@ Today dashboard; compact priority quadrants, board and list; task creation/editi
 - Mobile TypeScript/Vite build and Next.js build passed.
 - 141 release checks passed with fictional data in disposable PostgreSQL.
 - New mobile UI test exercised shared session auth, task-only data, create/sync/complete, assistant proposal/cancel, goals navigation and narrow-screen overflow.
+- 20 native Android acceptance checks passed on the Pixel 6 / Android 14 (API 34) emulator using disposable local PostgreSQL and a separate QA package. Checks cover login/session persistence, task edits and assignments, projects/goals, recurrence, focus completion/history, reviewed assistant Apply/cancel/replay safety, native notification delivery, 100-task bounded layout, tenant isolation, expired read-only access, logout and signup/reset. A live GPT-5.4 mini request also passed.
+- Fixed focus completion to send the task revision, blocked duplicate rapid submissions and prevented older refreshes from overwriting newer state.
 - Android Gradle assembleDebug succeeded and the APK installed/launched in an Android emulator. The native HTTPS client reached production and received the expected authenticated-route 401 while signed out. APK v2 signature verified.
 - iOS source/SPM project generated. iPhone work deferred at user request; no IPA, archive or signed iPhone binary built.
 

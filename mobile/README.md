@@ -47,3 +47,11 @@ npx cap open ios
 In Xcode select the App target, your signing team and connected iPhone, then Run. For TestFlight choose a paid Apple Developer team, create the app identifier `com.humeto.tasks`, archive and distribute through App Store Connect. An unsigned ZIP cannot be installed on an iPhone. No IPA has been compiled or signed on the current Mac because full Xcode is absent.
 
 Native projects and dependency locks are checked in. Build products, `.env*`, machine paths and signing material are ignored. See the root `docs/MOBILE_APP.md` for validation and limits.
+
+## Android acceptance tests
+
+From the repository root, run `npm run test:android` after the Next.js build. It creates a disposable local PostgreSQL database, builds a separate `com.humeto.tasks.qa` package, and drives a native Android emulator WebView. Test email is captured locally. Production account data is not used. Set `HUMETO_ANDROID_LIVE_AI=1` to include one real server-side model request using fictional task data.
+
+The QA build alone allows HTTP to the emulator host `10.0.2.2`; normal builds retain the fixed HTTPS production API and disallow cleartext. The runner restores production assets and rebuilds the normal APK in its cleanup. Logs/screenshots are ignored under `.data/android-acceptance/`. A failed fixture is retained locally for investigation; successful fixtures are dropped.
+
+The October 23 run passed 20 native checks on Android 14 / API 34, including delivered device notifications and a 100-task view. Physical devices and other Android versions still need acceptance testing.

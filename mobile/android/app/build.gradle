@@ -4,7 +4,8 @@ android {
     namespace = "com.humeto.tasks"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.humeto.tasks"
+        applicationId project.hasProperty('humetoQa') ? "com.humeto.tasks.qa" : "com.humeto.tasks"
+        manifestPlaceholders = [humetoCleartext: project.hasProperty('humetoQa') ? 'true' : 'false', humetoLabel: project.hasProperty('humetoQa') ? 'Humeto QA' : 'Humeto']
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

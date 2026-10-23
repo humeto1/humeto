@@ -1,5 +1,14 @@
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
-export const SERVER = "https://www.humeto.com";
+const qaServer =
+  import.meta.env.MODE === "qa"
+    ? import.meta.env.VITE_HUMETO_QA_API
+    : undefined;
+if (
+  import.meta.env.MODE === "qa" &&
+  (!qaServer || !/^http:\/\/10\.0\.2\.2:\d+$/.test(qaServer))
+)
+  throw Error("Android QA requires an emulator-only API URL.");
+export const SERVER: string = qaServer || "https://www.humeto.com";
 export class ApiError extends Error {
   constructor(
     message: string,
