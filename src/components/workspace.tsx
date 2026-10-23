@@ -188,7 +188,7 @@ const iconMap: Record<string, LucideIcon> = {
 const navItems = [
   ["overview", "Overview", LayoutDashboard],
   ["tasks", "Tasks to-do", CheckSquare],
-  ["progress", "Projects & goals", Compass],
+  ["progress", "Plans", Compass],
   ["leads", "Leads", AtSign],
   ["students", "Applicants", Users],
   ["applications", "Applications", GraduationCap],
@@ -197,7 +197,7 @@ const navItems = [
   ["finance", "Finance", Wallet],
   ["documents", "Documents", FolderOpen],
   ["reading", "Document reader", ScanText],
-  ["assistant", "Humeto assistant", Sparkles],
+  ["assistant", "Chat", MessageSquare],
   ["requests", "Requests", MessageSquare],
   ["notifications", "Notifications", Bell],
   ["activity", "Activity", History],
@@ -1187,18 +1187,20 @@ export default function Workspace({
             Workspace <ChevronRight size={12} />
             <strong>
               {view === "progress"
-                ? "Projects & goals"
-                : view === "crm-ai"
-                  ? "CRM AI"
-                  : view === "updates"
-                    ? "Update inbox"
-                    : view === "tasks"
-                      ? "Tasks to-do"
-                      : view === "profile"
-                        ? p?.name
-                        : view === "platform"
-                          ? "Workspaces & subscriptions"
-                          : view[0].toUpperCase() + view.slice(1)}
+                ? "Plans"
+                : view === "assistant"
+                  ? "Chat"
+                  : view === "crm-ai"
+                    ? "CRM AI"
+                    : view === "updates"
+                      ? "Update inbox"
+                      : view === "tasks"
+                        ? "Tasks to-do"
+                        : view === "profile"
+                          ? p?.name
+                          : view === "platform"
+                            ? "Workspaces & subscriptions"
+                            : view[0].toUpperCase() + view.slice(1)}
             </strong>
           </div>
           <div className="topbar-right">
@@ -2017,7 +2019,7 @@ export default function Workspace({
                       <Sparkles size={15} />
                     </a>
                     <a href="/workspace/progress" className="btn secondary">
-                      Projects
+                      Plans
                     </a>
                     {button("Add task", () => showModal("task"))}
                   </div>
@@ -2540,7 +2542,7 @@ export default function Workspace({
                       className="btn secondary small"
                       href="/workspace/assistant"
                     >
-                      Open Humeto assistant <ArrowUpRight size={14} />
+                      Open Chat <ArrowUpRight size={14} />
                     </a>
                     <dl>
                       <dt>In-app task chat</dt>

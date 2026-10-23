@@ -1,3 +1,9 @@
+# Plans and Chat — October 24, 2026
+
+Projects, Goals and Routines are peers in one Plans screen and one Add menu. Their sections appear first, followed by Calendar and reports. Operations, groceries and subscriptions remain routine types, without a second navigation tab. The explanatory “How to structure your work” disclosure is removed; “Plans needing a deadline” remains visible. Existing schedules, completion history, teams and financial targets are preserved. The calendar and routine tools now share the main navigation instead of introducing nested tabs.
+
+Assistant navigation is now Chat on web and Android; the existing assistant URL and conversation history remain compatible. Current Chat contains AI conversations. A future unified conversation list for AI tools, team discussions and client conversations is recorded in the private plan; this UI rename does not create a new global team messaging transport. Existing project-level client collaboration remains available.
+
 # Focus and task views — UI update, October 23, 2026
 
 Web and mobile now use a compact task selector with Start, Pause and Stop. Selecting a different task does not switch immediately: Start saves the current session and starts the chosen task. Stop ends the work session without completing its task. Hold Complete for one second to finish, or tap/press Enter and confirm; movement or cancellation stops a hold. Completion is disabled while a different task is selected but has not started.

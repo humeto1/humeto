@@ -4,7 +4,7 @@ import { PlanTeam } from "./plan-team";
 import { nextDay } from "../src/lib/scheduling-clock.mjs";
 import { TaskValueFields, valuePayload } from "./task-value";
 import RoutineWording from "./routine-wording";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./planning.css";
 export type Transport = (
   path: string,
@@ -58,6 +58,8 @@ export default function PlanningHub({
   writable,
   refresh,
   request = webApi,
+  view = "calendar",
+  createRoutineToken = 0,
 }: {
   tasks: any[];
   projects: Plan[];
@@ -65,9 +67,12 @@ export default function PlanningHub({
   writable: boolean;
   refresh: () => Promise<void>;
   request?: Transport;
+  view?: "calendar" | "routines" | "deadlines";
+  createRoutineToken?: number;
 }) {
-  const [tab, setTab] = useState("calendar"),
-    [month, setMonth] = useState(day().slice(0, 7)),
+  const routineForm = useRef<HTMLFormElement>(null);
+  const tab = view;
+  const [month, setMonth] = useState(day().slice(0, 7)),
     [selected, setSelected] = useState(day()),
     [week, setWeek] = useState(day()),
     [kind, setKind] = useState("all"),
@@ -80,6 +85,7 @@ export default function PlanningHub({
     [notice, setNotice] = useState("");
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
   const load = useCallback(async () => {
+    if (view === "deadlines") return;
     try {
       setReport(
         await request(
@@ -92,10 +98,22 @@ export default function PlanningHub({
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [request, week, zone]);
+  }, [request, week, zone, view]);
+  useEffect(() => {
+    setKind("all");
+  }, [view]);
   useEffect(() => {
     void load();
   }, [load, tasks]);
+  useEffect(() => {
+    if (createRoutineToken) setOpen(true);
+  }, [createRoutineToken]);
+  useEffect(() => {
+    if (open && view === "routines")
+      routineForm.current
+        ?.querySelector<HTMLInputElement>('input[name="title"]')
+        ?.focus();
+  }, [open, view]);
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -159,39 +177,47 @@ export default function PlanningHub({
   );
   const counter = (state: string) =>
     occurrences.filter((o: any) => o.state === state).length;
+  const deadlines = (
+    <>
+      <details>
+        <summary>
+          Plans needing a deadline (
+          {
+            [...goals, ...projects].filter(
+              (p) => !p.target_date && p.status !== "Archived",
+            ).length
+          }
+          )
+        </summary>
+        {[
+          ...goals.map((p) => ({ ...p, kind: "goals" })),
+          ...projects.map((p) => ({ ...p, kind: "projects" })),
+        ]
+          .filter((p) => !p.target_date && p.status !== "Archived")
+          .map((p) => (
+            <div className="planning-row" key={p.id}>
+              <span>{p.title}</span>
+              <button
+                disabled={!writable}
+                onClick={() => setEdit({ kind: p.kind, item: p })}
+              >
+                Set deadline
+              </button>
+            </div>
+          ))}
+      </details>
+    </>
+  );
   return (
-    <section className="planning-hub">
-      <div className="planning-heading">
-        <div>
-          <h2>Goals, projects & routines</h2>
-          <p>
-            Goals are outcomes. Projects deliver them. Routines keep life
-            running.
-          </p>
-        </div>
-        <div className="planning-tabs">
-          <button
-            aria-pressed={tab === "calendar"}
-            onClick={() => {
-              setTab("calendar");
-              setKind("all");
-            }}
-          >
-            Calendar
-          </button>
-          <button
-            aria-pressed={tab === "routines"}
-            onClick={() => {
-              setTab("routines");
-              setKind("all");
-            }}
-          >
-            Routines & operations
-          </button>
-        </div>
-      </div>
+    <section
+      className={
+        "planning-hub " +
+        (view === "deadlines" ? "planning-deadlines-only" : "")
+      }
+    >
       {error && <p role="alert">{error}</p>}
       {notice && <p role="status">{notice}</p>}
+      {deadlines}
       {tab === "calendar" ? (
         <>
           <div className="planning-controls">
@@ -287,46 +313,8 @@ export default function PlanningHub({
           {!events.some((e) => e.date === selected) && (
             <p>No deadlines on this date.</p>
           )}
-          <details>
-            <summary>
-              Plans needing a deadline (
-              {
-                [...goals, ...projects].filter(
-                  (p) => !p.target_date && p.status !== "Archived",
-                ).length
-              }
-              )
-            </summary>
-            {[
-              ...goals.map((p) => ({ ...p, kind: "goals" })),
-              ...projects.map((p) => ({ ...p, kind: "projects" })),
-            ]
-              .filter((p) => !p.target_date && p.status !== "Archived")
-              .map((p) => (
-                <div className="planning-row" key={p.id}>
-                  <span>{p.title}</span>
-                  <button
-                    disabled={!writable}
-                    onClick={() => setEdit({ kind: p.kind, item: p })}
-                  >
-                    Set deadline
-                  </button>
-                </div>
-              ))}
-          </details>
-          <details>
-            <summary>How to structure your work</summary>
-            <p>
-              <b>Goal:</b> a measurable outcome and target date, e.g. “Save PKR
-              100,000 by 31 December”. <b>Project:</b> a finite delivery, e.g.
-              “Launch the new admissions campaign”. Link tasks to a project and
-              one or more goals. <b>Routine:</b> repeatable work such as daily
-              follow-ups, monthly groceries or an annual subscription renewal.
-              Category describes the area of life, independently of these types.
-            </p>
-          </details>
         </>
-      ) : (
+      ) : tab === "routines" ? (
         <>
           <div className="planning-controls">
             <label>
@@ -338,12 +326,10 @@ export default function PlanningHub({
                 <option value="subscription">Subscriptions</option>
               </select>
             </label>
-            <button disabled={!writable} onClick={() => setOpen((v) => !v)}>
-              Add routine
-            </button>
           </div>
           {open && (
             <form
+              ref={routineForm}
               className="planning-form"
               onSubmit={(e) => {
                 e.preventDefault();
@@ -472,6 +458,13 @@ export default function PlanningHub({
               </fieldset>
               <TaskValueFields />
               <button disabled={busy || !writable}>Save routine</button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setOpen(false)}
+              >
+                Cancel routine
+              </button>
             </form>
           )}
           <div className="planning-controls">
@@ -617,7 +610,7 @@ export default function PlanningHub({
             reminders; Humeto does not charge or renew payments.
           </p>
         </>
-      )}
+      ) : null}
       {edit && (
         <form
           className="planning-form"

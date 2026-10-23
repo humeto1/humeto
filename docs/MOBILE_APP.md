@@ -1,6 +1,6 @@
-# Latest Android build: 0.2.2 (version code 4)
+# Latest Android build: 0.2.3 (version code 5)
 
-Focus now has one task selector, Start/Pause/Stop, hold-or-confirm completion, compact break/reset panels and recent history. Tasks use an eye icon for the overview and a due-date calendar. The same backend/authentication/database remain in use. See [task interaction notes](TASK_PLANNING.md). Android emulator: 25 checks passed; both builds and focused web/mobile UI checks pass. Earlier release counts below are historical.
+Plans now opens Projects, Goals and Routines as peer sections with one Add menu; Assistant is renamed Chat. Focus has one task selector, Start/Pause/Stop, hold-or-confirm completion, compact break/reset panels and recent history. Tasks use an eye icon for the overview and a due-date calendar. The same backend/authentication/database remain in use. See [task interaction notes](TASK_PLANNING.md). Android emulator: 25 checks passed; both builds and focused web/mobile UI checks pass. Earlier release counts below are historical.
 
 # Humeto mobile testing build · 2026-10-23
 
@@ -24,7 +24,7 @@ Today dashboard; compact priority quadrants, board and list; task creation/editi
 
 ## Testing
 
-`mobile/releases/Humeto-0.2.2-testing.apk` is a debug-signed APK for sideload testing, not a signed Play Store release. Build products and signing material stay outside Git. See [mobile README](../mobile/README.md) for builds. Use your regular workspace account. Platform-admin-only accounts do not manage tasks through this client; workspace owners, individuals (owner role) and consultants retain existing task permissions. Verification and password-reset emails use current web flows, after which users sign in on mobile.
+`mobile/releases/Humeto-0.2.3-testing.apk` is a debug-signed APK for sideload testing, not a signed Play Store release. Build products and signing material stay outside Git. See [mobile README](../mobile/README.md) for builds. Use your regular workspace account. Platform-admin-only accounts do not manage tasks through this client; workspace owners, individuals (owner role) and consultants retain existing task permissions. Verification and password-reset emails use current web flows, after which users sign in on mobile.
 
 ## Remaining before store release
 

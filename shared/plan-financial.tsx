@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./plan-controls.css";
 export function PlanFinancial({
   type,
   id,
@@ -37,13 +38,17 @@ export function PlanFinancial({
     }
   }
   return (
-    <section aria-label="Plan financial target">
+    <section
+      className="plan-financial-control"
+      aria-label="Plan financial target"
+    >
       <button
         type="button"
         disabled={busy}
+        aria-expanded={open}
         onClick={() => (open ? setOpen(false) : void load())}
       >
-        Financial target & reward timing
+        Financial target
       </button>
       {error && <p role="alert">{error}</p>}
       {open && target && (

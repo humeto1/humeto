@@ -402,7 +402,7 @@ export default function TaskAssistant({
               <Sparkles size={19} />
             </span>
             <div>
-              <strong>Humeto assistant</strong>
+              <strong>Chat · Humeto AI</strong>
               <small>
                 {live
                   ? "GPT-5.4 mini · reviewed task actions"

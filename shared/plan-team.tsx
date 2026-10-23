@@ -1,4 +1,5 @@
 import { useState } from "react";
+import "./plan-controls.css";
 export function PlanTeam({
   type,
   id,
@@ -31,10 +32,11 @@ export function PlanTeam({
     }
   }
   return (
-    <div>
+    <div className="plan-team-control">
       <button
         type="button"
         disabled={busy}
+        aria-expanded={open}
         onClick={() => (open ? setOpen(false) : void load())}
       >
         {data?.userIds.length
@@ -67,10 +69,7 @@ export function PlanTeam({
               .finally(() => setBusy(false));
           }}
         >
-          <p>
-            Tasks inherit this team unless they have their own assignment. Team
-            responsibility does not grant clients internal access.
-          </p>
+          <p>Tasks inherit this team. Client access is separate.</p>
           {data.members.map((m: any) => (
             <label key={m.id}>
               <input

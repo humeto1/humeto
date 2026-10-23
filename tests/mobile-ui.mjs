@@ -144,9 +144,7 @@ test(
         ).stage,
         "Done",
       );
-      await page
-        .getByRole("button", { name: "Assistant", exact: true })
-        .click();
+      await page.getByRole("button", { name: "Chat", exact: true }).click();
       await page
         .getByLabel("Message Humeto")
         .fill("Create a task to review mobile testing tomorrow");
@@ -155,10 +153,8 @@ test(
         .click();
       await page.getByRole("button", { name: "Apply", exact: true }).waitFor();
       await page.getByRole("button", { name: "Cancel", exact: true }).click();
-      await page.getByRole("button", { name: "Goals", exact: true }).click();
-      await page
-        .getByRole("heading", { name: "Projects & goals", exact: true })
-        .waitFor();
+      await page.getByRole("button", { name: "Plans", exact: true }).click();
+      await page.getByRole("heading", { name: "Plans", exact: true }).waitFor();
       assert.equal(
         await page.evaluate(
           () => document.documentElement.scrollWidth > innerWidth,
@@ -170,7 +166,7 @@ test(
       await page.getByRole("button", { name: "Today", exact: true }).click();
       await page.screenshot({ path: ".data/mobile-qa/today.png" });
       const audits = [];
-      for (const tab of ["Today", "Tasks", "Focus", "Goals", "Assistant"]) {
+      for (const tab of ["Today", "Tasks", "Focus", "Plans", "Chat"]) {
         await page.getByRole("button", { name: tab, exact: true }).click();
         const result = await new AxeBuilder({ page })
           .withTags(["wcag2a", "wcag2aa", "wcag21aa"])

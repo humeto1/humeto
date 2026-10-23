@@ -284,7 +284,7 @@ test("web calendar edits a deadline and routine interface shares the weekly repo
   const page = await context.newPage();
   try {
     await page.goto(base + "/workspace/progress");
-    await page.getByRole("button", { name: "Calendar", exact: true }).waitFor();
+    await page.getByRole("button", { name: "Calendar", exact: true }).click();
     await page
       .locator('.planning-controls input[type="month"]')
       .fill("2027-12");
@@ -308,15 +308,11 @@ test("web calendar edits a deadline and routine interface shares the weekly repo
       ).target_date,
       "2028-01-15",
     );
-    await page
-      .getByRole("button", { name: "Routines & operations", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Routines", exact: true }).click();
     await page
       .getByRole("heading", { name: /Weekly routine review/ })
       .waitFor();
-    await page
-      .getByRole("button", { name: "Add routine", exact: true })
-      .click();
+    await page.getByLabel("Add plan", { exact: true }).selectOption("routines");
     await page
       .getByRole("textbox", { name: "Name", exact: true })
       .fill("UI routine preview");
@@ -571,9 +567,7 @@ test("web wording review explicitly enables rotation and cards keep their origin
   const page = await context.newPage();
   try {
     await page.goto(base + "/workspace/progress");
-    await page
-      .getByRole("button", { name: "Routines & operations", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Routines", exact: true }).click();
     const wording = page
       .locator(".routine-wording")
       .filter({ hasText: "Review 5 pending enquiries" });

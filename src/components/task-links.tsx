@@ -76,7 +76,7 @@ export default function TaskLinks({
               {g.title}
             </label>
           ))}
-          {!goals.length && <p>Create a goal in Projects & goals.</p>}
+          {!goals.length && <p>Create a goal in Plans.</p>}
         </fieldset>
         <small>
           Changes affect future completions. History keeps the original links.

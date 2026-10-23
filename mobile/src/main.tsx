@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   Timer,
   Sparkles,
+  MessageSquare,
   Flag,
   Home,
   ChevronRight,
@@ -373,6 +374,8 @@ function App() {
     [categoryFilter, setCategoryFilter] = useState("all"),
     [dueFilter, setDueFilter] = useState("all"),
     [ownerFilter, setOwnerFilter] = useState("all"),
+    [planView, setPlanView] = useState("projects"),
+    [routineCreate, setRoutineCreate] = useState(0),
     [focusSelection, setFocusSelection] = useState(""),
     [focusQuery, setFocusQuery] = useState(""),
     [focus, setFocus] = useState<any>(null),
@@ -1283,7 +1286,7 @@ function App() {
             <div className="section-title">
               <div>
                 <span className="eyebrow">A LITTLE HELP MOVING FORWARD</span>
-                <h1>Humeto assistant</h1>
+                <h1>Chat</h1>
               </div>
               <button
                 className="icon"
@@ -1299,7 +1302,7 @@ function App() {
               <Sparkles size={17} />
               {agent?.modelConfigured
                 ? "GPT-5.4 mini · Changes need your approval"
-                : "Task assistant · Reviewed actions"}
+                : "Humeto AI · Reviewed actions"}
             </div>
             {!agent?.messages?.length && (
               <div className="chat-welcome">
@@ -1459,27 +1462,50 @@ function App() {
         {tab === "projects" && (
           <>
             <div className="section-title">
-              <div>
-                <span className="eyebrow">THE BIGGER PICTURE</span>
-                <h1>Projects & goals</h1>
-              </div>
-              <button
-                className="icon"
-                onClick={() => setSheet("project")}
-                aria-label="Create project or goal"
-                disabled={!writable}
-              >
-                <Plus />
-              </button>
+              <h1>Plans</h1>
+              <label className="plan-add">
+                <span className="sr-only">Add plan</span>
+                <select
+                  aria-label="Add plan"
+                  value=""
+                  disabled={!writable}
+                  onChange={(e) => {
+                    const kind = e.target.value;
+                    setPlanView(kind);
+                    if (kind === "routines") setRoutineCreate((n) => n + 1);
+                    else setSheet("project");
+                  }}
+                >
+                  <option value="" disabled>
+                    Add…
+                  </option>
+                  <option value="projects">Project</option>
+                  <option value="goals">Goal</option>
+                  <option value="routines">Routine</option>
+                </select>
+              </label>
             </div>
-            <section className="panel">
-              <span className="eyebrow">YOUR MOMENTUM</span>
-              <h2>{history?.uniqueCompleted || 0} tasks completed</h2>
-              <p>
-                Small steps add up. Each completion keeps its project and goal
-                history.
-              </p>
-            </section>
+            <div
+              className="plan-sections"
+              role="group"
+              aria-label="Plan sections"
+            >
+              {[
+                ["projects", "Projects"],
+                ["goals", "Goals"],
+                ["routines", "Routines"],
+                ["calendar", "Calendar"],
+              ].map(([key, label]) => (
+                <button
+                  key={key}
+                  className={planView === key ? "active" : ""}
+                  aria-pressed={planView === key}
+                  onClick={() => setPlanView(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <PlanningHub
               tasks={data.tasks}
               projects={data.projects}
@@ -1487,80 +1513,90 @@ function App() {
               writable={writable}
               refresh={refresh}
               request={api}
+              view={
+                planView === "routines"
+                  ? "routines"
+                  : planView === "calendar"
+                    ? "calendar"
+                    : "deadlines"
+              }
+              createRoutineToken={routineCreate}
             />
-            {(["projects", "goals"] as const).map((kind) => (
-              <section key={kind}>
-                <h2 className="spaced">
-                  {kind === "projects" ? "Projects" : "Goals"}
-                </h2>
-                {data[kind].map((p) => (
-                  <article key={p.id}>
-                    <button
-                      className="project"
-                      key={p.id}
-                      onClick={() => {
-                        setQuery(p.title);
-                        setFilter("all");
-                        setTab("tasks");
-                      }}
-                    >
-                      <Folder size={21} />
-                      <span>
-                        <strong>{p.title}</strong>
-                        <small>
-                          {p.category || "Uncategorized"} ·{" "}
-                          {p.target_date
-                            ? "Deadline " + p.target_date
-                            : "Needs a deadline"}
-                        </small>
-                        <small>
-                          {p.status} ·{" "}
-                          {kind === "projects"
-                            ? data.tasks.filter((t) => t.project_id === p.id)
-                                .length
-                            : data.tasks.filter((t) =>
-                                t.goals?.some((g) => g.id === p.id),
-                              ).length}{" "}
-                          linked tasks
-                        </small>
-                      </span>
-                      <ChevronRight size={17} />
-                    </button>
-                    <ParentControls
-                      type={kind === "projects" ? "project" : "goal"}
-                      id={p.id}
-                      writable={writable}
-                      request={api}
-                      shareLink={async (url, title) => {
-                        await Share.share({
-                          title,
-                          url,
-                          dialogTitle: "Share project",
-                        });
-                      }}
-                      downloadFile={downloadProjectFile}
-                    />
-                  </article>
-                ))}
-                {!data[kind].length && (
-                  <div className="empty">
-                    <p>
-                      {kind === "projects"
-                        ? "Give your tasks a shared purpose."
-                        : "What would you like to work towards?"}
-                    </p>
-                    <button
-                      className="text"
-                      disabled={!writable}
-                      onClick={() => setSheet("project")}
-                    >
-                      Create a {kind === "projects" ? "project" : "goal"}{" "}
-                      <Plus size={14} />
-                    </button>
-                  </div>
-                )}
-              </section>
-            ))}
+            {(["projects", "goals"] as const)
+              .filter((kind) => kind === planView)
+              .map((kind) => (
+                <section key={kind}>
+                  <h2 className="spaced">
+                    {kind === "projects" ? "Projects" : "Goals"}
+                  </h2>
+                  {data[kind].map((p) => (
+                    <article className="mobile-plan-card" key={p.id}>
+                      <button
+                        className="project"
+                        key={p.id}
+                        onClick={() => {
+                          setQuery(p.title);
+                          setFilter("all");
+                          setTab("tasks");
+                        }}
+                      >
+                        <Folder size={21} />
+                        <span>
+                          <strong>{p.title}</strong>
+                          <small>
+                            {p.category || "Uncategorized"} ·{" "}
+                            {p.target_date
+                              ? "Deadline " + p.target_date
+                              : "Needs a deadline"}
+                          </small>
+                          <small>
+                            {p.status} ·{" "}
+                            {kind === "projects"
+                              ? data.tasks.filter((t) => t.project_id === p.id)
+                                  .length
+                              : data.tasks.filter((t) =>
+                                  t.goals?.some((g) => g.id === p.id),
+                                ).length}{" "}
+                            linked tasks
+                          </small>
+                        </span>
+                        <ChevronRight size={17} />
+                      </button>
+                      <ParentControls
+                        type={kind === "projects" ? "project" : "goal"}
+                        id={p.id}
+                        writable={writable}
+                        request={api}
+                        shareLink={async (url, title) => {
+                          await Share.share({
+                            title,
+                            url,
+                            dialogTitle: "Share project",
+                          });
+                        }}
+                        downloadFile={downloadProjectFile}
+                      />
+                    </article>
+                  ))}
+                  {!data[kind].length && (
+                    <div className="empty">
+                      <p>
+                        {kind === "projects"
+                          ? "Give your tasks a shared purpose."
+                          : "What would you like to work towards?"}
+                      </p>
+                      <button
+                        className="text"
+                        disabled={!writable}
+                        onClick={() => setSheet("project")}
+                      >
+                        Create a {kind === "projects" ? "project" : "goal"}{" "}
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  )}
+                </section>
+              ))}
           </>
         )}
       </main>
@@ -1569,8 +1605,8 @@ function App() {
           ["today", Home, "Today"],
           ["tasks", CheckCircle2, "Tasks"],
           ["focus", Timer, "Focus"],
-          ["assistant", Sparkles, "Assistant"],
-          ["projects", Flag, "Goals"],
+          ["assistant", MessageSquare, "Chat"],
+          ["projects", Flag, "Plans"],
         ].map(([key, Icon, text]) => {
           const I = Icon as typeof Home;
           return (
@@ -1802,7 +1838,7 @@ function App() {
                   </label>
                 ))}
                 {!data.goals.length && (
-                  <small>No goals yet. Add one in Goals.</small>
+                  <small>No goals yet. Add one in Plans.</small>
                 )}
               </fieldset>
               <button className="primary full" disabled={!writable}>
@@ -2083,7 +2119,10 @@ function App() {
           >
             <label>
               Type
-              <select name="kind">
+              <select
+                name="kind"
+                defaultValue={planView === "goals" ? "goals" : "projects"}
+              >
                 <option value="projects">Project</option>
                 <option value="goals">Goal</option>
               </select>

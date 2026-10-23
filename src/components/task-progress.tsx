@@ -35,6 +35,7 @@ export default function TaskProgress({
   writable: boolean;
 }) {
   const [tab, setTab] = useState("projects"),
+    [routineCreate, setRoutineCreate] = useState(0),
     [edit, setEdit] = useState<{
       kind: "projects" | "goals";
       item?: Workstream;
@@ -68,7 +69,7 @@ export default function TaskProgress({
     );
   }, []);
   useEffect(() => {
-    if (!month) return;
+    if (!month || !["monthly", "history"].includes(tab)) return;
     const controller = new AbortController();
     setLoading(true);
     setReport(null);
@@ -97,6 +98,12 @@ export default function TaskProgress({
     setSearch("");
     setPage(1);
   }, [tab, month]);
+  useEffect(() => {
+    if (edit)
+      document
+        .querySelector(".plan-editor")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [edit]);
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!edit) return;
@@ -151,37 +158,55 @@ export default function TaskProgress({
     ) || [];
   return (
     <div className="task-progress">
-      <PlanningHub
-        tasks={tasks}
-        projects={projects}
-        goals={goals}
-        writable={writable}
-        refresh={refresh}
-      />
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">SMALL STEPS. MEANINGFUL DIRECTION.</span>
-          <h1>See what you’re moving toward.</h1>
-          <p>
-            Connect everyday tasks to projects and goals. Keep the evidence of
-            progress.
-          </p>
+      <div className="plans-page-heading">
+        <h1>Plans</h1>
+        <div className="plans-page-actions">
+          <a className="btn secondary" href="/workspace/tasks">
+            Tasks <ArrowUpRight size={14} />
+          </a>
+          <label className="plan-add">
+            <span className="sr-only">Add plan</span>
+            <select
+              aria-label="Add plan"
+              value=""
+              disabled={!writable}
+              onChange={(e) => {
+                const kind = e.target.value;
+                if (kind === "routines") {
+                  setTab(kind);
+                  setEdit(null);
+                  setRoutineCreate((n) => n + 1);
+                } else if (kind === "projects" || kind === "goals") {
+                  setTab(kind);
+                  setEdit({ kind });
+                  setError("");
+                }
+              }}
+            >
+              <option value="" disabled>
+                Add…
+              </option>
+              <option value="projects">Project</option>
+              <option value="goals">Goal</option>
+              <option value="routines">Routine</option>
+            </select>
+          </label>
         </div>
-        <a className="btn secondary" href="/workspace/tasks">
-          Open Tasks to-do <ArrowUpRight size={15} />
-        </a>
       </div>
       <div className="filter-bar">
-        <div className="segmented">
+        <div className="segmented" role="group" aria-label="Plan sections">
           {[
             ["projects", "Projects"],
             ["goals", "Goals"],
+            ["routines", "Routines"],
+            ["calendar", "Calendar"],
             ["monthly", "Monthly review"],
             ["history", "Task history"],
           ].map(([key, label]) => (
             <button
               key={key}
               className={tab === key ? "active" : ""}
+              aria-pressed={tab === key}
               onClick={() => setTab(key)}
             >
               {label}
@@ -190,6 +215,21 @@ export default function TaskProgress({
         </div>
         <span className="subtle">Shared with your workspace team</span>
       </div>
+      <PlanningHub
+        tasks={tasks}
+        projects={projects}
+        goals={goals}
+        writable={writable}
+        refresh={refresh}
+        view={
+          tab === "routines"
+            ? "routines"
+            : tab === "calendar"
+              ? "calendar"
+              : "deadlines"
+        }
+        createRoutineToken={routineCreate}
+      />
       {error && (
         <p className="notice" role="alert">
           {error}
@@ -215,17 +255,6 @@ export default function TaskProgress({
                   : "A goal names the outcome you are working toward. Task counts show activity; you choose the outcome status."}
               </p>
             </div>
-            <button
-              className="btn primary"
-              disabled={!writable}
-              onClick={() => {
-                setEdit({ kind: tab as "projects" | "goals" });
-                setError("");
-              }}
-            >
-              <Plus size={15} />
-              New {tab === "projects" ? "project" : "goal"}
-            </button>
           </div>
           <div className="workstream-grid">
             {list.map((item) => {

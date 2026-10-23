@@ -1,0 +1,134 @@
+.plan-team-control > button,
+.plan-financial-control > button,
+.parent-controls > details > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #dce5d3;
+  border-radius: 10px;
+  background: #f8faf4;
+  color: #294737;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  list-style: none;
+}
+.parent-controls > details > summary::-webkit-details-marker {
+  display: none;
+}
+.plan-team-control > button:after,
+.plan-financial-control > button:after,
+.parent-controls > details > summary:after {
+  content: "";
+  margin-left: auto;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.plan-team-control > button[aria-expanded="true"]:after,
+.plan-financial-control > button[aria-expanded="true"]:after,
+.parent-controls > details[open] > summary:after {
+  transform: rotate(225deg);
+}
+.plan-team-control button:focus-visible,
+.plan-financial-control button:focus-visible,
+.parent-controls > details > summary:focus-visible {
+  outline: 2px solid #527c60;
+  outline-offset: 2px;
+}
+.plan-team-control button:disabled,
+.plan-financial-control button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.plan-team-control form,
+.plan-financial-control form {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+  font-size: 12px;
+}
+.plan-team-control p,
+.plan-financial-control p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #536449;
+  margin: 10px 0;
+}
+.plan-team-control label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.plan-financial-control label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: #536449;
+}
+.plan-financial-control input,
+.plan-financial-control select,
+.plan-financial-control textarea {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #d5dfce;
+  border-radius: 9px;
+  background: #fff;
+  color: #294737;
+  font: inherit;
+}
+.plan-team-control form button,
+.plan-financial-control form button {
+  border: 1px solid #244b3a;
+  border-radius: 10px;
+  background: #244b3a;
+  color: #fff;
+  padding: 11px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.plan-team-control,
+.plan-financial-control {
+  min-width: 0;
+}
+.mobile-plan-card {
+  border: 1px solid #dce5d3;
+  border-radius: 18px;
+  padding: 15px;
+  margin-bottom: 14px;
+  background: #fff;
+}
+.mobile-plan-card > .project {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border-radius: 0;
+}
+.mobile-plan-card .parent-controls > details {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.mobile-plan-card .parent-controls {
+  margin-top: 14px !important;
+}
+.plan-team-control input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  accent-color: #244b3a;
+}

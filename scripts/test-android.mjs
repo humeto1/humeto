@@ -356,14 +356,13 @@ try {
   await check(
     "Create projects/goals and link native tasks to their shared records",
     async () => {
-      await cdp.click("Goals");
-      await cdp.click("Create project or goal");
-      await cdp.select("select[name=kind]", "goals");
+      await cdp.click("Plans");
+      await cdp.select('select[aria-label="Add plan"]', "goals");
       await cdp.fill("input[name=title]", "Android QA goal");
       await cdp.fill("input[name=targetDate]", "2027-03-31");
       await cdp.click("Create");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
-      await cdp.click("Create project or goal");
+      await cdp.select('select[aria-label="Add plan"]', "projects");
       await cdp.fill("input[name=title]", "Android QA project");
       await cdp.fill("input[name=targetDate]", "2027-02-28");
       await cdp.click("Create");
@@ -474,7 +473,7 @@ try {
   await check(
     "Assistant prepares and cancels a proposal without applying it",
     async () => {
-      await cdp.click("Assistant");
+      await cdp.click("Chat");
       await cdp.fill(
         'textarea[aria-label="Message Humeto"]',
         "Create a task to check native assistant tomorrow",
@@ -513,7 +512,7 @@ try {
           );
       await d.close();
       await cdp.click("Today");
-      await cdp.click("Assistant");
+      await cdp.click("Chat");
       await cdp.wait(
         "document.querySelectorAll('.messages article').length===30",
       );
@@ -717,7 +716,7 @@ try {
   await check(
     "Assistant Apply writes once and repeated approval is replay-safe",
     async () => {
-      await cdp.click("Assistant");
+      await cdp.click("Chat");
       await cdp.fill(
         'textarea[aria-label="Message Humeto"]',
         "Create a task to review native approvals tomorrow",
@@ -908,7 +907,7 @@ try {
           } catch {}
           await new Promise((r) => setTimeout(r, 100));
         }
-        await cdp.click("Assistant");
+        await cdp.click("Chat");
         await cdp.click("New conversation");
         await cdp.fill(
           'textarea[aria-label="Message Humeto"]',
@@ -956,8 +955,8 @@ try {
   await check(
     "Phone layout has no horizontal overflow; native screenshot captured",
     async () => {
-      await cdp.click("Goals");
-      await cdp.wait(`document.body.innerText.includes('Projects & goals')`);
+      await cdp.click("Plans");
+      await cdp.wait(`document.querySelector('h1')?.textContent==='Plans'`);
       assert.equal(
         await cdp.evaluate("document.documentElement.scrollWidth>innerWidth"),
         false,
@@ -1015,17 +1014,15 @@ try {
   await check(
     "Native calendar has shared goal deadlines and yearly subscription routines schedule device alerts",
     async () => {
-      await cdp.click("Goals");
-      await cdp.wait(
-        `document.body.innerText.includes('Goals, projects & routines')`,
-      );
+      await cdp.click("Plans");
+      await cdp.wait(`document.querySelector('h1')?.textContent==='Plans'`);
       assert.ok(
         (await nativeApi("/api/mobile")).data.goals.find(
           (g) => g.title === "Android QA goal",
         ).target_date,
       );
-      await cdp.click("Routines & operations");
-      await cdp.click("Add routine");
+      await cdp.click("Routines");
+      await cdp.select('select[aria-label="Add plan"]', "routines");
       await cdp.fill(
         "form.planning-form input[name=title]",
         "Android annual renewal",
