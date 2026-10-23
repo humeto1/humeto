@@ -12,7 +12,8 @@ Native Capacitor HTTP calls use the existing Humeto login/session cookies over H
 
 - Individual/company signup, shared login and email password reset; email verification takes place through the emailed web link.
 - Today, Tasks (priority, board, list), Focus, Assistant, Projects & goals.
-- Create/edit task titles, due dates, workflow stages, priorities and assignee; team assignments and project/goal links.
+- Create/edit task titles, custom categories, due dates, workflow stages, priorities and assignee; team assignments and project/goal links. Combine category, due-date, assignment, status and search filters.
+- Select/switch focus from Today, Focus or task details. Today always displays the active focus task; switching saves the previous session time without completing its task.
 - Server-backed focus timer, pause/resume, extensions, blockers and completion history.
 - Reviewed assistant actions; the configured model runs on the server only.
 - Reminders, snooze/dismiss and recurring series; future series generation requires the existing server scheduler worker.

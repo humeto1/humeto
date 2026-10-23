@@ -25,3 +25,11 @@ Today dashboard; compact priority quadrants, board and list; task creation/editi
 ## Remaining before store release
 
 Physical-device acceptance testing; production release signing/version policy; offline sync design; APNs/FCM remote push and device registration; mobile notebook capture; server-worker hosting for future recurrence generation. Local reminders may remain stale until next sync if tasks change elsewhere while the app stays closed. Native sessions currently match web: 12 hours. Android notifications may be delayed by OS scheduling. iOS testing requires full Xcode and Apple signing when resumed.
+
+## Focus selection and task categories · 2026-10-23
+
+Today’s “Your next small win” uses the same active focus task as the Focus screen, including current task-title edits. A searchable picker starts or switches focus from Today, Focus or task details. Switching uses the existing atomic focus endpoint: prior time remains in history, the previous task stays unfinished and the next task revision is validated.
+
+Task creation/editing now accepts a category of up to 60 characters. Suggested categories are Personal, Work, Social, Relationship, Family, Hobby and Financial; users can type their own. Categories persist in PostgreSQL (migration 022), sync with tasks and appear on cards. Filters combine category/uncategorized, today/overdue/no date, assignment, status and search. Cards indicate active focus and overdue tasks. Existing tasks stay uncategorized until edited.
+
+The native acceptance run passed 20 checks, including custom category persistence/filtering and switching away and back while verifying Today’s title and saved session history. This run used the local command assistant; live model connectivity was verified in the preceding Android run.

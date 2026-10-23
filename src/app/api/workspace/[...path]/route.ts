@@ -1045,6 +1045,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
     const input = z
       .object({
         title: string.min(2).max(200),
+        category: z.string().trim().max(60).default(""),
         personId: optionalString,
         important: z.boolean(),
         urgent: z.boolean(),
@@ -1075,7 +1076,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       const tid = id();
       await db()
         .prepare(
-          "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         )
         .run(
           tid,
@@ -1088,6 +1089,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           input.assignee,
           a.id,
           input.projectId,
+          input.category,
         );
       for (const gid of goalIds)
         await db()
@@ -1107,6 +1109,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
         stage: z.string().min(1).max(100),
         revision: z.number().int().positive(),
         title: z.string().trim().min(2).max(200).optional(),
+        category: z.string().trim().max(60).optional(),
         dueDate: z.union([z.literal(""), z.iso.date()]).optional(),
         assignee: z.string().max(100).optional(),
         important: z.boolean().optional(),
@@ -1120,6 +1123,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       .get(rid, a.tenantId)) as
       | {
           title: string;
+          category: string;
           due_date: string;
           assignee: string;
           important: number;
@@ -1138,11 +1142,12 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail("Choose a team member from this workspace.", 400);
     const result = await db()
       .prepare(
-        "UPDATE tasks SET stage=?,title=?,due_date=?,assignee=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+        "UPDATE tasks SET stage=?,title=?,category=?,due_date=?,assignee=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
       )
       .run(
         input.stage,
         input.title ?? task.title,
+        input.category ?? task.category,
         input.dueDate ?? task.due_date,
         input.assignee ?? task.assignee,
         input.important === undefined

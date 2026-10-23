@@ -265,6 +265,7 @@ try {
       await cdp.click("Tasks");
       await cdp.click("Add task");
       await cdp.fill("input[name=title]", title);
+      await cdp.fill("input[name=category]", "Personal");
       await cdp.click("Create task");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
       const r = await nativeApi("/api/mobile");
@@ -291,6 +292,7 @@ try {
       );
       await cdp.wait(`Boolean(document.querySelector('input[name=title]'))`);
       await cdp.fill("input[name=title]", title + " updated");
+      await cdp.fill("input[name=category]", "Creative projects");
       await cdp.evaluate(
         `document.querySelector('input[name=important]').click()`,
       );
@@ -301,10 +303,29 @@ try {
       );
       assert.equal(t.title, title + " updated");
       assert.equal(t.important, 1);
+      assert.equal(t.category, "Creative projects");
       await cdp.click("Close");
     },
   );
 
+  await check(
+    "Custom category labels and category/assignment/date filters work on Android",
+    async () => {
+      await cdp.select(
+        'select[aria-label="Category filter"]',
+        "Creative projects",
+      );
+      await cdp.wait(
+        `document.querySelectorAll('.task').length===1 && document.querySelector('.task').textContent.includes('Creative projects')`,
+      );
+      await cdp.select('select[aria-label="Due date filter"]', "none");
+      await cdp.wait(`document.querySelectorAll('.task').length===1`);
+      await cdp.select('select[aria-label="Assignment filter"]', "unassigned");
+      await cdp.wait(`document.querySelectorAll('.task').length===0`);
+      await cdp.click("Clear filters");
+      await cdp.wait(`document.querySelectorAll('.task').length>1`);
+    },
+  );
   await check(
     "Create projects/goals and link native tasks to their shared records",
     async () => {
@@ -461,6 +482,42 @@ try {
       await cdp.wait(
         `document.querySelector('.focus-session .pill')?.textContent.includes('Focusing')`,
       );
+      await cdp.click("Today");
+      await cdp.wait(
+        `document.querySelector('.focus-hero h2')?.textContent===${JSON.stringify(title + " updated")}`,
+      );
+      const other = (await nativeApi("/api/mobile")).data.tasks.find(
+        (t) => t.id !== taskId && t.stage !== "Done",
+      );
+      const pick = async (name) => {
+        await cdp.click("Switch focus task");
+        await cdp.fill('input[aria-label="Find focus task"]', name);
+        await cdp.wait(
+          `document.querySelectorAll('.focus-picker-list .task').length===1`,
+        );
+        await cdp.evaluate(
+          `document.querySelector('.focus-picker-list .task').click()`,
+        );
+        await cdp.wait(
+          `!document.querySelector('[role=dialog]') && document.querySelector('.focus-session h2')?.textContent===${JSON.stringify(name)}`,
+        );
+      };
+      await pick(other.title);
+      await cdp.click("Today");
+      await cdp.wait(
+        `document.querySelector('.focus-hero h2')?.textContent===${JSON.stringify(other.title)}`,
+      );
+      let f = (await nativeApi("/api/workspace/focus")).data;
+      assert.equal(f.active.task_id, other.id);
+      assert.ok(
+        f.history.some((h) => h.task_id === taskId && h.state === "stopped"),
+      );
+      assert.notEqual(
+        (await nativeApi("/api/mobile")).data.tasks.find((t) => t.id === taskId)
+          .stage,
+        "Done",
+      );
+      await pick(title + " updated");
       await cdp.click("Finished");
       await cdp.wait(
         `document.body.innerText.includes('What would you like to move forward?')`,

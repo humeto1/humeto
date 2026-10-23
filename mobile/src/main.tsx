@@ -39,6 +39,15 @@ import {
   clearNotifications,
 } from "./notifications";
 import "./style.css";
+const defaultCategories = [
+  "Personal",
+  "Work",
+  "Social",
+  "Relationship",
+  "Family",
+  "Hobby",
+  "Financial",
+];
 const priorities = [
   ["Do now", "Important & urgent"],
   ["Schedule", "Important, not urgent"],
@@ -308,6 +317,10 @@ function App() {
     [query, setQuery] = useState(""),
     [view, setView] = useState("priority"),
     [filter, setFilter] = useState("pending"),
+    [categoryFilter, setCategoryFilter] = useState("all"),
+    [dueFilter, setDueFilter] = useState("all"),
+    [ownerFilter, setOwnerFilter] = useState("all"),
+    [focusQuery, setFocusQuery] = useState(""),
     [focus, setFocus] = useState<any>(null),
     [schedule, setSchedule] = useState<any>(null),
     [history, setHistory] = useState<any>(null),
@@ -437,15 +450,39 @@ function App() {
     active = focus?.active,
     pending = data.tasks.filter((t) => t.stage !== "Done"),
     completed = data.tasks.filter((t) => t.stage === "Done");
+  const focusTask = data.tasks.find((t) => t.id === active?.task_id);
+  const focusTitle = focusTask?.title || active?.title;
+  const categories = [
+    ...new Set([
+      ...defaultCategories,
+      ...data.tasks.map((t) => t.category || "").filter(Boolean),
+    ]),
+  ].sort();
+  const todayDate = new Date().toLocaleDateString("en-CA");
   const task = data.tasks.find((t) => t.id === selected);
   const label = (stage: string) =>
     data.stages.stages.find((s) => s.key === stage)?.title || stage;
   const filtered = data.tasks.filter(
     (t) =>
+      (categoryFilter === "all" ||
+        (categoryFilter === "uncategorized"
+          ? !t.category
+          : t.category === categoryFilter)) &&
+      (ownerFilter === "all" ||
+        (ownerFilter === "mine"
+          ? t.assignee === data.actor.name
+          : !t.assignee)) &&
+      (dueFilter === "all" ||
+        (dueFilter === "none"
+          ? !t.due_date
+          : dueFilter === "today"
+            ? t.due_date === todayDate
+            : !!t.due_date && t.due_date < todayDate && t.stage !== "Done")) &&
       (filter === "all" ||
         (filter === "done" ? t.stage === "Done" : t.stage !== "Done")) &&
       [
         t.title,
+        t.category,
         t.project_title,
         t.assignee,
         ...(t.goals || []).map((g) => g.title),
@@ -471,6 +508,15 @@ function App() {
         <small>
           {t.project_title || "No project"} · {formatDate(t.due_date)}
         </small>
+        <span className="task-tags">
+          {t.category && <span className="task-tag">{t.category}</span>}
+          {active?.task_id === t.id && (
+            <span className="task-tag focusing">In focus</span>
+          )}
+          {t.stage !== "Done" && t.due_date && t.due_date < todayDate && (
+            <span className="task-tag overdue">Overdue</span>
+          )}
+        </span>
       </span>
       <ChevronRight size={16} />
     </button>
@@ -577,18 +623,30 @@ function App() {
             </div>
             <section className="focus-hero">
               <span className="eyebrow">YOUR NEXT SMALL WIN</span>
-              <h2>
-                {active ? active.title : "One task. Your full attention."}
-              </h2>
+              <h2>{active ? focusTitle : "One task. Your full attention."}</h2>
               <p>
                 {active
-                  ? "Your focus session is waiting for you."
+                  ? "One task. Your full attention. Your active focus is shared here."
                   : "Choose something meaningful. We’ll help you stay with it."}
               </p>
-              <button className="primary" onClick={() => setTab("focus")}>
+              <button
+                className="primary"
+                onClick={() =>
+                  active ? setTab("focus") : setSheet("focus-picker")
+                }
+              >
                 {active ? "Return to focus" : "Find my focus"}
                 <ArrowUpRight size={18} />
               </button>
+              {active && (
+                <button
+                  className="text"
+                  disabled={!writable}
+                  onClick={() => setSheet("focus-picker")}
+                >
+                  Switch focus task
+                </button>
+              )}
               <div className="orbit">
                 <Target />
               </div>
@@ -700,6 +758,65 @@ function App() {
                 <option value="all">All tasks</option>
               </select>
             </div>
+            <div className="task-filters">
+              <label>
+                Category
+                <select
+                  aria-label="Category filter"
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                >
+                  <option value="all">All categories</option>
+                  <option value="uncategorized">Uncategorized</option>
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Due date
+                <select
+                  aria-label="Due date filter"
+                  value={dueFilter}
+                  onChange={(e) => setDueFilter(e.target.value)}
+                >
+                  <option value="all">Any date</option>
+                  <option value="today">Today</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="none">No due date</option>
+                </select>
+              </label>
+              <label>
+                Assignment
+                <select
+                  aria-label="Assignment filter"
+                  value={ownerFilter}
+                  onChange={(e) => setOwnerFilter(e.target.value)}
+                >
+                  <option value="all">Everyone</option>
+                  <option value="mine">Assigned to me</option>
+                  <option value="unassigned">Unassigned</option>
+                </select>
+              </label>
+              {(categoryFilter !== "all" ||
+                dueFilter !== "all" ||
+                ownerFilter !== "all" ||
+                query) && (
+                <button
+                  className="text"
+                  onClick={() => {
+                    setCategoryFilter("all");
+                    setDueFilter("all");
+                    setOwnerFilter("all");
+                    setQuery("");
+                  }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </div>
             {view === "priority" ? (
               <div className="matrix">
                 {priorities.map(([name, description], i) => (
@@ -768,7 +885,14 @@ function App() {
                 <span className="pill">
                   {active.state === "running" ? "● Focusing" : "Paused"}
                 </span>
-                <h2>{active.title}</h2>
+                <h2>{focusTitle}</h2>
+                <button
+                  className="secondary"
+                  disabled={!writable}
+                  onClick={() => setSheet("focus-picker")}
+                >
+                  Switch focus task
+                </button>
                 <div className="timer">
                   {String(Math.floor(elapsed / 60)).padStart(2, "0")}
                   <span>:</span>
@@ -1163,6 +1287,105 @@ function App() {
           {notice}
         </div>
       )}
+      <datalist id="task-categories">
+        {categories.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
+      {sheet === "focus-picker" && (
+        <Sheet
+          title={active ? "Switch focus task" : "Choose a focus task"}
+          close={() => setSheet(null)}
+        >
+          <p>
+            {active
+              ? "Your tracked time is saved. The previous task stays open."
+              : "Choose one task to give your full attention."}
+          </p>
+          <label>
+            Find a task
+            <input
+              aria-label="Find focus task"
+              value={focusQuery}
+              onChange={(e) => setFocusQuery(e.target.value)}
+              placeholder="Search tasks, projects or categories"
+            />
+          </label>
+          <label>
+            Expected focus time
+            <select
+              value={minutes}
+              onChange={(e) => setMinutes(Number(e.target.value))}
+            >
+              {[10, 15, 25, 45, 60, 90].map((m) => (
+                <option key={m} value={m}>
+                  {m} minutes
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="focus-picker-list">
+            {pending
+              .filter(
+                (t) =>
+                  t.id !== active?.task_id &&
+                  [t.title, t.project_title, t.category]
+                    .join(" ")
+                    .toLowerCase()
+                    .includes(focusQuery.toLowerCase()),
+              )
+              .map((t) => (
+                <button
+                  className="task"
+                  key={t.id}
+                  disabled={!writable}
+                  onClick={() =>
+                    void run(
+                      async () => {
+                        await api("/api/workspace/focus", {
+                          action: active ? "switch" : "start",
+                          taskId: t.id,
+                          taskRevision: t.revision,
+                          nextTaskRevision: t.revision,
+                          sessionId: active?.id,
+                          revision: active?.revision,
+                          minutes,
+                        });
+                        setSheet(null);
+                        setFocusQuery("");
+                        setTab("focus");
+                      },
+                      active
+                        ? "Focus switched. Previous time saved."
+                        : "Focus started.",
+                    )
+                  }
+                >
+                  <Play size={18} />
+                  <span className="task-copy">
+                    <strong>{t.title}</strong>
+                    <small>
+                      {t.category || "Uncategorized"} ·{" "}
+                      {t.project_title || "No project"}
+                    </small>
+                  </span>
+                </button>
+              ))}
+          </div>
+          {!pending.some(
+            (t) =>
+              t.id !== active?.task_id &&
+              [t.title, t.project_title, t.category]
+                .join(" ")
+                .toLowerCase()
+                .includes(focusQuery.toLowerCase()),
+          ) && (
+            <p>
+              No matching unfinished tasks. Add a task or try another search.
+            </p>
+          )}
+        </Sheet>
+      )}
       {(sheet === "create" || (sheet === "task" && task)) && (
         <Sheet
           title={
@@ -1181,6 +1404,7 @@ function App() {
                 void run(async () => {
                   await api("/api/workspace/tasks", {
                     title: f.get("title"),
+                    category: f.get("category") || "",
                     dueDate: f.get("dueDate") || "",
                     assignee: f.get("assignee") || "",
                     projectId: f.get("projectId") || "",
@@ -1201,6 +1425,15 @@ function App() {
                   maxLength={200}
                   autoFocus
                   placeholder="A clear, small next step"
+                />
+              </label>
+              <label>
+                Category
+                <input
+                  name="category"
+                  list="task-categories"
+                  maxLength={60}
+                  placeholder="Choose or type your own"
                 />
               </label>
               <label>
@@ -1264,6 +1497,19 @@ function App() {
                   {priorities[priority(task)][0]}
                 </span>
                 <h2 className="detail-title">{task.title}</h2>
+                {task.stage !== "Done" && active?.task_id !== task.id && (
+                  <button
+                    className="secondary"
+                    disabled={!writable}
+                    onClick={() => {
+                      setFocusQuery(task.title);
+                      setSheet("focus-picker");
+                    }}
+                  >
+                    <Timer size={16} />
+                    Focus on this task
+                  </button>
+                )}
                 <p className="muted">
                   {task.project_title || "No project"} ·{" "}
                   {formatDate(task.due_date)}
@@ -1277,6 +1523,7 @@ function App() {
                       await patch(task, {
                         stage: f.get("stage"),
                         title: f.get("title"),
+                        category: f.get("category") || "",
                         dueDate: f.get("dueDate") || "",
                         assignee: f.get("assignee") || "",
                         important: f.get("important") === "on",
@@ -1293,6 +1540,16 @@ function App() {
                       required
                       minLength={2}
                       maxLength={200}
+                    />
+                  </label>
+                  <label>
+                    Category
+                    <input
+                      name="category"
+                      list="task-categories"
+                      maxLength={60}
+                      defaultValue={task.category || ""}
+                      placeholder="Choose or type your own"
                     />
                   </label>
                   <label>

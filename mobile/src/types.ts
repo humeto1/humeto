@@ -1,6 +1,7 @@
 export type Task = {
   id: string;
   title: string;
+  category?: string;
   stage: string;
   important: number;
   urgent: number;
