@@ -4,6 +4,7 @@ import { z } from "zod";
 import { actor, isStaff, canMutate, ensureOrigin } from "@/lib/auth";
 import {
   AgentError,
+  messagePage,
   agentState,
   sendMessage,
   decide,
@@ -51,6 +52,13 @@ async function route(req: Request) {
       );
     if (req.method === "GET") {
       const params = new URL(req.url).searchParams;
+      if (params.has("before")) {
+        const threadId = z.string().uuid().parse(params.get("threadId"));
+        const before = z.string().uuid().parse(params.get("before"));
+        return NextResponse.json(await messagePage(a, threadId, before), {
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
       return NextResponse.json(
         await agentState(
           a,

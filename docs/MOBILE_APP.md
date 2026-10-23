@@ -37,3 +37,9 @@ The native acceptance run passed 20 checks, including custom category persistenc
 ## 0.2.0 · planning, alerts and routine wording
 
 See [shared task planning](TASK_PLANNING.md) for the current data model, filters, goal/project deadlines, routine types and weekly reporting, expected-impact estimates, reviewed AI wording rotation and notification limits. The same shared components are rendered by web and mobile. Android 0.2.0 (versionCode 2) includes the tilted serif h icon, chime/bell audio channels, vibration/permission diagnostics and projected local routine alerts. 149 release checks and 23 native emulator checks passed, including a live wording-generation request which did not auto-activate suggestions. Physical-device sound/vibration and store signing remain pending.
+
+## 0.2.1 · work sessions and project collaboration
+
+Android versionCode 3 uses the same accounts, backend and database as the website. Includes 30-message assistant history pages; an explicit random focus suggestion; optional transition resets and timed breaks; cumulative work-session totals; separate Mark task complete; background activity/status check-ins; parent teams with task overrides; project client sharing and quarantined uploads; native sharing and private-cache downloads; project/goal/routine financial targets and task context badges; and a compact bird's-eye task view. Project/goal selection state is preserved while editing.
+
+The shared UX audit found no automated WCAG-rule violations across 12 web viewports and five mobile tabs. 156 release checks and 25 Android simulator checks passed; private file downloads and the native notification/permission paths were exercised. Real antivirus scanning still requires the separate ClamAV worker. The test APK is debug-signed, with package `com.humeto.tasks`, and remains a testing build rather than a Play Store release.

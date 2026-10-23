@@ -16,3 +16,10 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - Task views and filters are independent. Board/List/4Q/Calendar consume the same filtered records. Project and goal are relationship filters, Personal/Work/etc. are area labels, and expected profit/avoided loss is an estimate dimension that must never post real financial ledger entries.
 - Optional Operations wording rotation uses reviewed alternatives only. Keep immutable canonical names/IDs and dated alias history. Do not silently apply fresh AI names or mutate schedule/meaning/assignee/value while varying display text.
+
+- Client collaboration (guest chat/comments, file sharing and access grants) belongs to projects. Task cards keep reference links; never publish staff assignments, applicant records or internal financial targets through a project guest endpoint.
+- Projects, goals and operations/routine series own teams; task responsibility inherits dynamically unless explicitly overridden. This does not grant guests internal workspace permissions.
+- Parent financial targets distinguish upfront, completion and conditional estimated profit. Preserve currency, timing, conditions and routine basis; never add child-task estimates again or post ledger entries from planning data.
+
+- Focus tracks work sessions, not automatic task completion. Enforce one active focus per user; pauses, breaks and ending a session preserve an unfinished task and its cross-day cumulative time. Only explicit completion changes the task to Done.
+- Background/delegated/automated activity timers are separate from personal focused work, require comments and an expected update time, and do not launch AI jobs or start another member's focus session.

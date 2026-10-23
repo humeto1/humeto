@@ -33,13 +33,13 @@
 .shell summary small {
   display: block;
   font-size: 11px;
-  color: #7c8972;
+  color: #6c7763;
   margin-top: 5px;
 }
 .summaryMeta {
   margin-left: auto;
   text-align: right;
-  color: #78866e;
+  color: #68745f;
   font-size: 11px;
 }
 .online,
@@ -52,7 +52,7 @@
   color: #3b744d;
 }
 .offline {
-  color: #987246;
+  color: #906c42;
 }
 .body {
   padding: 0 24px 22px;

@@ -49,3 +49,37 @@ Web desktop notifications require browser permission and Humeto to remain open. 
 149 release checks passed against disposable local PostgreSQL, including recurrence catch-up/idempotency, late completion, pause/skip semantics, monthly/yearly dates and leap years, calendar deadline editing, tenant/read-only boundaries, stale preference edits, expected impact without accounting entries, and immutable wording history.
 
 23 Android API 34 emulator checks passed, including live GPT-5.4 mini assistant and wording generation, task-impact/category filtering across views, native channel tone/vibration, delivered timed alert, future subscription alert, shared goal deadlines, session restart and logout. Android icon uses the tilted Georgia-serif h monogram; source outlines and a reproducible launcher renderer are checked in. iPhone testing remains deferred; only its source icon asset was updated.
+
+## Assistant conversation history
+
+Web and mobile open the latest 30 messages. Scrolling near the top loads the next older page; a Load older messages button provides a keyboard/touch fallback and retry. Keyset cursors use a message ID scoped to the signed-in user's conversation. Each page is bounded to 30, fetched without unrelated summaries, and returns current action status. Prepending preserves the reading position; incoming replies preserve loaded history. The model still receives its existing last-eight-message context, independent from visible scrollback.
+
+## October 23 release scope
+
+The requests below are implemented on web and mobile. The initial task-level sharing proposal was superseded by project-level client collaboration; task cards retain their own reference links.
+
+## Project collaboration and shared ownership (October 23)
+
+Client collaboration is project-scoped. In Projects & goals → Project collaboration, open a project for its chat/comments, shared links, attachments and sharing controls. Individual task cards retain reference links only. Private task notes, staff assignments, applicant records and financial targets are not returned by the public project endpoint.
+
+Sharing supports expiring view/contribute links, optional email restriction with an eight-digit verification code, revocation, copy, email, WhatsApp and the native Android share sheet. Clients use an ordinary browser without an app account. Public contributors are labelled guests; a self-entered name is not verified identity. Contribution challenges are single-use, require a short dwell time, and submissions/read requests are rate limited per link.
+
+Attachments accept matching PDF, DOCX, XLSX, PNG, JPEG and WebP signatures, up to 2 MB each, 20 files / 20 MB per project and 100 MB per workspace. Files persist in PostgreSQL for the initial small deployment. All new files are quarantined; no file bytes are downloadable before an antivirus scan. On the trusted worker server install ClamAV, maintain current signatures, and schedule `node --env-file=.env.local scripts/project-file-scanner.mjs`. Scanner failures leave files quarantined. A clean scan is risk reduction, not a guarantee that any file is harmless. Large-scale file storage and content-disarm processing remain future infrastructure work.
+
+Projects, goals and routine/operation series have their own team controls. Tasks without explicit assignments inherit their project, linked-goal and routine teams dynamically. A task can override this or return to inheritance. Team responsibility and public client access are separate systems.
+
+Each project/goal/routine has an internal financial target: expected upfront profit, completion profit and conditional reward, with currency, expected dates, reward condition and whole-plan/per-occurrence/month/year basis. Conditional money is separate from the base target. Child-task estimates never automatically increase the parent target or create financial ledger entries.
+
+Bird’s-eye view is a compact responsive workload map with counts, overdue/important indicators and grouping by stage, project, category or priority. It consumes the same filtered tasks as Board/List/4Q/Calendar and opens normal task details.
+
+Focus adds a random task suggestion (explicit selection; never automatic start) and an optional ten-second transition reset. The reset does not silently complete, pause or switch work. Finish, extend, pause and switch remain user decisions. Reduced-motion preferences shorten the shuffle animation.
+
+## Work sessions, breaks and parallel activity
+
+One active focus is allowed per user, independently of other members. End work session saves a handover note and leaves the task open; Mark task complete is an explicit separate action. Focus totals sum all the user's sessions for each task, including work spread over days. Session start/end timestamps and notes remain in history.
+
+The break coach uses recorded continuous time and the expected check-in, not keyboard/screen surveillance. It offers gentle check-ins, short rests, stretches, walks or a jog by choice. Starting a timed break pauses the work clock; the focused task stays selected and the board remains out of the way. Break-end alerts follow existing opt-in notification, quiet-hours and native sound/vibration settings. Work never resumes automatically. Desktop alerts require the browser/app to remain open; native scheduled alerts remain subject to device settings.
+
+Task details → Activity timers & status check-ins records delegated team work, an already-running AI/automation process, or waiting work while the user focuses elsewhere. Enter what is happening, who/what is performing it, and when an update is expected. Check-ins use existing reminder delivery, and updates can request a new interval. These clocks track activity elapsed time separately from personal focused time; they do not launch jobs, bill hours or complete tasks. Each member still controls their own private focus. Task completion explicitly closes remaining activity timers and cancels their reminders.
+
+Deadline distinction: project target dates and individual task due dates are separate. Focus minutes and activity check-in intervals are work/check-in estimates, not delivery-date replacements.

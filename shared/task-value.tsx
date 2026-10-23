@@ -77,7 +77,29 @@ export function TaskValueFields({ task = {} }: { task?: any }) {
   );
 }
 export function TaskValueBadge({ task }: { task: any }) {
-  if (!task.value_type || task.value_type === "none") return null;
+  const parent = task.project_target_currency ? (
+    <span
+      className="task-value-badge"
+      title="Parent project target; this task contributes to it. Do not add it again as task income."
+    >
+      Project target
+      {task.project_target_basis && task.project_target_basis !== "project"
+        ? " / " + task.project_target_basis
+        : ""}{" "}
+      · {task.project_target_currency}{" "}
+      {(
+        (Number(task.project_target_upfront) +
+          Number(task.project_target_completion)) /
+        100
+      ).toLocaleString()}
+      {Number(task.project_target_conditional) > 0
+        ? " + " +
+          (Number(task.project_target_conditional) / 100).toLocaleString() +
+          " conditional"
+        : ""}
+    </span>
+  ) : null;
+  if (!task.value_type || task.value_type === "none") return parent;
   const text =
     (task.value_type === "profit" ? "Potential profit" : "Avoid loss") +
     (task.value_minor == null
@@ -89,11 +111,14 @@ export function TaskValueBadge({ task }: { task: any }) {
           maximumFractionDigits: 2,
         }).format(Number(task.value_minor) / 100));
   return (
-    <span
-      className={"task-value-badge " + task.value_type}
-      title={task.value_note || "Estimated impact, not realised money"}
-    >
-      {text}
-    </span>
+    <>
+      {parent}
+      <span
+        className={"task-value-badge " + task.value_type}
+        title={task.value_note || "Estimated impact, not realised money"}
+      >
+        {text}
+      </span>
+    </>
   );
 }

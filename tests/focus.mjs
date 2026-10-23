@@ -181,3 +181,51 @@ test("focus is private to each member and task board completion stops the timer"
     "completed",
   );
 });
+
+test("work sessions accumulate across days, breaks pause time and ending work never completes the task", async () => {
+  const c = await ctx("ayesha"),
+    t = await create(c),
+    d = database();
+  for (const hours of [1, 4, 4]) {
+    const current = (
+      await (await c.get("/api/workspace/bootstrap")).json()
+    ).tasks.find((x) => x.id === t.id);
+    let r = await send(c, {
+      action: "start",
+      taskId: t.id,
+      taskRevision: current.revision,
+      minutes: 60,
+    });
+    assert.equal(r.status(), 200, await r.text());
+    let a = (await read(c)).active;
+    await d
+      .prepare(
+        "UPDATE focus_sessions SET elapsed_seconds=?,running_since=clock_timestamp() WHERE id=?",
+      )
+      .run(hours * 3600, a.id);
+    r = await command(c, "break", { minutes: 5, breakKind: "walk" });
+    assert.equal(r.status(), 200, await r.text());
+    a = (await read(c)).active;
+    assert.equal(a.state, "paused");
+    assert.ok(a.break_until);
+    assert.equal(a.break_kind, "walk");
+    r = await command(c, "stop", {
+      note: "Continue the remaining sections tomorrow",
+      nextStep: "Continue the remaining sections",
+    });
+    assert.equal(r.status(), 200);
+    assert.equal((await read(c)).active, null);
+    assert.notEqual(
+      (await (await c.get("/api/workspace/bootstrap")).json()).tasks.find(
+        (x) => x.id === t.id,
+      ).stage,
+      "Done",
+    );
+  }
+  const total = (await read(c)).taskTotals.find((x) => x.task_id === t.id);
+  assert.equal(total.sessions, 3);
+  assert.ok(
+    Number(total.seconds) >= 9 * 3600 && Number(total.seconds) < 9 * 3600 + 10,
+  );
+  await d.close();
+});

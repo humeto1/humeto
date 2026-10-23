@@ -16,7 +16,7 @@
   margin: 10px 0;
 }
 .header p {
-  color: #7a8674;
+  color: #697364;
   font-size: 14px;
 }
 .actions {
@@ -41,7 +41,7 @@
   gap: 15px;
 }
 .cards small {
-  color: #75816a;
+  color: #65705c;
   font-size: 12px;
 }
 .cards strong {
@@ -51,7 +51,7 @@
 }
 .note {
   font-size: 12px;
-  color: #7a8673;
+  color: #697363;
   line-height: 1.65;
 }
 .toolbar {

@@ -89,6 +89,7 @@ export type AgentState = {
   threads: AgentThread[];
   threadId: string | null;
   messages: AgentMessage[];
+  history?: { hasOlder: boolean; before: string | null };
   reminders: Reminder[];
   counts: {
     important: number;

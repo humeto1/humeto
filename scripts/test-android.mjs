@@ -12,7 +12,7 @@ import {
 import { tmpdir, homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
-import { randomBytes, scryptSync } from "node:crypto";
+import { randomBytes, scryptSync, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { createTestDatabase } from "./lib/test-database.mjs";
 import { database } from "../src/lib/postgres.mjs";
@@ -493,9 +493,125 @@ try {
     },
   );
   await check(
+    "Android assistant loads older history without jumping to the bottom",
+    async () => {
+      const state = (await nativeApi("/api/agent")).data;
+      const d = database(fixture.url);
+      for (let i = 0; i < 65; i++)
+        await d
+          .prepare(
+            "INSERT INTO agent_messages(id,tenant_id,thread_id,role,content,result,created_at) VALUES(?,?,?,?,?,?,?)",
+          )
+          .run(
+            randomUUID(),
+            "northstar",
+            state.threadId,
+            "user",
+            "Android history " + i,
+            "{}",
+            "2020-01-01 00:00:00",
+          );
+      await d.close();
+      await cdp.click("Today");
+      await cdp.click("Assistant");
+      await cdp.wait(
+        "document.querySelectorAll('.messages article').length===30",
+      );
+      await cdp.evaluate(
+        "(()=>{const e=document.querySelector('.messages');e.scrollTop=0;e.dispatchEvent(new Event('scroll'));})()",
+      );
+      await cdp.wait(
+        "document.querySelectorAll('.messages article').length===60",
+      );
+      assert.ok(
+        await cdp.evaluate("document.querySelector('.messages').scrollTop>0"),
+      );
+      assert.equal(
+        await cdp.evaluate("window.Capacitor.isPluginAvailable('Share')"),
+        true,
+      );
+    },
+  );
+  await check(
+    "Native bird's-eye view opens task activity tracking and schedules a separate update",
+    async () => {
+      await cdp.click("Tasks");
+      await cdp.click("Bird’s-eye view");
+      await cdp.wait("document.querySelectorAll('.birds-task').length>0");
+      await cdp.evaluate(
+        `[...document.querySelectorAll('.birds-task')].find(e=>e.textContent.includes(${JSON.stringify(title + " updated")})).click()`,
+      );
+      await cdp.click("Activity timers & status check-ins");
+      await cdp.fill(
+        '[aria-label="Task activity tracking"] input[name=label]',
+        "Native application worker",
+      );
+      await cdp.fill(
+        '[aria-label="Task activity tracking"] textarea[name=note]',
+        "Preparing the application information",
+      );
+      await cdp.fill(
+        '[aria-label="Task activity tracking"] input[name=minutes]',
+        "120",
+      );
+      await cdp.click("Start activity & schedule check-in");
+      await cdp.wait(
+        "document.querySelector('[aria-label=\"Task activity tracking\"]')?.textContent.includes('Native application worker · running')",
+      );
+      const activity = (
+        await nativeApi("/api/task-activities?taskId=" + taskId)
+      ).data.activities[0];
+      assert.equal(activity.state, "running");
+      assert.ok(Date.parse(activity.check_in_at) > Date.now() + 119 * 60000);
+      assert.equal((await nativeApi("/api/workspace/focus")).data.active, null);
+      assert.equal(
+        await cdp.evaluate("window.Capacitor.isPluginAvailable('Filesystem')"),
+        true,
+      );
+      await cdp.click("Close");
+      await cdp.click("Priority");
+    },
+  );
+  await check(
+    "Native clean project attachments download with the signed-in session into private cache",
+    async () => {
+      const d = database(fixture.url),
+        fid = randomUUID(),
+        bytes = Buffer.from(
+          "%PDF-1.7\nFictional native download fixture\n%%EOF",
+        );
+      await d
+        .prepare(
+          "INSERT INTO project_attachments(id,tenant_id,project_id,author,name,mime,bytes,size,status) VALUES(?,?,?,?,?,?,?,?,?)",
+        )
+        .run(
+          fid,
+          "northstar",
+          "demo-project-intake",
+          "QA",
+          "native.pdf",
+          "application/pdf",
+          bytes,
+          bytes.length,
+          "clean",
+        );
+      const result = await cdp.evaluate(
+        `window.Capacitor.Plugins.CapacitorHttp.request({url:${JSON.stringify(qaOrigin)}+'/api/project-sharing?projectId=demo-project-intake&attachment=${fid}',method:'GET',headers:{Origin:${JSON.stringify(qaOrigin)}},responseType:'blob'}).then(async r=>{if(r.status!==200)throw Error('Download denied '+r.status);await window.Capacitor.Plugins.Filesystem.writeFile({path:'native-download-qa.pdf',directory:'CACHE',data:r.data});const read=await window.Capacitor.Plugins.Filesystem.readFile({path:'native-download-qa.pdf',directory:'CACHE'});await window.Capacitor.Plugins.Filesystem.deleteFile({path:'native-download-qa.pdf',directory:'CACHE'});return read.data;})`,
+      );
+      assert.equal(result, bytes.toString("base64"));
+      await d.prepare("DELETE FROM project_attachments WHERE id=?").run(fid);
+      await d.close();
+    },
+  );
+  await check(
     "Focus session starts, pauses, resumes and records completion",
     async () => {
       await cdp.click("Focus");
+      await cdp.click("🎲 Pick a random task");
+      await cdp.wait(
+        "[...document.querySelectorAll('button')].some(b=>b.textContent==='Choose this task'&&!b.disabled)",
+      );
+      assert.equal((await nativeApi("/api/workspace/focus")).data.active, null);
       await cdp.wait(
         `Array.from(document.querySelectorAll('button')).some(e=>e.textContent.includes(${JSON.stringify(title + " updated")})&&!e.disabled)`,
       );
@@ -503,6 +619,20 @@ try {
         `Array.from(document.querySelectorAll('button')).find(e=>e.textContent.includes(${JSON.stringify(title + " updated")})&&!e.disabled).click()`,
       );
       await cdp.wait(`document.body.innerText.includes('Time spent')`);
+      await cdp.click("Take a 10-second reset");
+      await cdp.wait("!!document.querySelector('[role=timer]')");
+      assert.equal(
+        (await nativeApi("/api/workspace/focus")).data.active.state,
+        "running",
+      );
+      await cdp.evaluate(
+        "[...document.querySelectorAll('.focus-rest summary')].find(e=>e.textContent==='Take a break').click()",
+      );
+      await cdp.click("Start break · pause work timer");
+      const onBreak = (await nativeApi("/api/workspace/focus")).data.active;
+      assert.equal(onBreak.state, "paused");
+      assert.ok(onBreak.break_until);
+      await cdp.click("Resume");
       await cdp.click("Pause");
       await cdp.wait(
         `Array.from(document.querySelectorAll('button')).some(e=>e.textContent.trim()==='Resume')`,
@@ -547,7 +677,7 @@ try {
         "Done",
       );
       await pick(title + " updated");
-      await cdp.click("Finished");
+      await cdp.click("Mark task complete");
       await cdp.wait(
         `document.body.innerText.includes('What would you like to move forward?')`,
       );

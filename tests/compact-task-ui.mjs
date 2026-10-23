@@ -79,6 +79,22 @@ test("100 tasks remain in bounded quadrants and open full editable details", asy
     );
     await page.keyboard.press("Escape");
     assert.equal(await page.getByRole("dialog").count(), 0);
+    await page.getByRole("button", { name: "Bird’s-eye", exact: true }).click();
+    await page.locator(".birds-task").first().waitFor();
+    assert.ok((await page.locator(".birds-task").count()) >= 100);
+    await page
+      .getByRole("button", { name: "Collapse groups", exact: true })
+      .click();
+    assert.equal(await page.locator(".birds-task").count(), 0);
+    await page
+      .getByRole("button", { name: "Expand groups", exact: true })
+      .click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert.ok(
+      await page
+        .locator(".birds-eye")
+        .evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+    );
   } finally {
     await context.close();
     await browser.close();

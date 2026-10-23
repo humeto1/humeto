@@ -19,6 +19,7 @@ import type {
   ActionCard,
   TaskSummary,
 } from "@/lib/agent/contracts";
+import { mergeConversation, useChatHistory } from "../../shared/chat-history";
 import styles from "./task-assistant.module.css";
 const examples = [
   [
@@ -37,7 +38,12 @@ const empty: AgentState = {
   engine: "Local command testing",
   modelConfigured: false,
 };
+function timestamp(value: string) {
+  const iso = value.replace(" ", "T");
+  return /(?:Z|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + "Z";
+}
 function when(value: string, timezone: string) {
+  if (!Number.isFinite(Date.parse(value))) return "Date unavailable";
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: timezone,
     day: "numeric",
@@ -72,14 +78,13 @@ export default function TaskAssistant({
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [pending, setPending] = useState("");
-  const messageScroller = useRef<HTMLDivElement>(null),
-    composer = useRef<HTMLTextAreaElement>(null),
+  const composer = useRef<HTMLTextAreaElement>(null),
     thread = useRef<string | null>(null),
     busyRef = useRef(false);
   const retry = useRef<{ message: string; key: string } | null>(null);
   const receive = useCallback((state: AgentState) => {
     thread.current = state.threadId;
-    setData(state);
+    setData((previous) => mergeConversation(previous, state));
   }, []);
   useEffect(
     () =>
@@ -121,10 +126,9 @@ export default function TaskAssistant({
       window.clearInterval(poll);
     };
   }, [timezone, receive]);
-  useEffect(() => {
-    const box = messageScroller.current;
-    if (box) box.scrollTop = box.scrollHeight;
-  }, [data.messages.length, pending]);
+  const history = useChatHistory(data, setData, (query) =>
+    request(undefined, query),
+  );
   function usePrompt(text: string) {
     setDraft(text);
     composer.current?.focus();
@@ -353,7 +357,7 @@ export default function TaskAssistant({
         <aside className={styles.conversations}>
           <button
             className={styles.newChat}
-            disabled={busy}
+            disabled={busy || loading}
             onClick={() => {
               thread.current = null;
               setData((prev) => ({ ...prev, threadId: null, messages: [] }));
@@ -369,7 +373,7 @@ export default function TaskAssistant({
             {data.threads.map((t) => (
               <button
                 key={t.id}
-                disabled={busy}
+                disabled={busy || loading}
                 className={data.threadId === t.id ? styles.activeThread : ""}
                 onClick={() => void select(t.id)}
               >
@@ -410,11 +414,27 @@ export default function TaskAssistant({
             <span className={styles.private}>Private chat</span>
           </header>
           <div
-            ref={messageScroller}
+            ref={history.scroller}
+            tabIndex={0}
+            onScroll={history.onScroll}
             className={styles.messages}
             aria-label="Conversation messages"
             aria-busy={busy || loading}
           >
+            {data.history?.hasOlder && (
+              <button
+                type="button"
+                onClick={() => void history.loadOlder()}
+                disabled={history.loadingOlder}
+              >
+                {history.loadingOlder
+                  ? "Loading older messages…"
+                  : "Load older messages"}
+              </button>
+            )}
+            {history.historyError && (
+              <p role="alert">{history.historyError} Try loading again.</p>
+            )}
             {loading ? (
               <div className={styles.loading}>
                 <LoaderCircle size={20} className={styles.spin} /> Opening your
@@ -449,7 +469,7 @@ export default function TaskAssistant({
               data.messages.map((m) => (
                 <article
                   key={m.id}
-                  className={`${styles.message} ${m.role === "user" ? styles.user : styles.agent}`}
+                  className={`${styles.message} ${m.role === "user" ? styles.user : ""}`}
                 >
                   <span className={styles.speaker}>
                     {m.role === "user" ? (
@@ -459,10 +479,10 @@ export default function TaskAssistant({
                         <Sparkles size={12} /> Humeto
                       </>
                     )}
-                    <time dateTime={m.created_at.replace(" ", "T") + "Z"}>
+                    <time dateTime={timestamp(m.created_at)}>
                       ·{" "}
                       {when(
-                        m.created_at.replace(" ", "T") + "Z",
+                        timestamp(m.created_at),
                         timezone || "Asia/Karachi",
                       )}
                     </time>

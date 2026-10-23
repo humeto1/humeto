@@ -49,6 +49,62 @@ function actionCard(row: Record<string, unknown>) {
     expiresAt: Number(row.expires_at),
   };
 }
+export async function messagePage(
+  a: Actor,
+  threadId: string,
+  before: string | null = null,
+) {
+  await ownedThread(a, threadId);
+  const cursor = before
+    ? await db()
+        .prepare(
+          "SELECT _rowid FROM agent_messages WHERE id=? AND thread_id=? AND tenant_id=?",
+        )
+        .get(before, threadId, a.tenantId)
+    : null;
+  if (before && !cursor)
+    throw new AgentError("Conversation cursor not found.", 404);
+  const rows = before
+    ? await db()
+        .prepare(
+          "SELECT id,role,content,result,created_at FROM agent_messages WHERE thread_id=? AND tenant_id=? AND _rowid<? ORDER BY _rowid DESC LIMIT 31",
+        )
+        .all(threadId, a.tenantId, cursor!._rowid)
+    : await db()
+        .prepare(
+          "SELECT id,role,content,result,created_at FROM agent_messages WHERE thread_id=? AND tenant_id=? ORDER BY _rowid DESC LIMIT 31",
+        )
+        .all(threadId, a.tenantId);
+  const hasOlder = rows.length > 30;
+  const messages = await Promise.all(
+    rows
+      .slice(0, 30)
+      .reverse()
+      .map(async (row) => {
+        const result = JSON.parse(String(row.result));
+        if (result.action) {
+          const action = await db()
+            .prepare(
+              "SELECT * FROM agent_actions WHERE id=? AND tenant_id=? AND user_id=?",
+            )
+            .get(result.action.id, a.tenantId, a.id);
+          if (action) result.action = actionCard(action);
+          else delete result.action;
+        }
+        return { ...row, result };
+      }),
+  );
+  return {
+    threadId,
+    messages: messages as unknown as AgentMessage[],
+    history: {
+      hasOlder,
+      before: rows.length
+        ? String(rows[Math.min(rows.length, 30) - 1].id)
+        : null,
+    },
+  };
+}
 export async function agentState(
   a: Actor,
   threadId: string | null,
@@ -65,31 +121,10 @@ export async function agentState(
         .all(a.tenantId, a.id)) as unknown as AgentState["threads"]);
   const selected = summaryOnly ? null : threadId || threads[0]?.id || null;
   if (selected) await ownedThread(a, selected);
-  const messages = selected
-    ? ((await Promise.all(
-        (
-          await db()
-            .prepare(
-              "SELECT id,role,content,result,created_at FROM agent_messages WHERE thread_id=? AND tenant_id=? ORDER BY _rowid DESC LIMIT 200",
-            )
-            .all(selected, a.tenantId)
-        )
-          .reverse()
-          .map(async (row) => {
-            const result = JSON.parse(String(row.result));
-            if (result.action) {
-              const action = await db()
-                .prepare(
-                  "SELECT * FROM agent_actions WHERE id=? AND tenant_id=? AND user_id=?",
-                )
-                .get(result.action.id, a.tenantId, a.id);
-              if (action) result.action = actionCard(action);
-              else delete result.action;
-            }
-            return { ...row, result };
-          }),
-      )) as unknown as AgentMessage[])
-    : [];
+  const page = selected
+    ? await messagePage(a, selected)
+    : { messages: [], history: { hasOlder: false, before: null } };
+  const messages = page.messages;
   const own = (await tasks(a)).filter(
     (t) => t.assignee === a.name && t.stage !== "Done",
   );
@@ -110,6 +145,7 @@ export async function agentState(
     threads,
     threadId: selected,
     messages,
+    history: page.history,
     reminders,
     counts: {
       pending: own.length,

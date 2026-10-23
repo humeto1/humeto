@@ -1,0 +1,17 @@
+CREATE INDEX IF NOT EXISTS agent_message_history ON agent_messages(tenant_id,thread_id,_rowid DESC);
+CREATE TABLE project_links(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,label TEXT NOT NULL,url TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE INDEX project_links_task ON project_links(tenant_id,project_id);
+CREATE TABLE project_shares(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,token_hash TEXT NOT NULL UNIQUE,email TEXT NOT NULL DEFAULT '',permission TEXT NOT NULL CHECK(permission IN ('view','contribute')),created_by TEXT NOT NULL,expires_at BIGINT NOT NULL,revoked INTEGER NOT NULL DEFAULT 0,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE INDEX project_shares_task ON project_shares(tenant_id,project_id);
+CREATE TABLE project_share_codes(id TEXT PRIMARY KEY,share_id TEXT NOT NULL REFERENCES project_shares(id) ON DELETE CASCADE,code_hash TEXT NOT NULL,expires_at BIGINT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE project_guest_sessions(token_hash TEXT PRIMARY KEY,share_id TEXT NOT NULL REFERENCES project_shares(id) ON DELETE CASCADE,expires_at BIGINT NOT NULL);
+CREATE TABLE project_comments(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,share_id TEXT REFERENCES project_shares(id) ON DELETE SET NULL,author TEXT NOT NULL,content TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE INDEX project_comments_task ON project_comments(tenant_id,project_id,created_at);
+CREATE TABLE project_attachments(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,share_id TEXT REFERENCES project_shares(id) ON DELETE SET NULL,author TEXT NOT NULL,name TEXT NOT NULL,mime TEXT NOT NULL,bytes BYTEA NOT NULL,size INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'quarantined' CHECK(status IN ('quarantined','clean','rejected')),created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE INDEX project_attachments_task ON project_attachments(tenant_id,project_id);
+CREATE TABLE project_share_challenges(id TEXT PRIMARY KEY,share_id TEXT NOT NULL REFERENCES project_shares(id) ON DELETE CASCADE,issued_at BIGINT NOT NULL);
+CREATE TABLE task_links(id TEXT PRIMARY KEY,tenant_id TEXT NOT NULL,task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,label TEXT NOT NULL,url TEXT NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE INDEX task_links_task ON task_links(tenant_id,task_id);
+ALTER TABLE work_assignments DROP CONSTRAINT work_assignments_entity_type_check;
+ALTER TABLE work_assignments ADD CONSTRAINT work_assignments_entity_type_check CHECK(entity_type IN ('task','application','applicant','project','goal','routine'));
+ALTER TABLE assignment_revisions ADD COLUMN inherit INTEGER NOT NULL DEFAULT 0;

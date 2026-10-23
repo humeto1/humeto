@@ -519,13 +519,13 @@ test("schedules UI creates a recurring series, saves preferences and fits a narr
       }),
     });
     await project
-      .getByRole("button", { name: "Assign team", exact: true })
+      .getByRole("button", { name: "Assign project team", exact: true })
       .click();
     await project
       .getByRole("checkbox", { name: "Leila Morgan", exact: true })
       .check();
     await project
-      .getByRole("button", { name: "Save team", exact: true })
+      .getByRole("button", { name: "Save project team", exact: true })
       .click();
     await project
       .getByRole("button", { name: "1 assigned", exact: true })

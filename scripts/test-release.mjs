@@ -93,7 +93,12 @@ try {
   });
   console.log("Testing isolated PostgreSQL release at " + url);
   const files = readdirSync("tests")
-    .filter((f) => f.endsWith(".mjs"))
+    .filter(
+      (f) =>
+        f.endsWith(".mjs") &&
+        (!process.env.HUMETO_QA_FILES ||
+          process.env.HUMETO_QA_FILES.split(",").includes(f)),
+    )
     .map((f) => "tests/" + f);
   result = await run(["--test", "--test-concurrency=1", ...files]);
 } catch (e) {

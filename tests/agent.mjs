@@ -1,7 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { request } from "playwright";
+import { request, chromium } from "playwright";
 import { database } from "../src/lib/postgres.mjs";
 import { resolve } from "node:path";
 const base = process.env.HUMETO_TEST_URL || "http://localhost:4174";
@@ -372,4 +372,121 @@ test("Natural-language task preview creates and links an explicitly reviewed pro
   await action(c, card, "cancel");
   // Project cleanup is deferred until task cleanup, via the test file's after hook.
   agentProjects.add(project.id);
+});
+
+test("assistant history uses bounded, owned cursor pages without gaps or duplicates", async () => {
+  const c = await context("ayesha");
+  const initial = await message(c, "Show my pending tasks");
+  const db = database();
+  const thread = await db
+    .prepare("SELECT tenant_id FROM agent_threads WHERE id=?")
+    .get(initial.threadId);
+  const ids = [];
+  for (let i = 0; i < 65; i++) {
+    const id = randomUUID();
+    ids.push(id);
+    await db
+      .prepare(
+        "INSERT INTO agent_messages (id,thread_id,tenant_id,role,content,result,created_at) VALUES (?,?,?,?,?,?,?)",
+      )
+      .run(
+        id,
+        initial.threadId,
+        thread.tenant_id,
+        "user",
+        `History fixture ${i}`,
+        "{}",
+        new Date().toISOString(),
+      );
+  }
+  let page = await (
+    await c.get(`/api/agent?threadId=${initial.threadId}`)
+  ).json();
+  assert.equal(page.messages.length, 30);
+  assert.equal(page.messages.at(-1).id, ids.at(-1));
+  const all = [...page.messages];
+  while (page.history.hasOlder) {
+    const response = await c.get(
+      `/api/agent?threadId=${initial.threadId}&before=${page.history.before}`,
+    );
+    assert.equal(response.status(), 200);
+    page = await response.json();
+    assert.ok(page.messages.length <= 30);
+    all.unshift(...page.messages);
+  }
+  assert.deepEqual(
+    all.map((m) => m.id),
+    [...initial.messages.map((m) => m.id), ...ids],
+  );
+  assert.equal(new Set(all.map((m) => m.id)).size, all.length);
+  await db
+    .prepare("UPDATE agent_threads SET updated_at=?,title=? WHERE id=?")
+    .run("2099-01-01 00:00:00", "History pagination fixture", initial.threadId);
+  const browser = await chromium.launch();
+  try {
+    const browserContext = await browser.newContext({
+      storageState: await c.storageState(),
+    });
+    const page = await browserContext.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
+    });
+    await page.goto(base + "/workspace/assistant");
+    const scroller = page.getByLabel("Conversation messages", { exact: true });
+    await scroller
+      .getByText("History fixture 64", { exact: true })
+      .waitFor({ timeout: 8000 })
+      .catch(async (e) => {
+        throw Error(
+          e.message +
+            " UI: " +
+            (await page.locator("body").innerText()).slice(-3000) +
+            " Errors: " +
+            errors.join(" | "),
+        );
+      });
+    assert.equal(await scroller.locator("article").count(), 30);
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+      el.dispatchEvent(new Event("scroll"));
+    });
+    await scroller.getByText("History fixture 5", { exact: true }).waitFor();
+    assert.equal(await scroller.locator("article").count(), 60);
+    assert.ok(
+      await scroller.evaluate((el) => el.scrollTop > 0),
+      "Prepending preserves the visible message anchor",
+    );
+  } finally {
+    await browser.close();
+  }
+  const other = { threadId: randomUUID() };
+  threads.add(other.threadId);
+  await db
+    .prepare(
+      "INSERT INTO agent_threads (id,tenant_id,user_id,title) VALUES (?,?,?,?)",
+    )
+    .run(other.threadId, thread.tenant_id, "ayesha", "Other history fixture");
+  assert.equal(
+    (
+      await c.get(`/api/agent?threadId=${other.threadId}&before=${ids[0]}`)
+    ).status(),
+    404,
+  );
+  assert.equal(
+    (
+      await c.get(`/api/agent?threadId=${initial.threadId}&before=bad`)
+    ).status(),
+    400,
+  );
+  const partner = await context("bright-owner");
+  assert.notEqual(
+    (
+      await partner.get(
+        `/api/agent?threadId=${initial.threadId}&before=${ids[0]}`,
+      )
+    ).status(),
+    200,
+  );
 });

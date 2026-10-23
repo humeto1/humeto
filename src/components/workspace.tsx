@@ -1,4 +1,8 @@
 "use client";
+import { TaskActivity } from "../../shared/task-activity";
+import BirdsEye from "../../shared/birds-eye";
+import { TaskLinks as TaskReferenceLinks } from "../../shared/task-links";
+import { webApi } from "../../shared/planning-hub";
 import {
   companyIndustries,
   industryLabel,
@@ -2048,6 +2052,7 @@ export default function Workspace({
                       ["matrix", "Priority matrix", Grid2X2],
                       ["list", "List", List],
                       ["calendar", "Calendar", Calendar],
+                      ["birds", "Bird’s-eye", Grid2X2],
                     ].map(([key, label, Icon]) => {
                       const I = Icon as LucideIcon;
                       return (
@@ -2205,7 +2210,13 @@ export default function Workspace({
                     </button>
                   </div>
                 </details>
-                {taskView === "calendar" ? (
+                {taskView === "birds" ? (
+                  <BirdsEye
+                    tasks={filteredTasks}
+                    stageTitle={(key) => stageTitle("tasks", key)}
+                    openTask={(t) => showModal("task-details:" + t.id)}
+                  />
+                ) : taskView === "calendar" ? (
                   <TaskCalendar
                     tasks={filteredTasks}
                     openTask={(t) => showModal("task-details:" + t.id)}
@@ -2766,6 +2777,12 @@ export default function Workspace({
                     <span className="eyebrow">TASK DETAILS</span>
                     <h2 id="modal-title">Review your task</h2>
                     {taskCard(task)}
+                    <TaskReferenceLinks taskId={task.id} request={webApi} />
+                    <TaskActivity
+                      taskId={task.id}
+                      request={webApi}
+                      onChange={refresh}
+                    />
                   </>
                 ) : (
                   <h2 id="modal-title">Task no longer available</h2>

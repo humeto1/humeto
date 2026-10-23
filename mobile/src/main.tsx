@@ -1,3 +1,11 @@
+import { ParentControls } from "../../shared/parent-controls";
+import { TaskActivity } from "../../shared/task-activity";
+import { FocusRest } from "../../shared/focus-rest";
+import BirdsEye from "../../shared/birds-eye";
+import { TaskLinks } from "../../shared/task-links";
+import { Share } from "@capacitor/share";
+import { RandomTaskPicker, FocusTransition } from "../../shared/focus-play";
+import { mergeConversation, useChatHistory } from "../../shared/chat-history";
 import {
   TaskValueFields,
   TaskValueBadge,
@@ -37,7 +45,8 @@ import {
   Folder,
   Send,
 } from "lucide-react";
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, CapacitorHttp } from "@capacitor/core";
+import { Filesystem, Directory } from "@capacitor/filesystem";
 import { App as NativeApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { api, ApiError, SERVER, timezone } from "./api";
@@ -72,6 +81,34 @@ const formatDate = (s: string) =>
         month: "short",
       })
     : "No due date";
+async function downloadProjectFile(path: string, name: string) {
+  if (!Capacitor.isNativePlatform()) {
+    window.open(path, "_blank", "noopener");
+    return;
+  }
+  const response = await CapacitorHttp.request({
+    url: SERVER + path,
+    method: "GET",
+    headers: { Origin: SERVER },
+    responseType: "blob",
+  });
+  if (response.status !== 200 || typeof response.data !== "string")
+    throw Error("This file is not available for download.");
+  const stored = await Filesystem.writeFile({
+    path:
+      "humeto-share-" +
+      crypto.randomUUID() +
+      "-" +
+      name.replace(/[^a-zA-Z0-9._-]/g, "_"),
+    data: response.data,
+    directory: Directory.Cache,
+  });
+  await Share.share({
+    title: name,
+    files: [stored.uri],
+    dialogTitle: "Open or share file",
+  });
+}
 async function openWeb(path: string) {
   if (Capacitor.isNativePlatform()) await Browser.open({ url: SERVER + path });
   else window.open(SERVER + path, "_blank", "noopener");
@@ -337,10 +374,15 @@ function App() {
     [focus, setFocus] = useState<any>(null),
     [schedule, setSchedule] = useState<any>(null),
     [history, setHistory] = useState<any>(null),
-    [agent, setAgent] = useState<any>(null),
+    [agent, setAgentRaw] = useState<any>(null),
     [draft, setDraft] = useState(""),
     [minutes, setMinutes] = useState(25),
     [tick, setTick] = useState(Date.now());
+  const setAgent = (next: any) =>
+    setAgentRaw((previous: any) => mergeConversation(previous, next));
+  const chatHistory = useChatHistory(agent, setAgentRaw, (query) =>
+    api("/api/agent" + query),
+  );
   const busyLock = useRef(false);
   const refreshSequence = useRef(0);
   const dataRef = useRef(data);
@@ -788,6 +830,13 @@ function App() {
               >
                 <Calendar size={15} />
               </button>
+              <button
+                className="secondary"
+                aria-label="Bird’s-eye view"
+                onClick={() => setView("birds")}
+              >
+                Bird’s-eye
+              </button>
               <select
                 aria-label="Task filter"
                 value={filter}
@@ -939,7 +988,16 @@ function App() {
                 )}
               </div>
             </details>
-            {view === "calendar" ? (
+            {view === "birds" ? (
+              <BirdsEye
+                tasks={filtered}
+                openTask={(t) => {
+                  setSelected(t.id);
+                  setSheet("task");
+                }}
+                stageTitle={label}
+              />
+            ) : view === "calendar" ? (
               <TaskCalendar
                 tasks={filtered}
                 openTask={(t) => {
@@ -1023,6 +1081,26 @@ function App() {
                 >
                   Switch focus task
                 </button>
+                <FocusRest
+                  key={active.id}
+                  active={active}
+                  now={tick}
+                  totalSeconds={
+                    Number(
+                      focus?.taskTotals?.find(
+                        (t: any) => t.task_id === active.task_id,
+                      )?.seconds || 0,
+                    ) + Math.max(0, elapsed - Number(active.total_seconds))
+                  }
+                  sessions={
+                    focus?.taskTotals?.find(
+                      (t: any) => t.task_id === active.task_id,
+                    )?.sessions || 1
+                  }
+                  onAction={(action, extra) => void focusAction(action, extra)}
+                  busy={busy || !writable}
+                />
+                <FocusTransition onReady={() => setSheet("focus-picker")} />
                 <div className="timer">
                   {String(Math.floor(elapsed / 60)).padStart(2, "0")}
                   <span>:</span>
@@ -1035,7 +1113,7 @@ function App() {
                     Math.ceil((active.target_minutes * 60 - elapsed) / 60),
                   )}{" "}
                   minutes left in your estimate · Timer keeps tracking until you
-                  pause or finish.
+                  pause or end this work session.
                 </p>
                 {active.check_in_at &&
                   new Date(active.check_in_at).getTime() <= tick && (
@@ -1064,11 +1142,11 @@ function App() {
                     {active.state === "running" ? "Pause" : "Resume"}
                   </button>
                   <button
-                    className="primary"
+                    className="secondary"
                     disabled={!writable}
                     onClick={() => void focusAction("complete")}
                   >
-                    Finished <Check size={17} />
+                    Mark task complete <Check size={17} />
                   </button>
                 </div>
                 <button
@@ -1090,19 +1168,22 @@ function App() {
                 >
                   I'm stuck · take a pause
                 </button>
-                <button
-                  className="text muted"
-                  disabled={!writable}
-                  onClick={() => void focusAction("stop")}
-                >
-                  Stop session & choose another task
-                </button>
               </section>
             ) : (
               <>
                 <section className="panel">
                   <h2>What would you like to move forward?</h2>
                   <p>Pick one task. Everything else can wait.</p>
+                  <RandomTaskPicker
+                    tasks={pending}
+                    onChoose={(id) => {
+                      const task = pending.find((t) => t.id === id);
+                      if (task) {
+                        setFocusQuery(task.title);
+                        setSheet("focus-picker");
+                      }
+                    }}
+                  />
                   <label>
                     Expected focus time
                     <select
@@ -1159,7 +1240,19 @@ function App() {
                 <span>
                   {s.title}
                   <small>
-                    {Math.floor(s.total_seconds / 60)} minutes · {s.state}
+                    {Math.floor(s.total_seconds / 60)} minutes ·{" "}
+                    {s.state === "completed"
+                      ? "Task completed"
+                      : "Work session saved"}
+                    <br />
+                    Started: {new Date(s.started_at).toLocaleString()}
+                    {s.ended_at && (
+                      <>
+                        <br />
+                        Finished working:{" "}
+                        {new Date(s.ended_at).toLocaleString()}
+                      </>
+                    )}
                   </small>
                 </span>
               </div>
@@ -1206,7 +1299,33 @@ function App() {
                 ))}
               </div>
             )}
-            <div className="messages">
+            <div
+              className="messages"
+              tabIndex={0}
+              aria-label="Conversation messages"
+              ref={chatHistory.scroller}
+              onScroll={chatHistory.onScroll}
+              style={{
+                maxHeight: "60dvh",
+                overflowY: "auto",
+                overflowAnchor: "none",
+              }}
+            >
+              {agent?.history?.hasOlder && (
+                <button
+                  onClick={() => void chatHistory.loadOlder()}
+                  disabled={chatHistory.loadingOlder}
+                >
+                  {chatHistory.loadingOlder
+                    ? "Loading older messages…"
+                    : "Load older messages"}
+                </button>
+              )}
+              {chatHistory.historyError && (
+                <p role="alert">
+                  {chatHistory.historyError} Try loading again.
+                </p>
+              )}
               {agent?.messages?.map((m: any) => (
                 <article key={m.id} className={"message " + m.role}>
                   <small>{m.role === "user" ? "You" : "Humeto"}</small>
@@ -1356,37 +1475,53 @@ function App() {
                   {kind === "projects" ? "Projects" : "Goals"}
                 </h2>
                 {data[kind].map((p) => (
-                  <button
-                    className="project"
-                    key={p.id}
-                    onClick={() => {
-                      setQuery(p.title);
-                      setFilter("all");
-                      setTab("tasks");
-                    }}
-                  >
-                    <Folder size={21} />
-                    <span>
-                      <strong>{p.title}</strong>
-                      <small>
-                        {p.category || "Uncategorized"} ·{" "}
-                        {p.target_date
-                          ? "Deadline " + p.target_date
-                          : "Needs a deadline"}
-                      </small>
-                      <small>
-                        {p.status} ·{" "}
-                        {kind === "projects"
-                          ? data.tasks.filter((t) => t.project_id === p.id)
-                              .length
-                          : data.tasks.filter((t) =>
-                              t.goals?.some((g) => g.id === p.id),
-                            ).length}{" "}
-                        linked tasks
-                      </small>
-                    </span>
-                    <ChevronRight size={17} />
-                  </button>
+                  <article key={p.id}>
+                    <button
+                      className="project"
+                      key={p.id}
+                      onClick={() => {
+                        setQuery(p.title);
+                        setFilter("all");
+                        setTab("tasks");
+                      }}
+                    >
+                      <Folder size={21} />
+                      <span>
+                        <strong>{p.title}</strong>
+                        <small>
+                          {p.category || "Uncategorized"} ·{" "}
+                          {p.target_date
+                            ? "Deadline " + p.target_date
+                            : "Needs a deadline"}
+                        </small>
+                        <small>
+                          {p.status} ·{" "}
+                          {kind === "projects"
+                            ? data.tasks.filter((t) => t.project_id === p.id)
+                                .length
+                            : data.tasks.filter((t) =>
+                                t.goals?.some((g) => g.id === p.id),
+                              ).length}{" "}
+                          linked tasks
+                        </small>
+                      </span>
+                      <ChevronRight size={17} />
+                    </button>
+                    <ParentControls
+                      type={kind === "projects" ? "project" : "goal"}
+                      id={p.id}
+                      writable={writable}
+                      request={api}
+                      shareLink={async (url, title) => {
+                        await Share.share({
+                          title,
+                          url,
+                          dialogTitle: "Share project",
+                        });
+                      }}
+                      downloadFile={downloadProjectFile}
+                    />
+                  </article>
                 ))}
                 {!data[kind].length && (
                   <div className="empty">
@@ -1477,6 +1612,20 @@ function App() {
               ))}
             </select>
           </label>
+          <RandomTaskPicker
+            tasks={pending.filter(
+              (t) =>
+                t.id !== active?.task_id &&
+                [t.title, t.display_title, t.project_title, t.category]
+                  .join(" ")
+                  .toLowerCase()
+                  .includes(focusQuery.toLowerCase()),
+            )}
+            onChoose={(id) => {
+              const task = pending.find((t) => t.id === id);
+              if (task) setFocusQuery(task.title);
+            }}
+          />
           <div className="focus-picker-list">
             {pending
               .filter(
@@ -1656,6 +1805,13 @@ function App() {
                   {task.display_title || task.title}
                 </h2>
                 {task.display_title && <p>Original: {task.title}</p>}
+                <TaskLinks taskId={task.id} request={api} />
+                <TaskActivity
+                  taskId={task.id}
+                  request={api}
+                  onChange={refresh}
+                />
+
                 {task.stage !== "Done" && active?.task_id !== task.id && (
                   <button
                     className="secondary"
@@ -1764,58 +1920,14 @@ function App() {
                     Save changes <Check size={17} />
                   </button>
                 </form>
-                <form
-                  key={"links" + task.revision}
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const f = new FormData(e.currentTarget);
-                    void run(async () => {
-                      await api(
-                        "/api/workspace/task-links/" + task.id,
-                        {
-                          revision: task.revision,
-                          projectId: f.get("projectId") || "",
-                          goalIds: f.getAll("goalIds"),
-                        },
-                        "PATCH",
-                      );
-                    }, "Project links saved.");
-                  }}
-                >
-                  <label>
-                    Project
-                    <select
-                      name="projectId"
-                      defaultValue={task.project_id || ""}
-                    >
-                      <option value="">No project</option>
-                      {data.projects.map((p) => (
-                        <option value={p.id} key={p.id}>
-                          {p.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <fieldset>
-                    <legend>Goals</legend>
-                    {data.goals.map((g) => (
-                      <label className="check" key={g.id}>
-                        <input
-                          type="checkbox"
-                          name="goalIds"
-                          value={g.id}
-                          defaultChecked={task.goals?.some(
-                            (x) => x.id === g.id,
-                          )}
-                        />
-                        {g.title}
-                      </label>
-                    ))}
-                  </fieldset>
-                  <button className="secondary full" disabled={!writable}>
-                    Save project & goals
-                  </button>
-                </form>
+                <TaskRelations
+                  task={task}
+                  projects={data.projects}
+                  goals={data.goals}
+                  writable={writable}
+                  save={run}
+                />
+
                 <Team
                   task={task}
                   writable={writable}
@@ -2188,7 +2300,7 @@ function App() {
             <LogOut size={16} /> Sign out
           </button>
           <small className="muted">
-            Humeto mobile · 0.1.0 testing build
+            Humeto mobile · 0.2.1 testing build
             <br />
             Cloud sync requires an internet connection. No private documents or
             passwords are stored in the app bundle.
@@ -2196,6 +2308,82 @@ function App() {
         </Sheet>
       )}
     </div>
+  );
+}
+function TaskRelations({
+  task,
+  projects,
+  goals,
+  save,
+  writable,
+}: {
+  task: Task;
+  projects: any[];
+  goals: any[];
+  writable: boolean;
+  save: (fn: () => Promise<void>, message?: string) => Promise<void>;
+}) {
+  const [projectId, setProjectId] = useState(task.project_id || ""),
+    [goalIds, setGoalIds] = useState<string[]>(
+      task.goals?.map((g) => g.id) || [],
+    );
+  useEffect(() => {
+    setProjectId(task.project_id || "");
+    setGoalIds(task.goals?.map((g) => g.id) || []);
+  }, [task.id, task.revision]);
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save(async () => {
+          await api(
+            "/api/workspace/task-links/" + task.id,
+            { revision: task.revision, projectId, goalIds },
+            "PATCH",
+          );
+        }, "Project links saved.");
+      }}
+    >
+      <label>
+        Project
+        <select
+          name="projectId"
+          value={projectId}
+          onChange={(e) => setProjectId(e.target.value)}
+        >
+          <option value="">No project</option>
+          {projects.map((p) => (
+            <option value={p.id} key={p.id}>
+              {p.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <fieldset>
+        <legend>Goals</legend>
+        {goals.map((g) => (
+          <label className="check" key={g.id}>
+            <input
+              type="checkbox"
+              name="goalIds"
+              value={g.id}
+              checked={goalIds.includes(g.id)}
+              onChange={(e) =>
+                setGoalIds((old) =>
+                  e.target.checked
+                    ? [...old, g.id]
+                    : old.filter((id) => id !== g.id),
+                )
+              }
+            />
+            {g.title}
+          </label>
+        ))}
+      </fieldset>
+      <button className="secondary full" disabled={!writable}>
+        Save project & goals
+      </button>
+    </form>
   );
 }
 function Team({
@@ -2227,6 +2415,7 @@ function Team({
             id: task.id,
             userIds: f.getAll("members"),
             revision: state.revision,
+            inherit: state.inherits || false,
           });
           setState(
             await api("/api/workspace/assignments?type=task&id=" + task.id),
@@ -2235,6 +2424,23 @@ function Team({
       }}
     >
       <h3>Shared with your team</h3>
+      {state && (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={!!state.inherits}
+            onChange={(e) => setState({ ...state, inherits: e.target.checked })}
+          />
+          Use project, goal and routine teams
+        </label>
+      )}
+      {state?.inherits && (
+        <p>
+          {state.inherited
+            ?.map((m: any) => m.name + " (" + m.entity_type + ")")
+            .join(", ") || "No parent team assigned yet."}
+        </p>
+      )}
       {error && <p className="error">{error}</p>}
       {state && (
         <>
@@ -2246,6 +2452,7 @@ function Team({
                   name="members"
                   value={m.id}
                   defaultChecked={state.userIds.includes(m.id)}
+                  onChange={() => setState({ ...state, inherits: false })}
                 />
                 {m.name}
               </label>

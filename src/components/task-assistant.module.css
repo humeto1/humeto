@@ -22,7 +22,7 @@
   margin: 0;
 }
 .pageHeading :global(.eyebrow) {
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 1.7px;
 }
 .layout {
@@ -54,10 +54,10 @@
   margin-bottom: 26px;
 }
 .label {
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 1.3px;
-  color: #8a967d;
+  color: #656e5c;
   display: block;
 }
 .threadList {
@@ -98,7 +98,7 @@
 .emptyHistory {
   font-size: 10px;
   line-height: 1.8;
-  color: #8a967d;
+  color: #656e5c;
   padding: 0 6px;
 }
 .channelNote {
@@ -106,7 +106,7 @@
   font-size: 10px;
   padding-top: 18px;
   margin-top: 15px;
-  color: #78866e;
+  color: #68745f;
 }
 .channelNote strong {
   font-size: 10px;
@@ -115,17 +115,17 @@
 }
 .channelNote small {
   display: block;
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.7;
   margin: 9px 0;
 }
 .channelNote > div {
-  font-size: 9px;
+  font-size: 10px;
   margin-bottom: 5px;
 }
 .channelNote > span:last-child {
-  font-size: 8px;
-  color: #97a08c;
+  font-size: 10px;
+  color: #6c7264;
 }
 .online {
   width: 6px;
@@ -168,16 +168,17 @@
 }
 .chatHeader small {
   display: block;
-  font-size: 8px;
-  color: #8d9883;
+  font-size: 10px;
+  color: #6d7666;
   margin-top: 5px;
 }
 .private {
   margin-left: auto;
-  font-size: 8px;
-  color: #8d9883;
+  font-size: 10px;
+  color: #6d7666;
 }
 .messages {
+  overflow-anchor: none;
   padding: 23px 22px;
   overflow-y: auto;
   flex: 1;
@@ -219,7 +220,7 @@
 .welcome > p {
   font-size: 10px;
   line-height: 1.9;
-  color: #86917b;
+  color: #6d7664;
   max-width: 330px;
   margin: 0 0 23px;
 }
@@ -239,9 +240,9 @@
 }
 .examples button > span {
   display: block;
-  font-size: 8px;
+  font-size: 10px;
   letter-spacing: 0.5px;
-  color: #8d997f;
+  color: #6d7662;
   margin-bottom: 6px;
 }
 .examples button > strong {
@@ -268,8 +269,8 @@
   gap: 7px;
 }
 .speaker {
-  font-size: 8px;
-  color: #8a967e;
+  font-size: 10px;
+  color: #6d7664;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -295,8 +296,8 @@
   max-width: 90%;
 }
 .engineLabel {
-  font-size: 7px;
-  color: #9ba58f;
+  font-size: 10px;
+  color: #6f7666;
   display: block;
   margin-top: 8px;
 }
@@ -312,12 +313,12 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #638144;
-  font-size: 9px;
+  color: #58733d;
+  font-size: 10px;
 }
 .reviewTop > span {
   margin-left: auto;
-  font-size: 7px;
+  font-size: 10px;
   background: #edf3df;
   padding: 3px 7px;
   border-radius: 10px;
@@ -337,12 +338,12 @@
   justify-content: space-between;
   align-items: center;
   gap: 15px;
-  font-size: 9px;
+  font-size: 10px;
   padding: 7px 0;
   border-bottom: 1px solid #edf0e6;
 }
 .review dt {
-  color: #8a957e;
+  color: #6c7563;
   display: flex;
   gap: 5px;
   align-items: center;
@@ -354,8 +355,8 @@
 }
 .review dd small {
   display: block;
-  color: #8a957e;
-  font-size: 8px;
+  color: #6c7563;
+  font-size: 10px;
 }
 .review .reminderDetail {
   background: #f1f5e6;
@@ -378,7 +379,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 9px;
+  font-size: 10px;
   color: #68874a;
   margin-top: 12px;
 }
@@ -415,7 +416,7 @@
 }
 .taskResult small {
   display: block;
-  font-size: 8px;
+  font-size: 10px;
   color: #86927a;
   margin-top: 4px;
 }
@@ -462,8 +463,8 @@
   margin-top: 8px;
 }
 .composerBottom > span {
-  font-size: 8px;
-  color: #95a085;
+  font-size: 10px;
+  color: #6e7662;
   display: flex;
   gap: 5px;
   align-items: center;
@@ -482,9 +483,9 @@
   color: #8b9d75;
 }
 .disclaimer {
-  font-size: 7px;
+  font-size: 10px;
   line-height: 1.7;
-  color: #9aa48e;
+  color: #6f7666;
   text-align: center;
   margin: 9px 0 0;
 }
@@ -523,7 +524,7 @@
   font-size: 10px;
   letter-spacing: 0;
   margin-top: 7px;
-  color: #7c8b6c;
+  color: #636f56;
 }
 .quadrants {
   display: grid;
@@ -549,7 +550,7 @@
   background: #e5e4e5;
 }
 .quadrants span {
-  font-size: 8px;
+  font-size: 10px;
 }
 .quadrants strong {
   font-size: 20px;
@@ -557,19 +558,19 @@
 }
 .quadrants small {
   font-size: 6px;
-  color: #80906e;
+  color: #5c674f;
   line-height: 1.6;
 }
 .textLink {
   display: flex;
   gap: 8px;
   align-items: center;
-  font-size: 9px;
+  font-size: 10px;
   margin-top: 17px;
 }
 .scope {
-  font-size: 7px;
-  color: #919d84;
+  font-size: 10px;
+  color: #656e5c;
   line-height: 1.6;
   margin-top: 10px;
   display: block;
@@ -594,19 +595,19 @@
 .railHeading > span {
   margin-left: auto;
   background: #f0f4e6;
-  font-size: 8px;
+  font-size: 10px;
   border-radius: 4px;
   padding: 3px 6px;
 }
 .reminders > p {
   font-size: 10px;
   line-height: 1.8;
-  color: #8e9983;
+  color: #6d7665;
   margin: 16px 0;
 }
 .reminders > small {
-  font-size: 7px;
-  color: #9ba58f;
+  font-size: 10px;
+  color: #6f7666;
   line-height: 1.8;
   display: block;
   margin-top: 16px;
@@ -629,7 +630,7 @@
   overflow-wrap: anywhere;
 }
 .reminder > small {
-  font-size: 8px;
+  font-size: 10px;
   line-height: 1.8;
   color: #8d9980;
   display: block;
@@ -641,7 +642,7 @@
   margin-top: 8px;
 }
 .reminder button {
-  font-size: 8px;
+  font-size: 10px;
   text-decoration: underline;
   color: #79935a;
   padding: 2px 0;
@@ -667,9 +668,9 @@
   color: #607649;
 }
 .howItWorks > p {
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.9;
-  color: #8c9880;
+  color: #6a7361;
 }
 .thinking,
 .loading {
@@ -782,7 +783,7 @@
     grid-column: 1/-1;
   }
   .pageHeading > a {
-    font-size: 9px;
+    font-size: 10px;
     padding: 8px;
     min-height: 34px;
     white-space: nowrap;
@@ -816,7 +817,7 @@
     padding: 15px 13px;
   }
   .chatHeader small {
-    font-size: 7px;
+    font-size: 10px;
   }
   .composerArea {
     padding: 10px;
@@ -828,7 +829,7 @@
     padding: 11px;
   }
   .review dl > div {
-    font-size: 8px;
+    font-size: 10px;
   }
   .reviewTop > span {
     font-size: 6px;
@@ -843,7 +844,7 @@
     padding: 14px;
   }
   .quadrants small {
-    font-size: 8px;
+    font-size: 10px;
   }
   .howItWorks {
     grid-column: auto;
@@ -871,13 +872,13 @@
   font-size: 13px;
 }
 .composerBottom > span {
-  font-size: 9px;
+  font-size: 10px;
 }
 .examples button > strong {
   font-size: 12px;
 }
 .examples button > span {
-  font-size: 9px;
+  font-size: 10px;
 }
 .welcome > p {
   font-size: 12px;
@@ -886,7 +887,7 @@
   font-size: 13px;
 }
 .chatHeader small {
-  font-size: 9px;
+  font-size: 10px;
 }
 .review dl > div {
   font-size: 11px;
@@ -895,10 +896,10 @@
   font-size: 14px;
 }
 .disclaimer {
-  font-size: 9px;
+  font-size: 10px;
 }
 .speaker time {
-  font-size: 8px;
-  color: #9aa68c;
+  font-size: 10px;
+  color: #6d7663;
   font-weight: 400;
 }

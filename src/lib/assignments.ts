@@ -10,10 +10,20 @@ const kinds = {
   application: "applications",
   applicant: "people",
   project: "projects",
+  goal: "goals",
+  routine: "task_recurrences",
 } as const;
 const input = z.object({
-  type: z.enum(["task", "application", "applicant", "project"]),
+  type: z.enum([
+    "task",
+    "application",
+    "applicant",
+    "project",
+    "goal",
+    "routine",
+  ]),
   id: z.string().min(1).max(100),
+  inherit: z.boolean().default(false),
   revision: z.number().int().nonnegative().default(0),
   userIds: z.array(z.string().max(100)).max(50).default([]),
 });
@@ -23,7 +33,7 @@ export async function assignmentRead(a: Actor, type: string, entityId: string) {
   if (
     !(await hasFeature(
       a.tenantId,
-      ["task", "project"].includes(type)
+      ["task", "project", "goal", "routine"].includes(type)
         ? "tasks"
         : type === "applicant"
           ? "shared"
@@ -48,7 +58,7 @@ export async function assignmentRead(a: Actor, type: string, entityId: string) {
       .all(a.tenantId, type, entityId),
     rev = await db()
       .prepare(
-        "SELECT revision FROM assignment_revisions WHERE tenant_id=? AND entity_type=? AND entity_id=?",
+        "SELECT revision,inherit FROM assignment_revisions WHERE tenant_id=? AND entity_type=? AND entity_id=?",
       )
       .get(a.tenantId, type, entityId);
   const members = await db()
@@ -56,7 +66,17 @@ export async function assignmentRead(a: Actor, type: string, entityId: string) {
       "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant') ORDER BY u.name",
     )
     .all(a.tenantId);
+  const inherited =
+    type === "task" ? await inheritedTaskTeam(a.tenantId, entityId) : [];
+  const inherits =
+    type === "task" &&
+    (rev ? Number(rev.inherit) === 1 : assigned.length === 0);
   return NextResponse.json({
+    inherits,
+    inherited,
+    effectiveUserIds: inherits
+      ? [...new Set(inherited.map((r) => String(r.user_id)))]
+      : assigned.map((r) => r.user_id),
     userIds: assigned.map((r) => r.user_id),
     revision: rev?.revision || 0,
     members,
@@ -72,7 +92,7 @@ export async function assignmentWrite(a: Actor, body: unknown) {
   if (
     !(await hasFeature(
       a.tenantId,
-      ["task", "project"].includes(v.type)
+      ["task", "project", "goal", "routine"].includes(v.type)
         ? "tasks"
         : v.type === "applicant"
           ? "shared"
@@ -95,7 +115,7 @@ export async function assignmentWrite(a: Actor, body: unknown) {
       return NextResponse.json({ error: "Record not found." }, { status: 404 });
     const current = await db()
       .prepare(
-        "SELECT revision FROM assignment_revisions WHERE tenant_id=? AND entity_type=? AND entity_id=?",
+        "SELECT revision,inherit FROM assignment_revisions WHERE tenant_id=? AND entity_type=? AND entity_id=?",
       )
       .get(a.tenantId, v.type, v.id);
     if ((current?.revision || 0) !== v.revision)
@@ -103,7 +123,8 @@ export async function assignmentWrite(a: Actor, body: unknown) {
         { error: "Team changed elsewhere. Reload before assigning." },
         { status: 409 },
       );
-    const userIds = [...new Set(v.userIds)];
+    const userIds =
+      v.type === "task" && v.inherit ? [] : [...new Set(v.userIds)];
     for (const uid of userIds)
       if (
         !(await db()
@@ -129,9 +150,9 @@ export async function assignmentWrite(a: Actor, body: unknown) {
         .run(a.tenantId, v.type, v.id, uid, a.id);
     await db()
       .prepare(
-        "INSERT INTO assignment_revisions(tenant_id,entity_type,entity_id) VALUES(?,?,?) ON CONFLICT(tenant_id,entity_type,entity_id) DO UPDATE SET revision=assignment_revisions.revision+1",
+        "INSERT INTO assignment_revisions(tenant_id,entity_type,entity_id,inherit) VALUES(?,?,?,?) ON CONFLICT(tenant_id,entity_type,entity_id) DO UPDATE SET revision=assignment_revisions.revision+1,inherit=excluded.inherit",
       )
-      .run(a.tenantId, v.type, v.id);
+      .run(a.tenantId, v.type, v.id, v.type === "task" && v.inherit ? 1 : 0);
     await audit(
       a.tenantId,
       a.id,
@@ -142,4 +163,28 @@ export async function assignmentWrite(a: Actor, body: unknown) {
     );
     return NextResponse.json({ ok: true });
   });
+}
+
+export async function inheritedTaskTeam(tenant: string, taskId: string) {
+  return db()
+    .prepare(
+      `SELECT DISTINCT a.user_id,u.name,a.entity_type,a.entity_id FROM work_assignments a JOIN users u ON u.id=a.user_id JOIN memberships m ON m.tenant_id=a.tenant_id AND m.user_id=a.user_id WHERE a.tenant_id=? AND m.role IN ('owner','consultant') AND (
+   (a.entity_type='project' AND a.entity_id IN (SELECT project_id FROM tasks WHERE tenant_id=? AND id=?)) OR
+   (a.entity_type='goal' AND a.entity_id IN (SELECT goal_id FROM task_goals WHERE tenant_id=? AND task_id=? UNION SELECT p.goal_id FROM projects p JOIN tasks t ON t.project_id=p.id AND t.tenant_id=p.tenant_id WHERE t.tenant_id=? AND t.id=?)) OR
+   (a.entity_type='routine' AND a.entity_id IN (SELECT o.series_id FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id WHERE r.tenant_id=? AND o.task_id=? UNION SELECT id FROM task_recurrences WHERE tenant_id=? AND template_task_id=?))
+  ) ORDER BY u.name,a.entity_type`,
+    )
+    .all(
+      tenant,
+      tenant,
+      taskId,
+      tenant,
+      taskId,
+      tenant,
+      taskId,
+      tenant,
+      taskId,
+      tenant,
+      taskId,
+    );
 }

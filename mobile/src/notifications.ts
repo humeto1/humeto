@@ -94,6 +94,7 @@ export async function syncNotifications(
     id: string;
     title: string;
     check_in_at: string;
+    break_until?: string;
     ended_at?: string;
     state: string;
   } | null,
@@ -153,6 +154,19 @@ export async function syncNotifications(
     })),
     ...(focus &&
     !focus.ended_at &&
+    focus.state !== "running" &&
+    focus.break_until
+      ? [
+          {
+            key: "break:" + focus.id,
+            title: "Break finished. Ready to return?",
+            body: focus.title,
+            at: new Date(focus.break_until),
+          },
+        ]
+      : []),
+    ...(focus &&
+    !focus.ended_at &&
     focus.state === "running" &&
     focus.check_in_at
       ? [
@@ -165,7 +179,12 @@ export async function syncNotifications(
         ]
       : []),
   ]
-    .sort((a, b) => a.at.getTime() - b.at.getTime())
+    .sort(
+      (a, b) =>
+        Number(!/^(focus|break):/.test(a.key)) -
+          Number(!/^(focus|break):/.test(b.key)) ||
+        a.at.getTime() - b.at.getTime(),
+    )
     .filter((r) => Number.isFinite(r.at.getTime()))
     .filter((r) => prefs.enabled !== false)
     .map((r) => {

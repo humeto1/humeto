@@ -1,6 +1,6 @@
 // Deliberately local, bounded intent matching. No model or external service is used.
 export type FocusAction =
-  "progress" | "extend" | "pause" | "resume" | "blocked" | "complete";
+  "progress" | "extend" | "pause" | "resume" | "blocked" | "complete" | "break";
 export type FocusProposal = {
   action: FocusAction;
   note: string;
@@ -68,6 +68,14 @@ export function interpretFocus(
         "Ready to mark this task done and save your time? Review and apply below.",
       proposal: { action: "complete", note: text },
     };
+  const timedBreak = lower.match(
+    /^(?:take |i need |start )?(?:a )?(\d{1,3})[- ]?min(?:ute)?s? (?:break|rest)[.!]*$/,
+  );
+  if (timedBreak && Number(timedBreak[1]) >= 1 && Number(timedBreak[1]) <= 120)
+    return {
+      reply: `Pause your work clock for a ${Number(timedBreak[1])}-minute break? The task stays open.`,
+      proposal: { action: "break", note: text, minutes: Number(timedBreak[1]) },
+    };
   if (
     /^(pause|take a break|i need a break|pause (the )?timer)[.!\s]*$/.test(
       lower,
@@ -134,7 +142,7 @@ export function interpretFocus(
     reply: duration
       ? `Set a new check-in in ${proposal.minutes} minutes${percentage ? ` and save ${proposal.progress}% progress` : ""}. This keeps the task open.`
       : percentage
-        ? `Save ${proposal.progress}% progress. Only Finished marks the task complete.`
+        ? `Save ${proposal.progress}% progress. Only Mark task complete marks the task complete.`
         : "Save this as a progress note. Your timer and task status will stay as they are.",
     proposal,
   };
@@ -153,6 +161,8 @@ export function focusReply(
   if (action === "switch")
     return `Your previous task is still open and its time is saved. Let’s give this task ${minutes} minutes.`;
   if (action === "blocked") return focusGuidance(blocker, nextStep);
+  if (action === "break")
+    return "Break started. Your work timer is paused; your task stays open. Resume when you are ready.";
   if (action === "pause")
     return "Timer paused. Take your time; your progress and next step are saved.";
   if (action === "stop")

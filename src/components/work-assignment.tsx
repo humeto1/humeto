@@ -13,6 +13,9 @@ export default function WorkAssignment({
   const [open, setOpen] = useState(false),
     [data, setData] = useState<{
       userIds: string[];
+      inherits?: boolean;
+      inherited?: { name: string; entity_type: string }[];
+      effectiveUserIds?: string[];
       revision: number;
       members: { id: string; name: string }[];
     } | null>(null),
@@ -49,6 +52,7 @@ export default function WorkAssignment({
             id,
             revision: data?.revision,
             userIds: selected,
+            inherit: data?.inherits || false,
           }),
         }),
         j = await r.json();
@@ -70,7 +74,9 @@ export default function WorkAssignment({
         onClick={() => (open ? setOpen(false) : void load())}
       >
         <Users size={12} />
-        {data?.userIds.length ? `${data.userIds.length} assigned` : "Assign team"}
+        {data?.userIds.length
+          ? `${data.userIds.length} assigned`
+          : "Assign team"}
       </button>
       {open && data && (
         <div
@@ -83,6 +89,25 @@ export default function WorkAssignment({
           }}
         >
           <strong style={{ fontSize: 12 }}>Responsible team members</strong>
+          {type === "task" && (
+            <label>
+              <input
+                type="checkbox"
+                checked={!!data.inherits}
+                onChange={(e) =>
+                  setData({ ...data, inherits: e.target.checked })
+                }
+              />
+              Use project, goal and routine teams
+            </label>
+          )}
+          {type === "task" && data.inherits && (
+            <p>
+              {data.inherited
+                ?.map((m) => m.name + " (" + m.entity_type + ")")
+                .join(", ") || "No parent team assigned yet."}
+            </p>
+          )}
           {data.members.map((m) => (
             <label
               key={m.id}
@@ -98,13 +123,14 @@ export default function WorkAssignment({
                 type="checkbox"
                 checked={selected.includes(m.id)}
                 disabled={!writable || busy}
-                onChange={(e) =>
+                onChange={(e) => {
+                  setData({ ...data, inherits: false });
                   setSelected(
                     e.target.checked
                       ? [...selected, m.id]
                       : selected.filter((id) => id !== m.id),
-                  )
-                }
+                  );
+                }}
               />
               {m.name}
             </label>

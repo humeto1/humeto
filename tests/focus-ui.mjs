@@ -33,17 +33,64 @@ test("focus UI hides the board, restores a paused timer and completes the chosen
     taskId = (await r.json()).id;
     const page = await context.newPage();
     await page.goto(base + "/workspace/tasks");
+    await page.getByRole("button", { name: /Pick a random task/ }).click();
+    await page
+      .getByRole("button", { name: "Choose this task", exact: true })
+      .waitFor();
+    await page.waitForFunction(
+      () =>
+        ![...document.querySelectorAll("button")].find(
+          (b) => b.textContent === "Choose this task",
+        )?.disabled,
+    );
+    const beforePick = await (
+      await context.request.get("/api/workspace/focus")
+    ).json();
+    assert.equal(
+      beforePick.active,
+      null,
+      "A random suggestion never starts a timer",
+    );
+    await page
+      .getByRole("button", { name: "Choose this task", exact: true })
+      .click();
     await page.getByLabel("Focus task", { exact: true }).selectOption(taskId);
     await page
       .getByRole("button", { name: "Let’s begin", exact: true })
       .click();
     await page.getByText("Tracking time", { exact: true }).waitFor();
     assert.equal(await page.locator(".kanban-board").isVisible(), false);
+    await page
+      .getByRole("button", { name: "Take a 10-second reset", exact: true })
+      .click();
+    await page.getByRole("timer").waitFor();
+    const afterReset = await (
+      await context.request.get("/api/workspace/focus")
+    ).json();
+    assert.equal(
+      afterReset.active.state,
+      "running",
+      "Reset does not silently pause or switch the task",
+    );
+    await page
+      .locator(".focus-rest summary")
+      .filter({ hasText: "Take a break" })
+      .click();
+    await page
+      .getByRole("button", {
+        name: "Start break · pause work timer",
+        exact: true,
+      })
+      .click();
+    await page.getByText("Paused · timer stopped", { exact: true }).waitFor();
+    await page.getByRole("button", { name: "Resume", exact: true }).click();
     await page.getByRole("button", { name: "Pause", exact: true }).click();
     await page.getByText("Paused · timer stopped", { exact: true }).waitFor();
     await page.reload();
     await page.getByText("Paused · timer stopped", { exact: true }).waitFor();
-    await page.getByRole("button", { name: "Finished", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Mark task complete", exact: true })
+      .click();
     await page
       .getByRole("heading", {
         name: "What would you like to move forward first?",

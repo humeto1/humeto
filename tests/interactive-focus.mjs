@@ -401,7 +401,7 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
       .click();
     await page.getByRole("heading", { name: b.title, exact: true }).waitFor();
     assert.equal(await page.locator(".kanban-board").isVisible(), false);
-    await page.getByRole("button", { name: "Finished", exact: true }).click();
+    await page.getByRole("button", { name: "Mark task complete", exact: true }).click();
     await page
       .getByRole("heading", {
         name: "What would you like to move forward first?",

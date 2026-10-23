@@ -9,7 +9,6 @@ import {
   Sparkles,
   ArrowRight,
   Flag,
-  Square,
   RotateCcw,
   Send,
   Bell,
@@ -18,6 +17,8 @@ import {
 } from "lucide-react";
 import type { Task } from "@/lib/types";
 import { focusGuidance, type FocusProposal } from "@/lib/focus-coach";
+import { RandomTaskPicker, FocusTransition } from "../../shared/focus-play";
+import { FocusRest } from "../../shared/focus-rest";
 import styles from "./task-focus.module.css";
 type Session = {
   id: string;
@@ -30,6 +31,8 @@ type Session = {
   revision: number;
   task_revision: number;
   check_in_at: string | null;
+  break_until?: string;
+  break_kind?: string;
   started_at: string;
   ended_at: string | null;
   project_title: string;
@@ -53,6 +56,7 @@ type Snapshot = {
   active: Session | null;
   history: Session[];
   events: Event[];
+  taskTotals?: { task_id: string; seconds: number; sessions: number }[];
   serverNow: string;
 };
 type Preview = {
@@ -195,16 +199,22 @@ export default function TaskFocus({
     serverTime >= Date.parse(active.check_in_at);
   const validMinutes =
     Number.isInteger(minutes) && minutes >= 1 && minutes <= 720;
+  const breakDue =
+    !!active?.break_until &&
+    active.state !== "running" &&
+    Date.parse(active.break_until) <= serverTime;
   useEffect(() => {
     if (
-      !checkDue ||
+      (!checkDue && !breakDue) ||
       !active ||
       !alerts ||
       !canNotify ||
       Notification.permission !== "granted"
     )
       return;
-    const key = `${active.id}:${active.check_in_at}`,
+    const key = breakDue
+        ? `${active.id}:break:${active.break_until}`
+        : `${active.id}:${active.check_in_at}`,
       store = "humeto-focus-last-alert:" + memberKey;
     if (sentAlert.current === key) return;
     sentAlert.current = key;
@@ -215,11 +225,18 @@ export default function TaskFocus({
         .then((r) => r.json())
         .then((s) => {
           if (!s.preferences?.enabled || s.quietUntil) return;
-          new Notification("Humeto · Time for a check-in", {
-            body: "How is your task going? Come back to finish, continue or change your plan.",
-            tag: "humeto-focus-" + memberKey,
-            silent: true,
-          });
+          new Notification(
+            breakDue
+              ? "Humeto · Break finished"
+              : "Humeto · Time for a check-in",
+            {
+              body: breakDue
+                ? "Ready to return? Your work clock stays paused until you resume."
+                : "How is your task going? Come back to finish, continue or change your plan.",
+              tag: "humeto-focus-" + memberKey,
+              silent: true,
+            },
+          );
           if (s.preferences.vibration && "vibrate" in navigator)
             navigator.vibrate([200, 100, 200]);
           void playTone(s.preferences.tone || "chime").catch(() =>
@@ -238,7 +255,16 @@ export default function TaskFocus({
         "Browser alerts are unavailable. Your check-in is still shown here.",
       );
     }
-  }, [checkDue, active?.id, active?.check_in_at, alerts, canNotify, memberKey]);
+  }, [
+    checkDue,
+    breakDue,
+    active?.id,
+    active?.check_in_at,
+    active?.break_until,
+    alerts,
+    canNotify,
+    memberKey,
+  ]);
   async function toggleAlerts() {
     if (alerts) {
       setAlerts(false);
@@ -337,6 +363,7 @@ export default function TaskFocus({
     (preview.sessionId !== active?.id || preview.revision !== active?.revision);
   const taskPicker = (switchTask = false) => (
     <div className={styles.pick}>
+      <RandomTaskPicker tasks={candidates} onChoose={setSelected} />
       <label>
         {switchTask ? "What can you move forward instead?" : "Your first task"}
         <select
@@ -502,6 +529,24 @@ export default function TaskFocus({
               </div>
             </div>
           )}
+          <FocusRest
+            key={active.id}
+            active={active}
+            now={serverTime}
+            totalSeconds={
+              Number(
+                data?.taskTotals?.find((t) => t.task_id === active.task_id)
+                  ?.seconds || 0,
+              ) + Math.max(0, elapsed - Number(active.total_seconds))
+            }
+            sessions={
+              data?.taskTotals?.find((t) => t.task_id === active.task_id)
+                ?.sessions || 1
+            }
+            onAction={(action, extra) => void act(action, extra)}
+            busy={busy || !writable}
+          />
+          <FocusTransition onReady={() => setSwitching(true)} />
           <div className={styles.controls}>
             <label>
               Next check-in{" "}
@@ -542,7 +587,7 @@ export default function TaskFocus({
               onClick={() => act("complete")}
             >
               <Check size={14} />
-              Finished
+              Mark task complete
             </button>
             <button
               type="button"
@@ -551,14 +596,6 @@ export default function TaskFocus({
             >
               <ArrowRight size={14} />
               Choose another task
-            </button>
-            <button
-              type="button"
-              disabled={!writable || busy}
-              onClick={() => act("stop")}
-            >
-              <Square size={14} />
-              Stop & choose another
             </button>
           </div>
           <div className={styles.interactiveGrid}>
@@ -918,6 +955,14 @@ export default function TaskFocus({
                   </span>
                   <span>{clock(s.total_seconds)}</span>
                 </summary>
+                <p>
+                  Started working: {new Date(s.started_at).toLocaleString()}
+                  <br />
+                  Finished working:{" "}
+                  {s.ended_at
+                    ? new Date(s.ended_at).toLocaleString()
+                    : "Still open"}
+                </p>
                 {s.note && <p>{s.note}</p>}
                 {s.next_step && <p>Next step: {s.next_step}</p>}
                 {(data.events || [])

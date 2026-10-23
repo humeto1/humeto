@@ -1,3 +1,5 @@
+import AxeBuilder from "@axe-core/playwright";
+import { writeFileSync } from "node:fs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
@@ -110,7 +112,9 @@ test(
       await page.getByRole("button", { name: "Pause", exact: true }).click();
       await page.getByRole("button", { name: "Resume", exact: true }).click();
       await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
-      await page.getByRole("button", { name: "Finished", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Mark task complete", exact: true })
+        .click();
       await page
         .getByRole("heading", {
           name: "What would you like to move forward?",
@@ -148,6 +152,37 @@ test(
       await page.screenshot({ path: ".data/mobile-qa/goals.png" });
       await page.getByRole("button", { name: "Today", exact: true }).click();
       await page.screenshot({ path: ".data/mobile-qa/today.png" });
+      const audits = [];
+      for (const tab of ["Today", "Tasks", "Focus", "Goals", "Assistant"]) {
+        await page.getByRole("button", { name: tab, exact: true }).click();
+        const result = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+          .analyze();
+        audits.push({
+          tab,
+          violations: result.violations.map((v) => ({
+            id: v.id,
+            impact: v.impact,
+            nodes: v.nodes.map((n) => ({
+              target: n.target,
+              summary: n.failureSummary,
+            })),
+          })),
+        });
+        assert.deepEqual(
+          result.violations.map((v) => v.id),
+          [],
+        );
+        assert.ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth + 1,
+          ),
+        );
+      }
+      writeFileSync(
+        ".data/mobile-qa/accessibility.json",
+        JSON.stringify(audits, null, 2),
+      );
       assert.deepEqual(errors, []);
     } finally {
       await context.close();

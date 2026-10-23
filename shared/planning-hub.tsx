@@ -1,4 +1,6 @@
 "use client";
+import { PlanFinancial } from "./plan-financial";
+import { PlanTeam } from "./plan-team";
 import { nextDay } from "../src/lib/scheduling-clock.mjs";
 import { TaskValueFields, valuePayload } from "./task-value";
 import RoutineWording from "./routine-wording";
@@ -549,6 +551,18 @@ export default function PlanningHub({
                   {r.routine_kind} · every {r.interval_count} {r.frequency} ·{" "}
                   {r.status} · next {r.next_day}
                 </small>
+                <PlanFinancial
+                  type="routine"
+                  id={r.id}
+                  request={request}
+                  writable={writable}
+                />
+                <PlanTeam
+                  type="routine"
+                  id={r.id}
+                  request={request}
+                  writable={writable}
+                />
                 {r.routine_kind === "operations" && (
                   <RoutineWording
                     routine={r}

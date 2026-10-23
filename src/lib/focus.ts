@@ -23,8 +23,14 @@ export async function focusRead(a: Actor) {
       `SELECT e.*,t.title FROM focus_events e JOIN focus_sessions f ON f.id=e.session_id AND f.tenant_id=e.tenant_id JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id WHERE e.tenant_id=? AND e.user_id=? ORDER BY e.created_at DESC,e.id DESC LIMIT 100`,
     )
     .all(a.tenantId, a.id);
+  const taskTotals = await db()
+    .prepare(
+      `SELECT f.task_id,t.title,count(*)::int AS sessions,sum(f.elapsed_seconds+CASE WHEN f.running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (clock_timestamp()-f.running_since)))::bigint) END) AS seconds FROM focus_sessions f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id WHERE f.tenant_id=? AND f.user_id=? GROUP BY f.task_id,t.title ORDER BY seconds DESC LIMIT 1000`,
+    )
+    .all(a.tenantId, a.id);
   return NextResponse.json(
     {
+      taskTotals,
       active: rows.find((r) => !r.ended_at) || null,
       history: rows.filter((r) => r.ended_at),
       events,
@@ -62,6 +68,7 @@ const command = z.object({
     "stop",
     "progress",
     "switch",
+    "break",
   ]),
   taskId: z.string().min(1).max(100).optional(),
   taskRevision: z.number().int().positive().optional(),
@@ -72,6 +79,7 @@ const command = z.object({
   note: z.string().trim().max(2000).default(""),
   progress: z.number().int().min(0).max(100).optional(),
   nextStep: z.string().trim().max(500).optional(),
+  breakKind: z.enum(["quiet", "stretch", "walk", "jog"]).default("quiet"),
   blocker: z
     .enum(["", "waiting", "unclear", "overwhelmed", "other"])
     .optional(),
@@ -80,6 +88,8 @@ export async function focusMutation(a: Actor, body: unknown) {
   if (!isStaff(a) || !(await canMutate(a)))
     return fail("Task focus is read-only.", 403);
   const v = command.parse(body);
+  if (v.action === "break" && v.minutes > 120)
+    return fail("Choose a break up to 120 minutes.");
   return withTransaction(async () => {
     await db()
       .prepare(
@@ -321,6 +331,19 @@ export async function focusMutation(a: Actor, body: unknown) {
             a.tenantId,
             a.id,
           );
+      }
+      if (v.action === "break") {
+        await db()
+          .prepare(
+            "UPDATE focus_sessions SET break_until=clock_timestamp()+(? * interval '1 minute'),break_kind=? WHERE id=?",
+          )
+          .run(v.minutes, v.breakKind, active.id);
+      } else if (["resume", "extend", "stop", "blocked"].includes(v.action)) {
+        await db()
+          .prepare(
+            "UPDATE focus_sessions SET break_until=NULL,break_kind='' WHERE id=?",
+          )
+          .run(active.id);
       }
       const row = await db()
         .prepare(
