@@ -1106,6 +1106,9 @@ async function handle(req: Request, parts: string[], a: Actor) {
       .object({
         stage: z.string().min(1).max(100),
         revision: z.number().int().positive(),
+        title: z.string().trim().min(2).max(200).optional(),
+        dueDate: z.union([z.literal(""), z.iso.date()]).optional(),
+        assignee: z.string().max(100).optional(),
         important: z.boolean().optional(),
         urgent: z.boolean().optional(),
       })
@@ -1116,17 +1119,32 @@ async function handle(req: Request, parts: string[], a: Actor) {
       .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=?")
       .get(rid, a.tenantId)) as
       | {
+          title: string;
+          due_date: string;
+          assignee: string;
           important: number;
           urgent: number;
         }
       | undefined;
     if (!task) return fail("Task not found.", 404);
+    if (
+      input.assignee &&
+      !(await db()
+        .prepare(
+          "SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND u.name=? AND m.role IN ('owner','consultant')",
+        )
+        .get(a.tenantId, input.assignee))
+    )
+      return fail("Choose a team member from this workspace.", 400);
     const result = await db()
       .prepare(
-        "UPDATE tasks SET stage=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+        "UPDATE tasks SET stage=?,title=?,due_date=?,assignee=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
       )
       .run(
         input.stage,
+        input.title ?? task.title,
+        input.dueDate ?? task.due_date,
+        input.assignee ?? task.assignee,
         input.important === undefined
           ? task.important
           : Number(input.important),

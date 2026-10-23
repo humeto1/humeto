@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Humeto</string>
+    <string name="title_activity_main">Humeto</string>
+    <string name="package_name">com.humeto.tasks</string>
+    <string name="custom_url_scheme">com.humeto.tasks</string>
+</resources>

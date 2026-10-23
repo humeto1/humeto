@@ -12,3 +12,16 @@ artifacts/
 /planning/
 .neon
 .vercel
+
+# Native build products and machine-specific settings
+mobile/dist/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/**/build/
+mobile/ios/App/Pods/
+mobile/ios/App/build/
+mobile/ios/**/xcuserdata/
+mobile/releases/
+mobile/**/*.jks
+mobile/**/*.keystore
+mobile/android/app/release/

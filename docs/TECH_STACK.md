@@ -78,3 +78,6 @@ PostgreSQL cutover and verified backup/restore details: [database guide](POSTGRE
 New local modules: `focus.ts`, `pipeline-settings.ts`, `assignments.ts`, `finance.ts`; migrations 003–007. [Behavior and integration boundaries](FEATURE_DELIVERY_2026-10-18.md).
 
 Local document reading uses native Tesseract/Poppler through a separate Node worker and PostgreSQL leased queue. No external model is called. [Operations, review semantics and deployment boundary](DOCUMENT_READING.md). Current release: 85 checks pass.
+
+## Mobile task client (2026-10-23)
+React 19 + TypeScript + Vite 8, bundled with Capacitor 8.5.3. Android APK testing build; iOS project prepared and deferred. Shared Next.js APIs, Neon and existing cookie authentication. Native HTTP, App lifecycle, Browser and Local Notifications plugins; no AI or database secrets in native assets. See [mobile delivery](MOBILE_APP.md).
