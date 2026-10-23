@@ -422,3 +422,32 @@
   font-size: 13px;
   color: #536849;
 }
+.planning-status-filter {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  max-width: 320px;
+  margin: 12px 0;
+  color: #41593a;
+  font-size: 13px;
+}
+.planning-status-filter select {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  border: 1px solid #dce5cf;
+  border-radius: 8px;
+  background: #f7f9f2;
+  color: #294b38;
+  padding: 8px;
+}
+.planning-row .planning-event-title {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  min-height: 36px;
+  font: 600 13px inherit;
+  color: #294b38;
+  cursor: pointer;
+}

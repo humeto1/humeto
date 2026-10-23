@@ -1,4 +1,5 @@
 "use client";
+import { HomeTasks } from "../../shared/home-tasks";
 import { TaskDetailGroup } from "../../shared/task-detail-group";
 import { TaskActivity } from "../../shared/task-activity";
 import { useTouchDrag } from "../../shared/touch-drag";
@@ -866,7 +867,7 @@ export default function Workspace({
           <span className="compact-task-context">
             {t.project_title || t.person_name || "Team task"}
             {t.category && " · " + t.category}
-            {t.work_kind === "routine" && " · Routine"}
+
             {t.due_date &&
               t.due_date < todayTaskDate &&
               t.stage !== "Done" &&
@@ -1492,6 +1493,18 @@ export default function Workspace({
                   );
                 })}
               </div>
+              {staff && featureAllowed(data.subscription, "tasks") && (
+                <HomeTasks
+                  tasks={data.tasks}
+                  projects={data.projects || []}
+                  goals={data.goals || []}
+                  writable={writable}
+                  refresh={refresh}
+                  request={webApi}
+                  onAdd={() => showModal("task")}
+                  onOpen={(id) => showModal("task-details:" + id)}
+                />
+              )}
               <div className="overview-grid">
                 <section className="panel">
                   <div className="panel-title">
@@ -2220,7 +2233,7 @@ export default function Workspace({
                       >
                         <option value="all">All work</option>
                         <option value="one_off">One-off tasks</option>
-                        <option value="routine">Routine occurrences</option>
+                        <option value="routine">Repeating</option>
                       </select>
                     </label>
                     <label>
@@ -2412,7 +2425,6 @@ export default function Workspace({
                           <small>
                             {t.person_name || "Team task"}
                             {t.category ? " · " + t.category : ""}
-                            {t.work_kind === "routine" ? " · Routine" : ""}
                           </small>
                           <TaskValueBadge task={t} />
                         </span>
@@ -3440,9 +3452,24 @@ export default function Workspace({
                     e.preventDefault();
                     const f = new FormData(e.currentTarget);
                     await mutate(
-                      "tasks",
+                      f.get("repeat") === "daily" ? "planning" : "tasks",
                       "POST",
                       {
+                        ...(f.get("repeat") === "daily"
+                          ? {
+                              action: "routine",
+                              kind: "operations",
+                              frequency: "daily",
+                              interval: 1,
+                              firstDay:
+                                f.get("dueDate") ||
+                                new Date().toLocaleDateString("en-CA"),
+                              time: "00:00",
+                              timezone:
+                                Intl.DateTimeFormat().resolvedOptions()
+                                  .timeZone || "Asia/Karachi",
+                            }
+                          : {}),
                         ...valuePayload(f),
                         title: f.get("title"),
                         category: f.get("category") || "",
@@ -3461,6 +3488,17 @@ export default function Workspace({
                   <label>
                     Task title
                     <input name="title" required minLength={2} />
+                  </label>
+                  <label>
+                    Repeat
+                    <select
+                      name="repeat"
+                      aria-label="Repeat"
+                      defaultValue="none"
+                    >
+                      <option value="none">Does not repeat</option>
+                      <option value="daily">Daily</option>
+                    </select>
                   </label>
                   <label>
                     Category

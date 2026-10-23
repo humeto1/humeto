@@ -276,14 +276,14 @@ test("planning and alert preferences reject foreign tenants, students, stale edi
     404,
   );
 });
-test("web calendar edits a deadline and routine interface shares the weekly report", async () => {
+test("web calendar edits deadlines and daily task tracking lives on Overview", async () => {
   const c = await ctx("ayesha"),
     browser = await chromium.launch(),
     context = await browser.newContext();
   await context.addCookies((await c.storageState()).cookies);
   const page = await context.newPage();
   try {
-    await page.goto(base + "/workspace/progress");
+    await page.goto(base + "/workspace");
     await page.getByRole("button", { name: "Calendar", exact: true }).click();
     await page
       .locator('.planning-controls input[type="month"]')
@@ -294,9 +294,12 @@ test("web calendar edits a deadline and routine interface shares the weekly repo
     await page.getByRole("button", { name: "Edit plan", exact: true }).click();
     const editor = page.getByRole("form", { name: "Edit calendar plan" });
     await editor.getByLabel("Deadline", { exact: true }).fill("2028-01-15");
+    const saved = page.waitForResponse(r => r.url().includes("/api/workspace/goals/") && r.request().method() === "PATCH");
     await editor
       .getByRole("button", { name: "Save calendar plan", exact: true })
       .click();
+    const response = await saved;
+    assert.equal(response.status(), 200, await response.text());
     await page
       .getByText("Plan and deadline saved on all devices.", { exact: true })
       .waitFor();
@@ -308,45 +311,33 @@ test("web calendar edits a deadline and routine interface shares the weekly repo
       ).target_date,
       "2028-01-15",
     );
-    await page.getByRole("button", { name: "Routines", exact: true }).click();
-    await page
-      .getByRole("heading", { name: /Weekly routine review/ })
-      .waitFor();
-    const tracker = page.getByLabel("Weekly tracker for QA daily operations", {
-      exact: true,
-    });
-    await tracker.waitFor();
-    assert.equal(await tracker.locator(".routine-day").count(), 7);
-    await page.setViewportSize({ width: 390, height: 844 });
-    assert.ok(
-      await tracker.evaluate((e) => e.scrollWidth <= e.clientWidth + 1),
+    await page.goto(base + "/workspace/progress");
+    assert.equal(
+      await page.getByRole("button", { name: "Routines", exact: true }).count(),
+      0,
     );
     assert.equal(
-      await tracker
-        .locator("xpath=following-sibling::details")
-        .getAttribute("open"),
-      null,
+      await page
+        .getByLabel("Add plan", { exact: true })
+        .locator('option[value="routines"]')
+        .count(),
+      0,
     );
-    await page.getByLabel("Add plan", { exact: true }).selectOption("routines");
+    await page.goto(base + "/workspace");
+    await page.getByRole("region", { name: "Daily task tracking" }).waitFor();
+    await page.getByRole("button", { name: "Add task from Today" }).click();
     await page
-      .getByRole("textbox", { name: "Name", exact: true })
-      .fill("UI routine preview");
-    await page.locator(".planning-form .task-detail-group > summary").click();
-    await page
-      .getByRole("combobox", { name: "Routine kind", exact: true })
-      .last()
-      .selectOption("subscription");
+      .getByRole("dialog")
+      .getByLabel("Repeat", { exact: true })
+      .selectOption("daily");
     assert.equal(
-      await page.getByLabel("Routine frequency", { exact: true }).inputValue(),
-      "monthly",
+      await page
+        .getByRole("dialog")
+        .getByLabel("Repeat", { exact: true })
+        .inputValue(),
+      "daily",
     );
-    await page
-      .getByLabel("Routine frequency", { exact: true })
-      .selectOption("yearly");
-    assert.equal(
-      await page.getByLabel("Routine frequency", { exact: true }).inputValue(),
-      "yearly",
-    );
+    await page.keyboard.press("Escape");
   } finally {
     await context.close();
     await browser.close();
@@ -575,43 +566,43 @@ test("paused operations days are skipped on resume rather than counted as missed
   assert.equal(rows.length, 2);
   assert.ok(rows.every((r) => r.disposition === "skipped"));
 });
-test("web wording review explicitly enables rotation and cards keep their original name visible", async () => {
+test("previously approved wording keeps canonical task identity visible", async () => {
   const c = await ctx("ayesha"),
     browser = await chromium.launch(),
     context = await browser.newContext();
   await context.addCookies((await c.storageState()).cookies);
   const page = await context.newPage();
   try {
-    await page.goto(base + "/workspace/progress");
-    await page.getByRole("button", { name: "Routines", exact: true }).click();
-    const wording = page
-      .locator(".routine-wording")
-      .filter({ hasText: "Review 5 pending enquiries" });
-    await wording
-      .locator("xpath=ancestor::details[contains(@class,'task-detail-group')]")
-      .locator(":scope > summary")
-      .click();
-    await wording.locator("summary").click();
-    await wording
-      .locator("textarea")
-      .fill(
-        "Check the 5 pending enquiries\nReview the 5 enquiries still pending",
-      );
-    await wording.getByRole("checkbox").check();
-    await wording
-      .getByRole("button", { name: "Approve wording rotation", exact: true })
-      .click();
-    await wording
-      .getByText(
-        "Approved. Future occurrences rotate these wordings; previous names remain in history.",
-        { exact: true },
-      )
-      .waitFor();
-    await page.goto(base + "/workspace/tasks");
-    const card = page.getByRole("button", {
-      name: "Open task: Review 5 pending enquiries",
-      exact: true,
+    const original = "Review 5 pending enquiries";
+    const r = await post(c, "planning", {
+      action: "routine",
+      title: original,
+      kind: "operations",
+      frequency: "daily",
+      firstDay: localDay(new Date(), "UTC"),
+      time: "00:00",
+      timezone: "UTC",
     });
+    series.push(r.id);
+    await post(c, "planning", {
+      action: "wording-approve",
+      id: r.id,
+      revision: 0,
+      canonicalTitle: original,
+      variants: [
+        "Check 5 pending enquiries",
+        "Review the 5 enquiries still pending",
+      ],
+      reviewed: true,
+    });
+    await page.goto(base + "/workspace/tasks");
+    const card = page
+      .getByRole("button", {
+        name: "Open task: Review 5 pending enquiries",
+        exact: true,
+      })
+      .filter({ hasText: "Original:" })
+      .first();
     await card.waitFor();
     assert.ok(
       (await card.innerText()).includes("Original: Review 5 pending enquiries"),

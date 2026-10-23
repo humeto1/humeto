@@ -1141,23 +1141,55 @@ try {
           (g) => g.title === "Android QA goal",
         ).target_date,
       );
-      await cdp.click("Routines");
-      await cdp.select('select[aria-label="Add plan"]', "routines");
-      await cdp.fill(
-        "form.planning-form input[name=title]",
-        "Android annual renewal",
+      assert.equal(
+        await cdp.evaluate(
+          `Array.from(document.querySelectorAll('.plan-sections button')).some(b=>b.textContent==='Routines')`,
+        ),
+        false,
       );
-      await cdp.evaluate(
-        `document.querySelector(".planning-form .task-detail-group > summary").click()`,
+      assert.equal(
+        await cdp.evaluate(
+          `!!document.querySelector('select[aria-label="Add plan"] option[value="routines"]')`,
+        ),
+        false,
       );
-      await cdp.select('select[aria-label="Routine kind"]', "subscription");
-      await cdp.select('select[aria-label="Routine frequency"]', "yearly");
-      const tomorrow = new Date(Date.now() + 86400000)
-        .toISOString()
-        .slice(0, 10);
-      await cdp.fill("input[name=firstDay]", tomorrow);
-      await cdp.click("Save routine");
-      await cdp.wait(`document.body.innerText.includes('Routine saved.')`);
+      await cdp.click("Today");
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Daily task tracking"]')`,
+      );
+      await cdp.click("Add task from Today");
+      await cdp.fill('input[name="title"]', "Android daily task");
+      await cdp.select('select[name="repeat"]', "daily");
+      await cdp.click("Create task");
+      await cdp.wait(`!document.querySelector('[role=dialog]')`);
+      await cdp.wait(
+        `Array.from(document.querySelectorAll('.daily-title')).some(e=>e.textContent.includes('Android daily task'))`,
+      );
+      await cdp.click("Mark Android daily task done");
+      await cdp.wait(
+        `Array.from(document.querySelectorAll('.daily-done')).some(e=>e.textContent.includes('Android daily task'))`,
+      );
+      const series = (
+        await nativeApi("/api/workspace/planning")
+      ).data.routines.find((r) => r.title === "Android daily task");
+      assert.ok(
+        series &&
+          series.frequency === "daily" &&
+          series.next_day > series.first_day,
+      );
+      const annual = await nativeApi("/api/workspace/planning", {
+        action: "routine",
+        title: "Android annual renewal",
+        kind: "subscription",
+        frequency: "yearly",
+        firstDay: new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Karachi",
+        }).format(new Date()),
+        time: "00:00",
+        timezone: "Asia/Karachi",
+      });
+      assert.equal(annual.status, 200);
+      await cdp.evaluate(`window.dispatchEvent(new Event('online'))`);
       await cdp.wait(
         `window.Capacitor.Plugins.LocalNotifications.getPending().then(r=>r.notifications.some(n=>n.body==='Android annual renewal'))`,
       );
@@ -1170,6 +1202,7 @@ try {
             r.routine_kind === "subscription",
         ),
       );
+      await cdp.click("Today");
       await cdp.click("Calendar");
       assert.equal(
         await cdp.evaluate("document.documentElement.scrollWidth>innerWidth"),

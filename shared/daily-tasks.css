@@ -1,0 +1,141 @@
+.daily-tasks {
+  border: 1px solid #dce5cf;
+  background: #fff;
+  border-radius: 16px;
+  padding: 18px;
+  margin: 20px 0;
+  min-width: 0;
+}
+.daily-tasks > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.daily-tasks h2 {
+  font-size: 20px;
+  margin: 0 0 5px;
+  color: #254637;
+}
+.daily-tasks small {
+  font-size: 12px;
+  color: #63735a;
+}
+.daily-tasks button {
+  border: 1px solid #dce5cf;
+  background: #f5f7ef;
+  color: #294b38;
+  border-radius: 9px;
+  min-height: 42px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+.daily-tasks button:disabled {
+  cursor: default;
+}
+.daily-date {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 16px 0;
+}
+.daily-date label {
+  min-width: 0;
+  margin: 0;
+  flex: 1;
+}
+.daily-date input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid #dce5cf;
+  border-radius: 9px;
+  background: #f7f9f2;
+  color: #294b38;
+  padding: 8px;
+  font: inherit;
+}
+.daily-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid #e7ebdf;
+}
+.daily-tasks .daily-check {
+  flex: 0 0 42px;
+  font-size: 20px;
+  padding: 5px;
+}
+.daily-tasks .daily-title {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+.daily-title small {
+  display: block;
+  margin-top: 5px;
+}
+.daily-done .daily-check {
+  background: #e6f1dd;
+  color: #396338;
+  opacity: 1;
+}
+.daily-missed .daily-check {
+  background: #f9e9e2;
+  color: #994d34;
+}
+.daily-empty {
+  font-size: 13px;
+  color: #63735a;
+  margin: 12px 0;
+}
+.daily-tasks .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.daily-task-list {
+  max-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #c4d2b8 transparent;
+}
+.daily-task-list:focus-visible {
+  outline: 2px solid #789465;
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+.home-task-views {
+  display: flex;
+  gap: 5px;
+  padding: 5px;
+  background: #edf2e4;
+  border: 1px solid #dce5cf;
+  border-radius: 11px;
+  width: fit-content;
+  margin-top: 20px;
+}
+.home-task-views button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #506742;
+  padding: 9px 20px;
+  font: inherit;
+  cursor: pointer;
+}
+.home-task-views button[aria-pressed="true"] {
+  background: #fff;
+  color: #244d3b;
+  box-shadow: 0 1px 4px #23452614;
+}

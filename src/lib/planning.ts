@@ -106,6 +106,10 @@ const input = z.discriminatedUnion("action", [
   z.object({
     ...impactFields,
     action: z.literal("routine"),
+    important: z.boolean().default(false),
+    urgent: z.boolean().default(false),
+    personId: z.string().max(100).default(""),
+    assignee: z.string().max(200).default(""),
     title: z.string().trim().min(2).max(200),
     category: z.string().trim().max(60).default("Personal"),
     kind: z.enum(["operations", "groceries", "subscription"]),
@@ -184,18 +188,37 @@ export async function planningWrite(a: Actor, body: unknown) {
           .get(goal, a.tenantId))
       )
         return fail("Goal not found.", 404);
+    if (
+      v.personId &&
+      !(await db()
+        .prepare("SELECT id FROM people WHERE id=? AND tenant_id=?")
+        .get(v.personId, a.tenantId))
+    )
+      return fail("Applicant not found.", 404);
+    if (
+      v.assignee &&
+      !(await db()
+        .prepare(
+          "SELECT u.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant') AND u.name=?",
+        )
+        .get(a.tenantId, v.assignee))
+    )
+      return fail("Choose a workspace team member.");
     const tid = id(),
       sid = id();
     await db()
       .prepare(
-        "INSERT INTO tasks(id,tenant_id,title,category,work_kind,assignee,last_actor_id,project_id,value_type,value_minor,value_currency,value_note) VALUES(?,?,?,?,'routine',?,?,?,?,?,?,?)",
+        "INSERT INTO tasks(id,tenant_id,title,category,person_id,important,urgent,work_kind,assignee,last_actor_id,project_id,value_type,value_minor,value_currency,value_note) VALUES(?,?,?,?,?,?,?,'routine',?,?,?,?,?,?,?)",
       )
       .run(
         tid,
         a.tenantId,
         v.title,
         v.category,
-        a.name,
+        v.personId || null,
+        v.important ? 1 : 0,
+        v.urgent ? 1 : 0,
+        v.assignee || a.name,
         a.id,
         v.projectId,
         ...impactValues(v),

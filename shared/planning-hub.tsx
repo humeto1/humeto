@@ -61,6 +61,7 @@ export default function PlanningHub({
   request = webApi,
   view = "calendar",
   createRoutineToken = 0,
+  onOpenTask,
 }: {
   tasks: any[];
   projects: Plan[];
@@ -70,6 +71,7 @@ export default function PlanningHub({
   request?: Transport;
   view?: "calendar" | "routines" | "deadlines";
   createRoutineToken?: number;
+  onOpenTask?: (id: string) => void;
 }) {
   const routineForm = useRef<HTMLFormElement>(null);
   const tab = view;
@@ -77,6 +79,7 @@ export default function PlanningHub({
     [selected, setSelected] = useState(day()),
     [week, setWeek] = useState(day()),
     [kind, setKind] = useState("all"),
+    [statusFilter, setStatusFilter] = useState("all"),
     [report, setReport] = useState<any>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -134,11 +137,11 @@ export default function PlanningHub({
     let at = r.next_day;
     for (let i = 0; i < 5000 && at.slice(0, 7) <= month; i++) {
       if (r.end_day && at > r.end_day) break;
-      if (at.slice(0, 7) === month)
+      if (at.slice(0, 7) === month && !(report?.occurrences || []).some((o: any) => o.series_id === r.id && o.day === at))
         projected.push({
           id: r.id + at,
           title: r.title,
-          type: "Routine",
+          type: "Task",
           date: at,
           category: r.category,
           status: "Upcoming",
@@ -156,15 +159,62 @@ export default function PlanningHub({
     ...projected,
     ...goals.map((p) => ({ ...p, type: "Goal", date: p.target_date })),
     ...projects.map((p) => ({ ...p, type: "Project", date: p.target_date })),
+    ...(report?.occurrences || [])
+      .filter((o: any) => !tasks.some((t) => t.id === o.task_id && t.due_date))
+      .map((o: any) => ({
+        id: o.series_id + o.day,
+        taskId: o.task_id,
+        title: o.title,
+        type: "Task",
+        date: o.day,
+        status:
+          o.state === "done"
+            ? "Done"
+            : o.state === "missed"
+              ? "Missed"
+              : o.state === "upcoming"
+                ? "Upcoming"
+                : o.state === "skipped"
+                  ? "Skipped"
+                  : "To do",
+      })),
     ...tasks
       .filter((t) => t.due_date)
       .map((t) => ({
         ...t,
         title: t.display_title || t.title,
-        type: t.work_kind === "routine" ? "Routine" : "Task",
+        type: "Task",
+        taskId: t.id,
+        status:
+          t.stage === "Done"
+            ? "Done"
+            : t.due_date < day()
+              ? "Missed"
+              : t.due_date > day()
+                ? "Upcoming"
+                : "To do",
         date: t.due_date,
       })),
-  ].filter((e) => kind === "all" || e.type.toLowerCase() === kind);
+  ]
+    .map((e) => ({
+      ...e,
+      planStatus: e.status,
+      status:
+        e.type === "Task"
+          ? e.status
+          : ["Completed", "Done", "Achieved"].includes(e.status)
+            ? "Done"
+            : e.date < day()
+              ? "Missed"
+              : e.date > day()
+                ? "Upcoming"
+                : "To do",
+    }))
+    .filter(
+      (e) =>
+        (kind === "all" || e.type.toLowerCase() === kind) &&
+        (statusFilter === "all" || e.status === statusFilter),
+    );
   const first = new Date(month + "-01T12:00:00"),
     offset = (first.getDay() + 6) % 7;
   const days = Array.from({ length: 42 }, (_, i) =>
@@ -254,7 +304,7 @@ export default function PlanningHub({
               Show
               <select value={kind} onChange={(e) => setKind(e.target.value)}>
                 <option value="all">Everything</option>
-                {["Goal", "Project", "Task", "Routine"].map((k) => (
+                {["Goal", "Project", "Task"].map((k) => (
                   <option key={k} value={k.toLowerCase()}>
                     {k}s
                   </option>
@@ -262,6 +312,20 @@ export default function PlanningHub({
               </select>
             </label>
           </div>
+          <label className="planning-status-filter">
+            Status
+            <select
+              aria-label="Calendar status"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              {["all", "Upcoming", "To do", "Done", "Missed"].map((v) => (
+                <option value={v} key={v}>
+                  {v === "all" ? "All work" : v}
+                </option>
+              ))}
+            </select>
+          </label>
           <div className="planning-calendar">
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((n) => (
               <span className="calendar-weekday" key={n}>
@@ -277,20 +341,33 @@ export default function PlanningHub({
                   (d.slice(0, 7) !== month ? "outside " : "") +
                   (d === day() ? "today" : "")
                 }
-                onClick={() => setSelected(d)}
+                onClick={() => {
+                  setSelected(d);
+                  setWeek(d);
+                }}
               >
                 <strong>{Number(d.slice(8))}</strong>
                 <small>{events.filter((e) => e.date === d).length || ""}</small>
               </button>
             ))}
           </div>
-          <h3>{selected} · deadlines</h3>
+          <h3>{selected} · work & deadlines</h3>
           {events
             .filter((e) => e.date === selected)
             .map((e) => (
               <div className="planning-row" key={e.type + e.id}>
                 <div>
-                  <strong>{e.title}</strong>
+                  {e.type === "Task" && e.taskId && onOpenTask ? (
+                    <button
+                      type="button"
+                      className="planning-event-title"
+                      onClick={() => onOpenTask(e.taskId)}
+                    >
+                      {e.title}
+                    </button>
+                  ) : (
+                    <strong>{e.title}</strong>
+                  )}
                   <small>
                     {e.type} · {e.category || "Uncategorized"} ·{" "}
                     {e.status || e.stage}
@@ -302,7 +379,7 @@ export default function PlanningHub({
                     onClick={() =>
                       setEdit({
                         kind: e.type === "Goal" ? "goals" : "projects",
-                        item: e,
+                        item: { ...e, status: e.planStatus },
                       })
                     }
                   >
@@ -312,7 +389,7 @@ export default function PlanningHub({
               </div>
             ))}
           {!events.some((e) => e.date === selected) && (
-            <p>No deadlines on this date.</p>
+            <p>No work on this date.</p>
           )}
         </>
       ) : tab === "routines" ? (

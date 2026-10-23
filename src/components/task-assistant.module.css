@@ -925,3 +925,16 @@
     display: none;
   }
 }
+/* Reminder text remains readable when the daily checklist creates scheduled tasks. */
+.reminder > span {
+  color: #536449;
+  font-size: 11px;
+}
+.reminder > small {
+  color: #536449;
+  font-size: 11px;
+}
+.reminder > div > button {
+  color: #456334;
+  font-size: 11px;
+}

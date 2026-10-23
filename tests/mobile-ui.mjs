@@ -199,11 +199,11 @@ test(
       );
       mkdirSync(".data/mobile-qa", { recursive: true });
       await page.screenshot({ path: ".data/mobile-qa/goals.png" });
-      await page.getByRole("button", { name: "Today", exact: true }).click();
+      await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
       await page.screenshot({ path: ".data/mobile-qa/today.png" });
       const audits = [];
       for (const tab of ["Today", "Tasks", "Focus", "Plans", "Chat"]) {
-        await page.getByRole("button", { name: tab, exact: true }).click();
+        await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: tab, exact: true }).click();
         const result = await new AxeBuilder({ page })
           .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
           .analyze();

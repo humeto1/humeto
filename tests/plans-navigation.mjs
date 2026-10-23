@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 const base = process.env.HUMETO_TEST_URL;
-test("Projects, Goals and Routines are peers with one Add menu and no extra operations tab", async () => {
+test("Plans contains Projects and Goals; daily tasks live on Overview", async () => {
   const browser = await chromium.launch(),
     context = await browser.newContext({
       baseURL: base,
@@ -20,10 +20,9 @@ test("Projects, Goals and Routines are peers with one Add menu and no extra oper
     const page = await context.newPage();
     await page.goto(base + "/workspace/progress");
     const tabs = page.locator(".task-progress > .filter-bar .segmented button");
-    assert.deepEqual((await tabs.allTextContents()).slice(0, 3), [
+    assert.deepEqual((await tabs.allTextContents()).slice(0, 2), [
       "Projects",
       "Goals",
-      "Routines",
     ]);
     assert.equal(
       await page
@@ -46,7 +45,7 @@ test("Projects, Goals and Routines are peers with one Add menu and no extra oper
       await add
         .locator("option")
         .evaluateAll((options) => options.map((o) => o.value)),
-      ["", "projects", "goals", "routines"],
+      ["", "projects", "goals"],
     );
     await add.selectOption("projects");
     await page
@@ -58,9 +57,8 @@ test("Projects, Goals and Routines are peers with one Add menu and no extra oper
       .getByRole("heading", { name: "New goal", exact: true })
       .waitFor();
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await add.selectOption("routines");
-    await page.locator('form.planning-form input[name="title"]').waitFor();
-    assert.equal(await page.locator(".planning-tabs").count(), 0);
+    assert.equal(await page.getByRole("button", { name: "Calendar", exact: true }).count(), 0);
+    await page.goto(base + "/workspace");
     await page.getByRole("button", { name: "Calendar", exact: true }).click();
     await page.locator(".planning-calendar").waitFor();
     await page.getByRole("button", { name: "Chat", exact: true }).click();

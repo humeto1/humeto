@@ -35,7 +35,6 @@ export default function TaskProgress({
   writable: boolean;
 }) {
   const [tab, setTab] = useState("projects"),
-    [routineCreate, setRoutineCreate] = useState(0),
     [edit, setEdit] = useState<{
       kind: "projects" | "goals";
       item?: Workstream;
@@ -172,11 +171,7 @@ export default function TaskProgress({
               disabled={!writable}
               onChange={(e) => {
                 const kind = e.target.value;
-                if (kind === "routines") {
-                  setTab(kind);
-                  setEdit(null);
-                  setRoutineCreate((n) => n + 1);
-                } else if (kind === "projects" || kind === "goals") {
+                if (kind === "projects" || kind === "goals") {
                   setTab(kind);
                   setEdit({ kind });
                   setError("");
@@ -188,7 +183,6 @@ export default function TaskProgress({
               </option>
               <option value="projects">Project</option>
               <option value="goals">Goal</option>
-              <option value="routines">Routine</option>
             </select>
           </label>
         </div>
@@ -198,8 +192,6 @@ export default function TaskProgress({
           {[
             ["projects", "Projects"],
             ["goals", "Goals"],
-            ["routines", "Routines"],
-            ["calendar", "Calendar"],
             ["monthly", "Monthly review"],
             ["history", "Task history"],
           ].map(([key, label]) => (
@@ -221,14 +213,7 @@ export default function TaskProgress({
         goals={goals}
         writable={writable}
         refresh={refresh}
-        view={
-          tab === "routines"
-            ? "routines"
-            : tab === "calendar"
-              ? "calendar"
-              : "deadlines"
-        }
-        createRoutineToken={routineCreate}
+        view={tab === "calendar" ? "calendar" : "deadlines"}
       />
       {error && (
         <p className="notice" role="alert">

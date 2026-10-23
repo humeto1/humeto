@@ -56,3 +56,9 @@ The chat message list now takes the remaining visible screen height and scrolls 
 0.2.6 / version code 8: clearer Move grip with 44px touch target; drag to a column or the destination tray that appears above navigation. Priority tray includes all four quadrants. Routine cards now show a compact weekly completion/missed tracker; optional setup and controls are collapsed. Same routine UI and drag behavior are shared with mobile web.
 
 0.2.7 / version code 9 adds whole-card long-press dragging: hold the task body, move and release over a stage/priority destination. Normal tapping and swiping retain their usual behavior. The explicit Move handle is optional.
+
+0.2.8 / version code 10: Plans contains Projects and Goals, with no Routine category or creation menu. Today adds a daily checklist with date navigation and Done/Missed records. Add an ordinary task and choose Repeat: Daily to have separate tasks appear each day. Existing schedules/history remain intact. Web Overview has the same checklist.
+
+Home now contains Today and Calendar views on mobile and web Overview. Calendar has month navigation and status filters for Upcoming, To do, Done and Missed work, with tasks and project/goal deadlines together. Existing dated completion records and repeating schedules are preserved. Calendar is removed from Plans; Projects and Goals remain there.
+
+Validation: web and mobile builds passed; 12 targeted browser/API checks passed, including Calendar Done/Upcoming filters and goal deadline editing. Automated layout/accessibility audit passed across 20 web viewports. Android emulator acceptance passed 27 checks, including Home daily-repeat tracking and Calendar. Physical-device testing remains separate.

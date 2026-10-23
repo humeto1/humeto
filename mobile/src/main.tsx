@@ -1,3 +1,4 @@
+import { HomeTasks } from "../../shared/home-tasks";
 import { useChatViewport } from "../../shared/chat-viewport";
 import { TaskDetailGroup } from "../../shared/task-detail-group";
 import { useTouchDrag } from "../../shared/touch-drag";
@@ -378,7 +379,6 @@ function App() {
     [dueFilter, setDueFilter] = useState("all"),
     [ownerFilter, setOwnerFilter] = useState("all"),
     [planView, setPlanView] = useState("projects"),
-    [routineCreate, setRoutineCreate] = useState(0),
     [focusSelection, setFocusSelection] = useState(""),
     [focusQuery, setFocusQuery] = useState(""),
     [focus, setFocus] = useState<any>(null),
@@ -647,9 +647,6 @@ function App() {
             {t.project_title || "No project"} · {formatDate(t.due_date)}
           </small>
           <span className="task-tags">
-            {t.work_kind === "routine" && (
-              <span className="task-tag">Routine</span>
-            )}
             {t.category && <span className="task-tag">{t.category}</span>}
             {active?.task_id === t.id && (
               <span className="task-tag focusing">In focus</span>
@@ -798,6 +795,19 @@ function App() {
                 <Target />
               </div>
             </section>
+            <HomeTasks
+              tasks={data.tasks}
+              projects={data.projects}
+              goals={data.goals}
+              writable={writable}
+              request={api}
+              refresh={refresh}
+              onAdd={() => setSheet("create")}
+              onOpen={(id) => {
+                setSelected(id);
+                setSheet("task");
+              }}
+            />
             <div className="stats">
               <button
                 onClick={() => {
@@ -997,7 +1007,7 @@ function App() {
                   >
                     <option value="all">All work</option>
                     <option value="one_off">One-off tasks</option>
-                    <option value="routine">Routine occurrences</option>
+                    <option value="routine">Repeating</option>
                   </select>
                 </label>
                 <label>
@@ -1538,8 +1548,7 @@ function App() {
                   onChange={(e) => {
                     const kind = e.target.value;
                     setPlanView(kind);
-                    if (kind === "routines") setRoutineCreate((n) => n + 1);
-                    else setSheet("project");
+                    setSheet("project");
                   }}
                 >
                   <option value="" disabled>
@@ -1547,7 +1556,6 @@ function App() {
                   </option>
                   <option value="projects">Project</option>
                   <option value="goals">Goal</option>
-                  <option value="routines">Routine</option>
                 </select>
               </label>
             </div>
@@ -1559,8 +1567,6 @@ function App() {
               {[
                 ["projects", "Projects"],
                 ["goals", "Goals"],
-                ["routines", "Routines"],
-                ["calendar", "Calendar"],
               ].map(([key, label]) => (
                 <button
                   key={key}
@@ -1579,14 +1585,7 @@ function App() {
               writable={writable}
               refresh={refresh}
               request={api}
-              view={
-                planView === "routines"
-                  ? "routines"
-                  : planView === "calendar"
-                    ? "calendar"
-                    : "deadlines"
-              }
-              createRoutineToken={routineCreate}
+              view={planView === "calendar" ? "calendar" : "deadlines"}
             />
             {(["projects", "goals"] as const)
               .filter((kind) => kind === planView)
@@ -1821,17 +1820,34 @@ function App() {
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
                 void run(async () => {
-                  await api("/api/workspace/tasks", {
-                    ...valuePayload(f),
-                    title: f.get("title"),
-                    category: f.get("category") || "",
-                    dueDate: f.get("dueDate") || "",
-                    assignee: f.get("assignee") || "",
-                    projectId: f.get("projectId") || "",
-                    goalIds: f.getAll("goalIds"),
-                    important: f.get("important") === "on",
-                    urgent: f.get("urgent") === "on",
-                  });
+                  const daily = f.get("repeat") === "daily";
+                  await api(
+                    daily ? "/api/workspace/planning" : "/api/workspace/tasks",
+                    {
+                      ...(daily
+                        ? {
+                            action: "routine",
+                            kind: "operations",
+                            frequency: "daily",
+                            interval: 1,
+                            firstDay:
+                              f.get("dueDate") ||
+                              new Date().toLocaleDateString("en-CA"),
+                            time: "00:00",
+                            timezone,
+                          }
+                        : {}),
+                      ...valuePayload(f),
+                      title: f.get("title"),
+                      category: f.get("category") || "",
+                      dueDate: f.get("dueDate") || "",
+                      assignee: f.get("assignee") || "",
+                      projectId: f.get("projectId") || "",
+                      goalIds: f.getAll("goalIds"),
+                      important: f.get("important") === "on",
+                      urgent: f.get("urgent") === "on",
+                    },
+                  );
                   setSheet(null);
                 }, "Task created.");
               }}
@@ -1846,6 +1862,13 @@ function App() {
                   autoFocus
                   placeholder="A clear, small next step"
                 />
+              </label>
+              <label>
+                Repeat
+                <select name="repeat" aria-label="Repeat" defaultValue="none">
+                  <option value="none">Does not repeat</option>
+                  <option value="daily">Daily</option>
+                </select>
               </label>
               <label>
                 Category

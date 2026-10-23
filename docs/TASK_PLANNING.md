@@ -137,3 +137,10 @@ User clarified that repetition is a property of a task: one-time or operational/
 
 ### Whole-card touch dragging
 Long-press task cards (about 400 ms), then move to a column or the destination tray. Quick movement before the hold keeps normal scrolling, and a normal tap opens details. Suppress the trailing click after a drag so it cannot open the card. Handle dragging remains an optional shortcut. Touch move prevention starts only after the hold activates.
+
+### Daily tasks, not a Routine plan (24 October 2026)
+Removed Routine from the Plans tabs and Add plan menus on web and Android. Today/Home (web Overview) now has the same daily task checklist and day navigation. Normal task creation offers Does not repeat or Daily. A daily task starts at midnight in the selected local timezone, so it can be worked on before a reminder time. Standard project/goal links, importance, urgency, applicant and assignee are preserved through repeat creation. Dated occurrences retain Done/Missed records; completing one day never resets it or completes tomorrow. Existing recurrence/wording/weekly/monthly/yearly data is retained. Main task cards no longer label repeats as Routine. Daily checklist scrolls within a bounded area to keep Home compact. Old advanced APIs stay compatible; dedicated Routine plan UI is not exposed.
+
+Home now contains Today and Calendar views on mobile and web Overview. Calendar has month navigation and status filters for Upcoming, To do, Done and Missed work, with tasks and project/goal deadlines together. Existing dated completion records and repeating schedules are preserved. Calendar is removed from Plans; Projects and Goals remain there.
+
+Validation: web and mobile builds passed; 12 targeted browser/API checks passed, including Calendar Done/Upcoming filters and goal deadline editing. Automated layout/accessibility audit passed across 20 web viewports. Android emulator acceptance passed 27 checks, including Home daily-repeat tracking and Calendar. Physical-device testing remains separate.
