@@ -110,7 +110,7 @@ export function ProjectCollaboration({
       ) : state.locked ? (
         <>
           <p>
-            This task is restricted. Verify the invited email address; no app or
+            This project is restricted. Verify the invited email address; no app or
             account is needed.
           </p>
           <form onSubmit={(e) => form(e, "request-code")}>

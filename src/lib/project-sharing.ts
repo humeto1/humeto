@@ -214,7 +214,7 @@ export async function taskSharing(req: Request) {
       !share &&
       (!a || !isStaff(a) || !(await hasFeature(a.tenantId, "tasks")))
     )
-      throw new ShareError("Sign in to manage task sharing.", 403);
+      throw new ShareError("Sign in to manage project sharing.", 403);
     if (!tenant) throw new ShareError("Not permitted.", 403);
     await db()
       .prepare("SELECT id FROM projects WHERE id=? AND tenant_id=?")
@@ -466,7 +466,7 @@ export async function taskSharing(req: Request) {
           Number(usage?.size) + bytes.length > 20 * 1024 * 1024 ||
           Number(total?.size) + bytes.length > 100 * 1024 * 1024
         )
-          throw new ShareError("Task or workspace attachment limit reached.");
+          throw new ShareError("Project or workspace attachment limit reached.");
         await db()
           .prepare(
             "INSERT INTO project_attachments(id,tenant_id,project_id,share_id,author,name,mime,bytes,size) VALUES(?,?,?,?,?,?,?,?,?)",
