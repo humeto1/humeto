@@ -76,3 +76,7 @@ Validation for 0.2.10: both builds passed; five shared dropdown/relationship/dai
 
 ### Android 0.2.11 (build 13) · 24 October 2026
 Shared task Bin/Archive menu and restore, 750 ms card hold, collapsed-bar Clear filters, financial timing/payment selectors, grouped amounts and synced default currencies. Native acceptance passed 28 checks, including the new financial values and archive/Bin/restore flow. Normal signed package com.humeto.tasks is published with the website download.
+
+
+### Android 0.2.12 (build 14)
+Startup tagline: “AI task management app”. Home leads with “Ask AI to add or edit your tasks”. Home daily lists and task quadrant lists allow scrolling to continue into the page at either boundary, shared with the web client.

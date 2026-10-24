@@ -407,7 +407,7 @@ small {
   background: #f0f4e7;
   width: 100%;
   padding: 19px 15px;
-  margin-top: 22px;
+  margin: 0 0 22px;
   text-align: left;
 }
 .ask-card > span {
@@ -546,7 +546,7 @@ small {
 .quadrant-scroll {
   max-height: 280px;
   overflow: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   scrollbar-width: thin;
 }
 .quadrant .task {

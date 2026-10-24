@@ -551,7 +551,7 @@ function App() {
         <div className="brand">
           <b>h</b> humeto.
         </div>
-        <p>Making room for your next step…</p>
+        <p>AI task management app</p>
       </div>
     );
   if (!data)
@@ -775,6 +775,14 @@ function App() {
         <main className="content">
           {tab === "today" && (
             <>
+              <button className="ask-card" onClick={() => setTab("assistant")}>
+                <Sparkles />
+                <span>
+                  <strong>Ask AI to add or edit your tasks</strong>
+                  <small>Tell Humeto what you need. Review changes before applying.</small>
+                </span>
+                <ArrowUpRight />
+              </button>
               <div className="page-intro">
                 <span className="eyebrow">
                   {new Date().toLocaleDateString(undefined, {
@@ -877,14 +885,6 @@ function App() {
                   </p>
                 </div>
               )}
-              <button className="ask-card" onClick={() => setTab("assistant")}>
-                <Sparkles />
-                <span>
-                  <strong>Think it through with Humeto</strong>
-                  <small>Capture a task. Ask about priorities.</small>
-                </span>
-                <ArrowUpRight />
-              </button>
             </>
           )}
           {tab === "tasks" && (

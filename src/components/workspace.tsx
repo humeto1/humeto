@@ -1430,6 +1430,16 @@ export default function Workspace({
             )}
             {view === "overview" && !isPlatform && (
               <>
+                {staff && featureAllowed(data.subscription, "tasks") && (
+                  <a className="home-ai-card" href="/workspace/assistant">
+                    <Sparkles size={24} />
+                    <span>
+                      <strong>Ask AI to add or edit your tasks</strong>
+                      <small>Tell Humeto what you need. Review changes before applying.</small>
+                    </span>
+                    <ArrowUpRight size={22} />
+                  </a>
+                )}
                 {title(
                   isStudent
                     ? "Your next chapter starts here."
