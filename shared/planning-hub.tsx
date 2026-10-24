@@ -7,22 +7,8 @@ import { TaskValueFields, valuePayload } from "./task-value";
 import RoutineWording from "./routine-wording";
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import "./planning.css";
-export type Transport = (
-  path: string,
-  body?: any,
-  method?: string,
-) => Promise<any>;
-export const webApi: Transport = async (path, body, method) => {
-  const r = await fetch(path, {
-    method: method || (body ? "POST" : "GET"),
-    headers: body ? { "Content-Type": "application/json" } : {},
-    body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-  });
-  const v = await r.json();
-  if (!r.ok) throw Error(v.error || "Unable to save.");
-  return v;
-};
+import { webApi, type Transport } from "./transport";
+export { webApi, type Transport } from "./transport";
 const day = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const plus = (s: string, n: number) => {
@@ -137,7 +123,12 @@ export default function PlanningHub({
     let at = r.next_day;
     for (let i = 0; i < 5000 && at.slice(0, 7) <= month; i++) {
       if (r.end_day && at > r.end_day) break;
-      if (at.slice(0, 7) === month && !(report?.occurrences || []).some((o: any) => o.series_id === r.id && o.day === at))
+      if (
+        at.slice(0, 7) === month &&
+        !(report?.occurrences || []).some(
+          (o: any) => o.series_id === r.id && o.day === at,
+        )
+      )
         projected.push({
           id: r.id + at,
           title: r.title,

@@ -1,13 +1,30 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { worldCurrencies, currencyLabel, groupedAmount } from "./currencies";
+import { useTaskCurrency } from "./task-currency";
 export const valuePayload = (f: FormData) => ({
   valueType: f.get("valueType") || "none",
   valueAmount: String(f.get("valueAmount") || ""),
   valueCurrency: String(f.get("valueCurrency") || "PKR").toUpperCase(),
   valueNote: f.get("valueNote") || "",
+  valueTiming: f.get("valueTiming") || "prompt",
+  paymentPattern: f.get("paymentPattern") || "one_time",
 });
 export function TaskValueFields({ task = {} }: { task?: any }) {
+  const pref = useTaskCurrency();
   const [type, setType] = useState(task.value_type || "none");
+  const [amount, setAmount] = useState(
+    task.value_minor == null
+      ? ""
+      : groupedAmount((Number(task.value_minor) / 100).toFixed(2)),
+  );
+  const [currency, setCurrency] = useState(
+    task.value_currency || pref.currency,
+  );
+  const [overridden, setOverridden] = useState(false);
+  useEffect(() => {
+    if (!task.value_currency && !overridden) setCurrency(pref.currency);
+  }, [pref.currency, task.value_currency, overridden]);
   return (
     <fieldset className="task-value-fields">
       <legend>Expected financial impact · optional</legend>
@@ -32,28 +49,56 @@ export function TaskValueFields({ task = {} }: { task?: any }) {
             <input
               name="valueAmount"
               inputMode="decimal"
-              type="number"
-              step="0.01"
-              min="0"
-              max="999999999.99"
-              defaultValue={
-                task.value_minor == null
-                  ? ""
-                  : (Number(task.value_minor) / 100).toFixed(2)
-              }
+              type="text"
+              value={amount}
+              onChange={(e) => {
+                const raw = e.target.value.replaceAll(",", "");
+                if (/^\d{0,9}(?:\.\d{0,2})?$/.test(raw))
+                  setAmount(groupedAmount(raw));
+              }}
               placeholder="Amount, if known"
             />
           </label>
           <label>
             Currency
-            <input
+            <select
+              aria-label="Currency"
               name="valueCurrency"
-              minLength={3}
-              maxLength={3}
-              pattern="[A-Za-z]{3}"
-              defaultValue={task.value_currency || "PKR"}
-              required
-            />
+              value={currency}
+              onChange={(e) => {
+                setCurrency(e.target.value);
+                setOverridden(true);
+              }}
+            >
+              {worldCurrencies.map((c) => (
+                <option key={c} value={c}>
+                  {currencyLabel(c)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            {type === "profit" ? "Profit timing" : "Impact timing"}
+            <select
+              aria-label={type === "profit" ? "Profit timing" : "Impact timing"}
+              name="valueTiming"
+              defaultValue={task.value_timing || "prompt"}
+            >
+              <option value="prompt">Prompt</option>
+              <option value="deferred">Deferred</option>
+            </select>
+          </label>
+          <label>
+            Payment
+            <select
+              aria-label="Payment"
+              name="paymentPattern"
+              defaultValue={task.payment_pattern || "one_time"}
+            >
+              <option value="one_time">One-time</option>
+              <option value="monthly">Monthly</option>
+              <option value="installments">In installments</option>
+            </select>
           </label>
           <label>
             Why does this matter?
@@ -118,6 +163,12 @@ export function TaskValueBadge({ task }: { task: any }) {
         title={task.value_note || "Estimated impact, not realised money"}
       >
         {text}
+        {task.value_timing === "deferred" ? " · Deferred" : ""}
+        {task.payment_pattern === "monthly"
+          ? " · Monthly"
+          : task.payment_pattern === "installments"
+            ? " · Installments"
+            : ""}
       </span>
     </>
   );

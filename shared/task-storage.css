@@ -1,0 +1,217 @@
+.task-storage-tabs {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin: 14px 0 20px;
+}
+.task-storage-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 8px 14px;
+  border: 1px solid #dce5cf;
+  border-radius: 10px;
+  background: #f7f9f2;
+  color: #456334;
+  font: inherit;
+  font-size: 13px;
+}
+.task-storage-tabs button[aria-pressed="true"] {
+  background: #e7eed9;
+  border-color: #bacd9d;
+  color: #234b39;
+}
+.task-storage-tabs button span {
+  font-size: 11px;
+  background: #fff;
+  border-radius: 20px;
+  padding: 2px 6px;
+}
+.task-storage-list {
+  background: #fff;
+  border: 1px solid #dce5cf;
+  border-radius: 16px;
+  padding: 20px;
+}
+.task-storage-list h2 {
+  margin: 0 0 8px;
+}
+.task-storage-list header p,
+.task-storage-empty {
+  color: #536449;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.task-storage-list article {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 0;
+  border-top: 1px solid #e6ecdf;
+}
+.task-storage-list article > div:first-child {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.task-storage-list small {
+  font-size: 12px;
+  color: #536449;
+}
+.task-storage-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.task-storage-actions button {
+  min-height: 40px;
+  border: 1px solid #cfddc1;
+  border-radius: 9px;
+  background: #f7f9f2;
+  color: #456334;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 12px;
+}
+.task-storage-error {
+  font-size: 13px;
+  color: #993e30;
+}
+.touch-task-card,
+.compact-task {
+  position: relative;
+}
+.task-options {
+  position: absolute;
+  right: 9px;
+  top: 7px;
+  z-index: 2;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.task-options-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 36px;
+  border-radius: 9px;
+  color: #526b40;
+  cursor: pointer;
+  list-style: none;
+  background: #f7f9f1;
+  border: 1px solid #e2e9d8;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+.task-options-trigger::-webkit-details-marker {
+  display: none;
+}
+.task-options-popover {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  width: 155px;
+  display: grid;
+  gap: 3px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #d4dfc8;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px #193e3226;
+}
+.task-options-popover button {
+  min-height: 42px;
+  text-align: left;
+  padding: 9px;
+  border: 0;
+  border-radius: 8px;
+  background: #fff;
+  color: #34533d;
+  font: inherit;
+  font-size: 13px;
+}
+.task-options-popover button:hover {
+  background: #edf2e4;
+}
+.task-options-popover small {
+  padding: 5px;
+  font-size: 11px;
+  color: #993e30;
+}
+.compact-task:has(.task-options) .compact-task-open {
+  padding-right: 49px;
+}
+.touch-task-card:has(.task-options) .task {
+  padding-right: 49px;
+}
+.touch-task-card:has(.task-options) .task > svg:last-child {
+  display: none;
+}
+.task-card-top .task-options {
+  position: relative;
+  top: auto;
+  right: auto;
+}
+.task-list-row > .task-options {
+  position: relative;
+  top: auto;
+  right: auto;
+}
+@media (max-width: 600px) {
+  .task-storage-list article {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .task-storage-actions {
+    width: 100%;
+  }
+}
+
+.task-filter-reset {
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px 0;
+}
+.task-filter-reset button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #d4dfc8;
+  background: #f5f8ef;
+  color: #456334;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 12px;
+}
+.compact-task:has(.task-options) .compact-task-open {
+  padding-right: 49px !important;
+}
+
+.currency-preferences {
+  display: grid;
+  gap: 12px;
+}
+.currency-preferences label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  color: #526449;
+}
+.currency-preferences select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #d4dfc8;
+  border-radius: 9px;
+  padding: 10px;
+  background: #fafbf6;
+  color: #294737;
+}
+.currency-preferences small {
+  font-size: 12px;
+  color: #536449;
+  line-height: 1.6;
+}

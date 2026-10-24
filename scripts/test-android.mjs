@@ -268,12 +268,19 @@ try {
       await cdp.fill("input[name=category]", "Personal");
       await cdp.select("select[name=valueType]", "profit");
       await cdp.fill("input[name=valueAmount]", "25000");
+      assert.equal(await cdp.evaluate(`document.querySelector('input[name=valueAmount]').value`), "25,000");
+      await cdp.select("select[name=valueCurrency]", "EUR");
+      await cdp.select("select[name=valueTiming]", "deferred");
+      await cdp.select("select[name=paymentPattern]", "installments");
       await cdp.click("Create task");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
       const r = await nativeApi("/api/mobile");
       const t = r.data.tasks.find((t) => t.title === title);
       assert.ok(t);
       taskId = t.id;
+      assert.equal(t.value_currency, "EUR");
+      assert.equal(t.value_timing, "deferred");
+      assert.equal(t.payment_pattern, "installments");
       const d = database(fixture.url);
       assert.ok(
         await d
@@ -283,6 +290,23 @@ try {
       await d.close();
     },
   );
+  await check("Native task options archive, bin and restore the same task", async () => {
+    await cdp.evaluate(`document.querySelector('[aria-label="Task options: Android native acceptance task"]').click()`);
+    await cdp.click("Archive", true);
+    await cdp.wait(`!document.querySelector('[aria-label="Task options: Android native acceptance task"]')`);
+    await cdp.evaluate(`[...document.querySelectorAll('[aria-label="Task locations"] button')].find(b=>b.textContent.startsWith('Archive')).click()`);
+    await cdp.wait(`document.querySelector('[aria-label="Task Archive"]')?.textContent.includes('Android native acceptance task')`);
+    await cdp.evaluate(`[...document.querySelectorAll('[aria-label="Task Archive"] article')].find(a=>a.textContent.includes('Android native acceptance task')).querySelectorAll('button')[1].click()`);
+    await cdp.evaluate(`[...document.querySelectorAll('[aria-label="Task locations"] button')].find(b=>b.textContent.startsWith('Bin')).click()`);
+    await cdp.wait(`document.querySelector('[aria-label="Task Bin"]')?.textContent.includes('Android native acceptance task')`);
+    await cdp.evaluate(`[...document.querySelectorAll('[aria-label="Task Bin"] article')].find(a=>a.textContent.includes('Android native acceptance task')).querySelector('button').click()`);
+    await cdp.wait(`!document.querySelector('[aria-label="Task Bin"]')?.textContent.includes('Android native acceptance task')`);
+    await cdp.click("Active tasks", true);
+    const task = (await nativeApi("/api/mobile")).data.tasks.find(t=>t.id===taskId);
+    assert.equal(task.value_currency, "EUR");
+    assert.equal(task.value_timing, "deferred");
+    assert.equal(task.payment_pattern, "installments");
+  });
   await check(
     "Edit task title and priority in the native detail sheet",
     async () => {
@@ -359,7 +383,7 @@ try {
       await cdp.click("Board");
       const gripSelector =
         "button[aria-label=" +
-        JSON.stringify("Drag: " + title + " updated") +
+        JSON.stringify("Open task: " + title + " updated") +
         "]";
       const point = async (selector) =>
         cdp.evaluate(

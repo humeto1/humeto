@@ -291,7 +291,7 @@ test("web calendar edits deadlines and daily task tracking lives on Overview", a
     await page
       .getByRole("button", { name: "Calendar 2027-12-31", exact: true })
       .click();
-    await page.getByRole("button", { name: "Edit plan", exact: true }).click();
+    await page.locator(".planning-row").filter({ has: page.getByText("QA measurable goal", { exact: true }) }).getByRole("button", { name: "Edit plan", exact: true }).click();
     const editor = page.getByRole("form", { name: "Edit calendar plan" });
     await editor.getByLabel("Deadline", { exact: true }).fill("2028-01-15");
     const saved = page.waitForResponse(r => r.url().includes("/api/workspace/goals/") && r.request().method() === "PATCH");

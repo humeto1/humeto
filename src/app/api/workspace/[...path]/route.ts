@@ -1,3 +1,5 @@
+import { taskPreferences } from "@/lib/task-preferences";
+import { storageRead, storageWrite } from "@/lib/task-storage";
 import { wordingWrite } from "@/lib/routine-wording";
 import { impactFields, impactValues } from "@/lib/task-value";
 import { planningRead, planningWrite } from "@/lib/planning";
@@ -79,6 +81,8 @@ const string = z.string().trim().max(500),
 async function handle(req: Request, parts: string[], a: Actor) {
   const [resource, rid, action] = parts;
   if (req.method === "GET") {
+    if (resource === "task-preferences") return taskPreferences(a);
+    if (resource === "task-storage") return storageRead(a);
     if (resource === "planning") return planningRead(req, a);
     if (resource === "vouchers") return voucherRead(a);
     if (resource === "reading") return readingRead(req, parts, a);
@@ -593,6 +597,17 @@ async function handle(req: Request, parts: string[], a: Actor) {
     });
   }
   const body = await req.json();
+  if (resource === "task-preferences" && req.method === "POST")
+    return taskPreferences(a, body);
+  if (resource === "task-storage" && rid && req.method === "POST")
+    return storageWrite(a, rid, body);
+  if (["tasks", "task-links"].includes(resource) && rid) {
+    const stored = await db()
+      .prepare("SELECT storage_state FROM tasks WHERE id=? AND tenant_id=?")
+      .get(rid, a.tenantId);
+    if (stored && stored.storage_state !== "active")
+      return fail("Restore this task before editing it.", 409);
+  }
   if (resource === "vouchers" && req.method === "POST")
     return voucherWrite(a, body);
   if (resource === "billing" && rid === "request" && req.method === "POST") {
@@ -1090,7 +1105,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       const tid = id();
       await db()
         .prepare(
-          "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category,value_type,value_minor,value_currency,value_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category,value_type,value_minor,value_currency,value_note,value_timing,payment_pattern) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .run(
           tid,
@@ -1162,7 +1177,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail("Choose a team member from this workspace.", 400);
     const result = await db()
       .prepare(
-        "UPDATE tasks SET stage=?,title=?,category=?,value_type=?,value_minor=?,value_currency=?,value_note=?,due_date=?,assignee=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+        "UPDATE tasks SET stage=?,title=?,category=?,value_type=?,value_minor=?,value_currency=?,value_note=?,value_timing=?,payment_pattern=?,due_date=?,assignee=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
       )
       .run(
         input.stage,

@@ -51,12 +51,33 @@ test("phone touch gestures persist stages and priority, reach off-screen destina
       await grip.scrollIntoViewIfNeeded();
       const b = await grip.boundingBox();
       await touch("touchStart", b.x + b.width / 2, b.y + b.height / 2);
-      await page.waitForTimeout(470);
+      await page.waitForTimeout(850);
       await page.locator(".touch-drag-ghost").waitFor();
       return b;
     };
     await page.goto(base + "/workspace/tasks");
     await page.getByRole("button", { name: "Board", exact: true }).click();
+    const quick = page.getByRole("button", {
+      name: "Open task: " + title,
+      exact: true,
+    });
+    await quick.scrollIntoViewIfNeeded();
+    const qb = await quick.boundingBox();
+    await touch("touchStart", qb.x + qb.width / 2, qb.y + qb.height / 2);
+    await page.waitForTimeout(450);
+    assert.equal(
+      await page.locator(".touch-drag-ghost").count(),
+      0,
+      "450ms no longer starts a card drag",
+    );
+    await touch("touchMove", qb.x + qb.width / 2, qb.y + qb.height / 2 - 35);
+    await page.waitForTimeout(400);
+    assert.equal(
+      await page.locator(".touch-drag-ghost").count(),
+      0,
+      "scrolling before hold cancels drag",
+    );
+    await touch("touchCancel");
     const before = await read();
     await hold();
     const target = page.locator(

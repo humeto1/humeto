@@ -1,20 +1,32 @@
 import { z } from "zod";
+import { worldCurrencies } from "../../shared/currencies";
 export const impactFields = {
   valueType: z.enum(["none", "profit", "avoid_loss"]).optional(),
   valueAmount: z
     .string()
     .trim()
-    .regex(
-      /^(?:\d{1,9}(?:\.\d{1,2})?)?$/,
-      "Use a positive amount with up to two decimal places.",
+    .transform((v) =>
+      /^(?:\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(v)
+        ? v.replaceAll(",", "")
+        : v,
+    )
+    .pipe(
+      z
+        .string()
+        .regex(
+          /^(?:\d{1,9}(?:\.\d{1,2})?)?$/,
+          "Use a positive amount with up to two decimal places.",
+        ),
     )
     .optional(),
   valueCurrency: z
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z]{3}$/, "Use a three-letter currency code.")
+    .refine((c) => worldCurrencies.includes(c), "Choose a supported currency.")
     .optional(),
+  valueTiming: z.enum(["prompt", "deferred"]).optional(),
+  paymentPattern: z.enum(["one_time", "monthly", "installments"]).optional(),
   valueNote: z.string().trim().max(300).optional(),
 };
 export function impactValues(input: any, current: any = {}) {
@@ -32,5 +44,7 @@ export function impactValues(input: any, current: any = {}) {
     type === "none" ? null : amount,
     input.valueCurrency ?? current.value_currency ?? "PKR",
     input.valueNote ?? current.value_note ?? "",
+    input.valueTiming ?? current.value_timing ?? "prompt",
+    input.paymentPattern ?? current.payment_pattern ?? "one_time",
   ] as const;
 }

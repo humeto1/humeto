@@ -72,3 +72,7 @@ Homepage navigation links to Android app, with a responsive Download Android app
 
 0.2.10 / version code 12: Goal is a native dropdown beside Project during task creation and task link editing. Existing multi-goal data is preserved and individually removable. Web uses the same shared control. Milestones within projects/goals remain the planned next layer; this release changes goal selection only.
 Validation for 0.2.10: both builds passed; five shared dropdown/relationship/daily/mobile/UI checks passed, including a 20-view accessibility audit. Android acceptance passed 27 checks after retrying emulator cold-start debugging. Final website download and dropdown regressions both passed. The website APK/manifest are published together with this release.
+
+
+### Android 0.2.11 (build 13) · 24 October 2026
+Shared task Bin/Archive menu and restore, 750 ms card hold, collapsed-bar Clear filters, financial timing/payment selectors, grouped amounts and synced default currencies. Native acceptance passed 28 checks, including the new financial values and archive/Bin/restore flow. Normal signed package com.humeto.tasks is published with the website download.

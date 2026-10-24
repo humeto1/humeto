@@ -185,7 +185,7 @@ export async function focusMutation(a: Actor, body: unknown) {
           409,
         );
       const t = await db()
-        .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? FOR UPDATE")
+        .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE")
         .get(v.taskId || "", a.tenantId);
       if (!t) return fail("Task not found.", 404);
       if (t.stage === "Done") return fail("Choose an unfinished task.", 409);
@@ -207,12 +207,12 @@ export async function focusMutation(a: Actor, body: unknown) {
     if (active.revision !== v.revision)
       return fail("Focus changed in another tab. Refresh and try again.", 409);
     const t = await db()
-      .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? FOR UPDATE")
+      .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE")
       .get(active.task_id, a.tenantId);
     if (!t) return fail("Task not found.", 404);
     if (v.action === "switch") {
       const next = await db()
-        .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? FOR UPDATE")
+        .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE")
         .get(v.taskId || "", a.tenantId);
       if (!next) return fail("Next task not found.", 404);
       if (next.id === active.task_id || next.stage === "Done")

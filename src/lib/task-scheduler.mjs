@@ -25,6 +25,10 @@ export async function runTaskScheduler({
   userId = "",
   routineOnly = false,
 } = {}) {
+  await d.query("SELECT humeto_purge_task_bin($1,$2)", [
+    now.toISOString(),
+    tenantId,
+  ]);
   if (heartbeat)
     await d
       .prepare(
@@ -80,7 +84,9 @@ export async function runTaskScheduler({
       } else if (occurrence.day) days.push(occurrence.day);
       for (const occurrenceDay of days) {
         const t = await d
-          .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=?")
+          .prepare(
+            "SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active'",
+          )
           .get(s.template_task_id, s.tenant_id);
         if (!t) return;
         const taskId = randomUUID(),
@@ -106,7 +112,7 @@ export async function runTaskScheduler({
         if (claim.changes) {
           await d
             .prepare(
-              "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category,work_kind,value_type,value_minor,value_currency,value_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+              "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category,work_kind,value_type,value_minor,value_currency,value_note,value_timing,payment_pattern) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             )
             .run(
               taskId,
@@ -125,6 +131,8 @@ export async function runTaskScheduler({
               t.value_minor ?? null,
               t.value_currency || "PKR",
               t.value_note || "",
+              t.value_timing || "prompt",
+              t.payment_pattern || "one_time",
             );
           await d
             .prepare(

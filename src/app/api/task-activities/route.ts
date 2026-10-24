@@ -25,7 +25,7 @@ async function route(req: Request) {
       .max(100)
       .parse(new URL(req.url).searchParams.get("taskId"));
     const task = await db()
-      .prepare("SELECT id,title,stage FROM tasks WHERE id=? AND tenant_id=?")
+      .prepare("SELECT id,title,stage FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active'")
       .get(taskId, a.tenantId);
     if (!task)
       return Response.json({ error: "Task not found." }, { status: 404 });
@@ -70,7 +70,7 @@ async function route(req: Request) {
     return await withTransaction(async () => {
       const locked = await db()
         .prepare(
-          "SELECT id,stage FROM tasks WHERE id=? AND tenant_id=? FOR UPDATE",
+          "SELECT id,stage FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE",
         )
         .get(taskId, a.tenantId);
       if (!locked)

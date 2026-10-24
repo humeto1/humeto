@@ -21,6 +21,8 @@ export function featureForView(view) {
       "task-notebooks",
       "task-history",
       "task-links",
+      "task-storage",
+      "task-preferences",
       "agent",
     ].includes(view)
   )

@@ -5943,7 +5943,7 @@ textarea {
 .inline-stage-heading { display:flex; align-items:center; gap:7px; position:relative; margin:0 0 15px; min-height:28px; }
 .stage-title-button { border:0; background:transparent; color: #294737; padding:4px 0; font:inherit; font-size:12px; font-weight:600; cursor:text; text-align:left; overflow-wrap:anywhere; }
 .stage-title-button:hover { box-shadow:0 1px #8da67a; }
-.stage-card-count { margin-left:auto; color: #7e906f; font-size:10px; }
+.stage-card-count { margin-left:auto; color: #526347; font-size:10px; }
 .stage-menu-button,.stage-popover-close { border:0; background:transparent; color: #627159; padding:4px; cursor:pointer; }
 .inline-stage-add { position:relative; align-self:start; min-width:160px; }
 .add-stage-button { display:flex; align-items:center; gap:7px; border:1px dashed #bacbab; border-radius:9px; color: #587446; padding:12px; background:#f7faf2; font:inherit; font-size:12px; width:100%; cursor:pointer; }

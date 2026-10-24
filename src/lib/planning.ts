@@ -42,7 +42,7 @@ export async function planningRead(req: Request, a: Actor) {
     .all(a.tenantId, a.id);
   const rows = await db()
     .prepare(
-      "SELECT o.*,r.routine_kind,r.timezone,t.stage,t.revision AS task_revision,t.completed_at,t.title,template.title AS template_title FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id JOIN tasks template ON template.id=r.template_task_id AND template.tenant_id=r.tenant_id LEFT JOIN tasks t ON t.id=o.task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.track_occurrences=TRUE AND o.day>=? AND o.day<=? ORDER BY o.day,template.title",
+      "SELECT o.*,r.routine_kind,r.timezone,t.stage,t.revision AS task_revision,t.completed_at,t.title,template.title AS template_title FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id JOIN tasks template ON template.id=r.template_task_id AND template.tenant_id=r.tenant_id LEFT JOIN tasks t ON t.id=o.task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.track_occurrences=TRUE AND (t.id IS NULL OR t.storage_state='active') AND o.day>=? AND o.day<=? ORDER BY o.day,template.title",
     )
     .all(a.tenantId, a.id, from, end);
   const occurrences: any[] = rows.map((r) => ({
@@ -208,7 +208,7 @@ export async function planningWrite(a: Actor, body: unknown) {
       sid = id();
     await db()
       .prepare(
-        "INSERT INTO tasks(id,tenant_id,title,category,person_id,important,urgent,work_kind,assignee,last_actor_id,project_id,value_type,value_minor,value_currency,value_note) VALUES(?,?,?,?,?,?,?,'routine',?,?,?,?,?,?,?)",
+        "INSERT INTO tasks(id,tenant_id,title,category,person_id,important,urgent,work_kind,assignee,last_actor_id,project_id,value_type,value_minor,value_currency,value_note,value_timing,payment_pattern) VALUES(?,?,?,?,?,?,?,'routine',?,?,?,?,?,?,?,?,?)",
       )
       .run(
         tid,

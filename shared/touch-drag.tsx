@@ -272,7 +272,7 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       setStatus("Moving " + title + ". Release over a column or destination.");
       animate();
     }
-    const timer = setTimeout(activate, wholeCard ? 400 : 180);
+    const timer = setTimeout(activate, wholeCard ? 750 : 250);
     cleanupRef.current = clear;
   }
   return {
@@ -287,7 +287,9 @@ export function useTouchDrag({ enabled, onDrop }: Options) {
       onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
         if (e.pointerType !== "touch" || !latest.current.enabled) return;
         const target = e.target as HTMLElement;
-        if (target.closest("input,select,textarea,a,.touch-drag-handle"))
+        if (
+          target.closest("input,select,textarea,a,summary,.touch-drag-handle")
+        )
           return;
         const button = target.closest("button");
         if (button && !button.matches(".task,.compact-task-open")) return;
