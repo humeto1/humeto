@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import Script from "next/script";
+import androidRelease from "../../public/downloads/android-release.json";
 import HeroCarousel from "@/components/hero-carousel";
 export default function Home() {
   const source = readFileSync(
@@ -24,6 +25,39 @@ export default function Home() {
         <div
           dangerouslySetInnerHTML={{ __html: body.slice(heroEnd, mainEnd) }}
         />
+        <section
+          id="download-app"
+          className="android-download wrap"
+          aria-labelledby="android-download-title"
+        >
+          <div>
+            <div className="eyebrow">HUMETO ON ANDROID</div>
+            <h2 id="android-download-title">
+              Your next small win. <em>Anywhere.</em>
+            </h2>
+            <p>
+              Take your tasks, focus timer and plans with you. Sign in with the
+              same Humeto account—your work stays in sync.
+            </p>
+          </div>
+          <div className="android-download-action">
+            <a
+              className="button"
+              href={androidRelease.url}
+              download="Humeto-Android.apk"
+            >
+              Download Android app <span aria-hidden="true">↓</span>
+            </a>
+            <small>
+              Version {androidRelease.version} ·{" "}
+              {(androidRelease.size / 1_000_000).toFixed(1)} MB · Testing APK
+            </small>
+            <small>
+              Android may ask you to allow installation from your browser.
+              Updates install over the previous Humeto testing app.
+            </small>
+          </div>
+        </section>
       </main>
       <div
         dangerouslySetInnerHTML={{

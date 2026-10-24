@@ -25,7 +25,8 @@
     "whatsapp:worker": "node --env-file-if-exists=.env.local scripts/whatsapp-worker.mjs",
     "tasks:worker": "node --env-file-if-exists=.env.local scripts/task-worker.mjs",
     "seed:notebook": "node --env-file-if-exists=.env.local scripts/seed-notebook-demo.mjs",
-    "test:android": "node --env-file-if-exists=.env.local scripts/test-android.mjs"
+    "test:android": "node --env-file-if-exists=.env.local scripts/test-android.mjs",
+    "release:android": "node scripts/publish-android.mjs"
   },
   "dependencies": {
     "@neon/config": "^1.9.3",

@@ -5,6 +5,25 @@ const config: NextConfig = {
   async headers() {
     return [
       {
+        source: "/downloads/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
+      },
+      {
+        source: "/downloads/humeto-android.apk",
+        headers: [
+          {
+            key: "Content-Type",
+            value: "application/vnd.android.package-archive",
+          },
+          {
+            key: "Content-Disposition",
+            value: 'attachment; filename="Humeto-Android.apk"',
+          },
+        ],
+      },
+      {
         source: "/api/:path*",
         headers: [{ key: "Cache-Control", value: "private, no-store" }],
       },

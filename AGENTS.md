@@ -25,3 +25,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - Focus tracks work sessions, not automatic task completion. Enforce one active focus per user; pauses, breaks and ending a session preserve an unfinished task and its cross-day cumulative time. Only explicit completion changes the task to Done.
 - Background/delegated/automated activity timers are separate from personal focused work, require comments and an expected update time, and do not launch AI jobs or start another member's focus session.
+
+- Every Android testing release must update the website download: run `npm run release:android -- <verified APK>` and commit both `public/downloads/humeto-android.apk` and `android-release.json`. The normal `mobile` android:apk command does this automatically. Never publish the QA package. Website deployment publishes the new download; installed Android apps still require the user to install the update.

@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 4180",
     "build": "tsc --noEmit && vite build",
     "sync": "npm run build && cap sync",
-    "android:apk": "npm run sync && cd android && ./gradlew assembleDebug",
+    "android:apk": "npm run sync && (cd android && ./gradlew assembleDebug) && node ../scripts/publish-android.mjs",
     "ios:open": "cap open ios"
   },
   "dependencies": {
