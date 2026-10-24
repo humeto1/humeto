@@ -779,7 +779,9 @@ function App() {
                 <Sparkles />
                 <span>
                   <strong>Ask AI to add or edit your tasks</strong>
-                  <small>Tell Humeto what you need. Review changes before applying.</small>
+                  <small>
+                    Tell Humeto what you need. Review changes before applying.
+                  </small>
                 </span>
                 <ArrowUpRight />
               </button>
@@ -971,128 +973,138 @@ function App() {
                     <option value="all">All tasks</option>
                   </select>
                 </div>
-                <div className="task-filter-reset">
-                  <button type="button" onClick={clearTaskFilters}>
+
+                <div className="task-filter-shell">
+                  <details className="task-filter-panel">
+                    <summary>
+                      Filters ·{" "}
+                      {
+                        [
+                          impactFilter,
+                          projectFilter,
+                          goalFilter,
+                          natureFilter,
+                          categoryFilter,
+                          dueFilter,
+                          ownerFilter,
+                        ].filter((v) => v !== "all").length
+                      }{" "}
+                      active
+                    </summary>
+                    <div className="task-filters">
+                      <label>
+                        Expected impact
+                        <select
+                          aria-label="Expected impact filter"
+                          value={impactFilter}
+                          onChange={(e) => setImpactFilter(e.target.value)}
+                        >
+                          <option value="all">Any impact</option>
+                          <option value="profit">Potential profit</option>
+                          <option value="avoid_loss">Avoid loss</option>
+                          <option value="none">No estimate</option>
+                        </select>
+                      </label>
+                      <label>
+                        Project
+                        <select
+                          aria-label="Project filter"
+                          value={projectFilter}
+                          onChange={(e) => setProjectFilter(e.target.value)}
+                        >
+                          <option value="all">All projects</option>
+                          <option value="none">No project</option>
+                          {data.projects.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Goal
+                        <select
+                          aria-label="Goal filter"
+                          value={goalFilter}
+                          onChange={(e) => setGoalFilter(e.target.value)}
+                        >
+                          <option value="all">All goals</option>
+                          <option value="none">No goal</option>
+                          {data.goals.map((g) => (
+                            <option key={g.id} value={g.id}>
+                              {g.title}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Task type
+                        <select
+                          aria-label="Task type filter"
+                          value={natureFilter}
+                          onChange={(e) => setNatureFilter(e.target.value)}
+                        >
+                          <option value="all">All work</option>
+                          <option value="one_off">One-off tasks</option>
+                          <option value="routine">Repeating</option>
+                        </select>
+                      </label>
+                      <label>
+                        Category
+                        <select
+                          aria-label="Category filter"
+                          value={categoryFilter}
+                          onChange={(e) => setCategoryFilter(e.target.value)}
+                        >
+                          <option value="all">All categories</option>
+                          <option value="uncategorized">Uncategorized</option>
+                          {categories.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Due date
+                        <select
+                          aria-label="Due date filter"
+                          value={dueFilter}
+                          onChange={(e) => setDueFilter(e.target.value)}
+                        >
+                          <option value="all">Any date</option>
+                          <option value="today">Today</option>
+                          <option value="overdue">Overdue</option>
+                          <option value="none">No due date</option>
+                        </select>
+                      </label>
+                      <label>
+                        Assignment
+                        <select
+                          aria-label="Assignment filter"
+                          value={ownerFilter}
+                          onChange={(e) => setOwnerFilter(e.target.value)}
+                        >
+                          <option value="all">Everyone</option>
+                          <option value="mine">Assigned to me</option>
+                          <option value="unassigned">Unassigned</option>
+                        </select>
+                      </label>
+                    </div>
+                  </details>
+                  <button
+                    type="button"
+                    className="task-filter-clear"
+                    aria-label="Clear filters"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      clearTaskFilters();
+                    }}
+                  >
                     Clear filters
                   </button>
                 </div>
-                <details className="task-filter-panel">
-                  <summary>
-                    Filters ·{" "}
-                    {
-                      [
-                        impactFilter,
-                        projectFilter,
-                        goalFilter,
-                        natureFilter,
-                        categoryFilter,
-                        dueFilter,
-                        ownerFilter,
-                      ].filter((v) => v !== "all").length
-                    }{" "}
-                    active
-                  </summary>
-                  <div className="task-filters">
-                    <label>
-                      Expected impact
-                      <select
-                        aria-label="Expected impact filter"
-                        value={impactFilter}
-                        onChange={(e) => setImpactFilter(e.target.value)}
-                      >
-                        <option value="all">Any impact</option>
-                        <option value="profit">Potential profit</option>
-                        <option value="avoid_loss">Avoid loss</option>
-                        <option value="none">No estimate</option>
-                      </select>
-                    </label>
-                    <label>
-                      Project
-                      <select
-                        aria-label="Project filter"
-                        value={projectFilter}
-                        onChange={(e) => setProjectFilter(e.target.value)}
-                      >
-                        <option value="all">All projects</option>
-                        <option value="none">No project</option>
-                        {data.projects.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.title}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Goal
-                      <select
-                        aria-label="Goal filter"
-                        value={goalFilter}
-                        onChange={(e) => setGoalFilter(e.target.value)}
-                      >
-                        <option value="all">All goals</option>
-                        <option value="none">No goal</option>
-                        {data.goals.map((g) => (
-                          <option key={g.id} value={g.id}>
-                            {g.title}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Task type
-                      <select
-                        aria-label="Task type filter"
-                        value={natureFilter}
-                        onChange={(e) => setNatureFilter(e.target.value)}
-                      >
-                        <option value="all">All work</option>
-                        <option value="one_off">One-off tasks</option>
-                        <option value="routine">Repeating</option>
-                      </select>
-                    </label>
-                    <label>
-                      Category
-                      <select
-                        aria-label="Category filter"
-                        value={categoryFilter}
-                        onChange={(e) => setCategoryFilter(e.target.value)}
-                      >
-                        <option value="all">All categories</option>
-                        <option value="uncategorized">Uncategorized</option>
-                        {categories.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Due date
-                      <select
-                        aria-label="Due date filter"
-                        value={dueFilter}
-                        onChange={(e) => setDueFilter(e.target.value)}
-                      >
-                        <option value="all">Any date</option>
-                        <option value="today">Today</option>
-                        <option value="overdue">Overdue</option>
-                        <option value="none">No due date</option>
-                      </select>
-                    </label>
-                    <label>
-                      Assignment
-                      <select
-                        aria-label="Assignment filter"
-                        value={ownerFilter}
-                        onChange={(e) => setOwnerFilter(e.target.value)}
-                      >
-                        <option value="all">Everyone</option>
-                        <option value="mine">Assigned to me</option>
-                        <option value="unassigned">Unassigned</option>
-                      </select>
-                    </label>
-                  </div>
-                </details>
                 {view === "birds" ? (
                   <BirdsEye
                     tasks={filtered}

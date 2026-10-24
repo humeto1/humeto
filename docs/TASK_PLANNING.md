@@ -156,7 +156,7 @@ Milestones are the next planned layer within both Projects and Goals, not a repl
 ### Task storage and financial options · 24 October 2026
 Web and Android task cards use a top-right three-dot menu for Archive and Move to Bin; the extra Move button is removed. Tasks, Bin and Archive locations share the task screen. Archive has no expiry; Bin expires 30 days after moving a task there. Restore preserves the same task ID, links, stage and history. Storing a task stops active focus/activity timers and cancels scheduled reminders without completing it or cancelling future repeating occurrences. A daily authenticated cron purges expired Bin tasks; opening storage also purges expired tasks for that workspace. Expired tasks cannot be restored.
 
-Clear filters is available above the collapsed filter panel and retains the selected view. Whole-card touch dragging requires a 750 ms hold and cancels pending activation during scrolling.
+Clear filters is available at the right of the filter header, even while collapsed and retains the selected view. Whole-card touch dragging requires a 750 ms hold and cancels pending activation during scrolling.
 
 Task estimates support Prompt/Deferred timing, One-time/Monthly/In installments payment patterns, comma-grouped amount entry and the built-in ISO currency list. Settings stores a per-account default currency shared by web and Android; each task can override it. These fields remain estimates and never create actual payment or ledger records. Existing financial amounts retain their established minor-unit representation.
 

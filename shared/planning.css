@@ -451,3 +451,10 @@
   color: #294b38;
   cursor: pointer;
 }
+
+/* Keep reset available in the same header whether filters are expanded or collapsed. */
+.task-filter-shell { position:relative; margin:14px 0; }
+.task-filter-shell > .task-filter-panel { margin:0; }
+.task-filter-panel > summary { min-height:36px; padding-right:120px; align-content:center; }
+.task-filter-clear { position:absolute; right:8px; top:8px; min-height:44px; padding:8px 12px; border:1px solid #d4dfc8; border-radius:9px; background:#fafbf6; color:#294737; font-size:12px; cursor:pointer; }
+.task-filter-clear:focus-visible { outline:2px solid #244d3b; outline-offset:2px; }

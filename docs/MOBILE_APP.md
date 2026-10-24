@@ -80,3 +80,7 @@ Shared task Bin/Archive menu and restore, 750 ms card hold, collapsed-bar Clear 
 
 ### Android 0.2.12 (build 14)
 Startup tagline: “AI task management app”. Home leads with “Ask AI to add or edit your tasks”. Home daily lists and task quadrant lists allow scrolling to continue into the page at either boundary, shared with the web client.
+
+
+### Android 0.2.13 (build 15)
+Clear filters shares the Filters header row on web and Android. It stays at the top right when expanded, works while collapsed, and preserves both the selected task view and the panel's expanded state.

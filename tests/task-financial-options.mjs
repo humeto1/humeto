@@ -114,6 +114,22 @@ test("clear filters works while collapsed and keeps the chosen task view", async
       "all",
     );
     assert.equal(await panel.getAttribute("open"), null);
+    const clear = p.getByRole("button", {
+      name: "Clear task filters",
+      exact: true,
+    });
+    const header = await panel.locator("summary").boundingBox();
+    const button = await clear.boundingBox();
+    assert.ok(
+      button.x >= header.x &&
+        button.x + button.width <= header.x + header.width + 5,
+    );
+    await panel.locator("summary").click();
+    await clear.click();
+    assert.notEqual(await panel.getAttribute("open"), null);
+    const expandedButton = await clear.boundingBox();
+    assert.equal(expandedButton.y, button.y);
+
     assert.equal(
       await p
         .getByRole("button", { name: "Priority matrix", exact: true })

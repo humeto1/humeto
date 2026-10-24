@@ -1435,7 +1435,10 @@ export default function Workspace({
                     <Sparkles size={24} />
                     <span>
                       <strong>Ask AI to add or edit your tasks</strong>
-                      <small>Tell Humeto what you need. Review changes before applying.</small>
+                      <small>
+                        Tell Humeto what you need. Review changes before
+                        applying.
+                      </small>
                     </span>
                     <ArrowUpRight size={22} />
                   </a>
@@ -2200,135 +2203,149 @@ export default function Workspace({
                         independent
                       </span>
                     </div>
-                    <div className="task-filter-reset">
-                      <button type="button" onClick={clearTaskFilters}>
-                        Clear task filters
+
+                    <div className="task-filter-shell">
+                      <details className="task-filter-panel">
+                        <summary>
+                          Filters ·{" "}
+                          {
+                            [
+                              taskImpact,
+                              taskProject,
+                              taskGoal,
+                              taskCategory,
+                              taskNature,
+                              taskDateFilter,
+                              taskOwnerFilter,
+                            ].filter((v) => v !== "all").length
+                          }{" "}
+                          active
+                        </summary>
+                        <div
+                          className="filter-bar"
+                          style={{ flexWrap: "wrap", gap: 12 }}
+                        >
+                          <label>
+                            Expected impact
+                            <select
+                              aria-label="Task impact filter"
+                              value={taskImpact}
+                              onChange={(e) => setTaskImpact(e.target.value)}
+                            >
+                              <option value="all">Any impact</option>
+                              <option value="profit">Potential profit</option>
+                              <option value="avoid_loss">Avoid loss</option>
+                              <option value="none">No estimate</option>
+                            </select>
+                          </label>
+                          <label>
+                            Project
+                            <select
+                              aria-label="Task project filter"
+                              value={taskProject}
+                              onChange={(e) => setTaskProject(e.target.value)}
+                            >
+                              <option value="all">All projects</option>
+                              <option value="none">No project</option>
+                              {data.projects.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Goal
+                            <select
+                              aria-label="Task goal filter"
+                              value={taskGoal}
+                              onChange={(e) => setTaskGoal(e.target.value)}
+                            >
+                              <option value="all">All goals</option>
+                              <option value="none">No goal</option>
+                              {data.goals.map((g) => (
+                                <option key={g.id} value={g.id}>
+                                  {g.title}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Category
+                            <select
+                              aria-label="Task category filter"
+                              value={taskCategory}
+                              onChange={(e) => setTaskCategory(e.target.value)}
+                            >
+                              <option value="all">All categories</option>
+                              <option value="none">Uncategorized</option>
+                              {[
+                                ...new Set([
+                                  ...taskCategories,
+                                  ...data.tasks
+                                    .map((t) => t.category || "")
+                                    .filter(Boolean),
+                                ]),
+                              ]
+                                .sort()
+                                .map((c) => (
+                                  <option key={c}>{c}</option>
+                                ))}
+                            </select>
+                          </label>
+                          <label>
+                            Task type
+                            <select
+                              value={taskNature}
+                              onChange={(e) => setTaskNature(e.target.value)}
+                            >
+                              <option value="all">All work</option>
+                              <option value="one_off">One-off tasks</option>
+                              <option value="routine">Repeating</option>
+                            </select>
+                          </label>
+                          <label>
+                            Due date
+                            <select
+                              value={taskDateFilter}
+                              onChange={(e) =>
+                                setTaskDateFilter(e.target.value)
+                              }
+                            >
+                              <option value="all">Any date</option>
+                              <option value="today">Today</option>
+                              <option value="overdue">Overdue</option>
+                              <option value="none">No due date</option>
+                            </select>
+                          </label>
+                          <label>
+                            Assignment
+                            <select
+                              value={taskOwnerFilter}
+                              onChange={(e) =>
+                                setTaskOwnerFilter(e.target.value)
+                              }
+                            >
+                              <option value="all">Everyone</option>
+                              <option value="mine">Assigned to me</option>
+                              <option value="none">Unassigned</option>
+                            </select>
+                          </label>
+                        </div>
+                      </details>
+                      <button
+                        type="button"
+                        className="task-filter-clear"
+                        aria-label="Clear task filters"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          clearTaskFilters();
+                        }}
+                      >
+                        Clear filters
                       </button>
                     </div>
-                    <details className="task-filter-panel">
-                      <summary>
-                        Filters ·{" "}
-                        {
-                          [
-                            taskImpact,
-                            taskProject,
-                            taskGoal,
-                            taskCategory,
-                            taskNature,
-                            taskDateFilter,
-                            taskOwnerFilter,
-                          ].filter((v) => v !== "all").length
-                        }{" "}
-                        active
-                      </summary>
-                      <div
-                        className="filter-bar"
-                        style={{ flexWrap: "wrap", gap: 12 }}
-                      >
-                        <label>
-                          Expected impact
-                          <select
-                            aria-label="Task impact filter"
-                            value={taskImpact}
-                            onChange={(e) => setTaskImpact(e.target.value)}
-                          >
-                            <option value="all">Any impact</option>
-                            <option value="profit">Potential profit</option>
-                            <option value="avoid_loss">Avoid loss</option>
-                            <option value="none">No estimate</option>
-                          </select>
-                        </label>
-                        <label>
-                          Project
-                          <select
-                            aria-label="Task project filter"
-                            value={taskProject}
-                            onChange={(e) => setTaskProject(e.target.value)}
-                          >
-                            <option value="all">All projects</option>
-                            <option value="none">No project</option>
-                            {data.projects.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.title}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Goal
-                          <select
-                            aria-label="Task goal filter"
-                            value={taskGoal}
-                            onChange={(e) => setTaskGoal(e.target.value)}
-                          >
-                            <option value="all">All goals</option>
-                            <option value="none">No goal</option>
-                            {data.goals.map((g) => (
-                              <option key={g.id} value={g.id}>
-                                {g.title}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Category
-                          <select
-                            aria-label="Task category filter"
-                            value={taskCategory}
-                            onChange={(e) => setTaskCategory(e.target.value)}
-                          >
-                            <option value="all">All categories</option>
-                            <option value="none">Uncategorized</option>
-                            {[
-                              ...new Set([
-                                ...taskCategories,
-                                ...data.tasks
-                                  .map((t) => t.category || "")
-                                  .filter(Boolean),
-                              ]),
-                            ]
-                              .sort()
-                              .map((c) => (
-                                <option key={c}>{c}</option>
-                              ))}
-                          </select>
-                        </label>
-                        <label>
-                          Task type
-                          <select
-                            value={taskNature}
-                            onChange={(e) => setTaskNature(e.target.value)}
-                          >
-                            <option value="all">All work</option>
-                            <option value="one_off">One-off tasks</option>
-                            <option value="routine">Repeating</option>
-                          </select>
-                        </label>
-                        <label>
-                          Due date
-                          <select
-                            value={taskDateFilter}
-                            onChange={(e) => setTaskDateFilter(e.target.value)}
-                          >
-                            <option value="all">Any date</option>
-                            <option value="today">Today</option>
-                            <option value="overdue">Overdue</option>
-                            <option value="none">No due date</option>
-                          </select>
-                        </label>
-                        <label>
-                          Assignment
-                          <select
-                            value={taskOwnerFilter}
-                            onChange={(e) => setTaskOwnerFilter(e.target.value)}
-                          >
-                            <option value="all">Everyone</option>
-                            <option value="mine">Assigned to me</option>
-                            <option value="none">Unassigned</option>
-                          </select>
-                        </label>
-                      </div>
-                    </details>
                     {taskView === "birds" ? (
                       <BirdsEye
                         tasks={filteredTasks}
