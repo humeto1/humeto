@@ -388,6 +388,7 @@ function App() {
     [planView, setPlanView] = useState("projects"),
     [focusSelection, setFocusSelection] = useState(""),
     [focusQuery, setFocusQuery] = useState(""),
+    [focusSearch, setFocusSearch] = useState(""),
     [focus, setFocus] = useState<any>(null),
     [schedule, setSchedule] = useState<any>(null),
     [history, setHistory] = useState<any>(null),
@@ -566,8 +567,16 @@ function App() {
     pending = data.tasks.filter((t) => t.stage !== "Done"),
     completed = data.tasks.filter((t) => t.stage === "Done");
   const focusTask = data.tasks.find((t) => t.id === active?.task_id);
+  const focusMatches = pending.filter((t) =>
+    [t.title, t.display_title, t.project_title, t.category]
+      .join(" ")
+      .toLowerCase()
+      .includes(focusSearch.trim().toLowerCase()),
+  );
   const focusChoice =
-    pending.find((t) => t.id === focusSelection) || focusTask || pending[0];
+    focusMatches.find((t) => t.id === focusSelection) ||
+    (!focusSearch.trim() ? focusTask : undefined) ||
+    focusMatches[0];
   const switchPending =
     !!active && !!focusChoice && focusChoice.id !== active.task_id;
   const focusTitle =
@@ -1191,16 +1200,34 @@ function App() {
               </div>
               <section className="focus-session">
                 {!active && <h2>Choose a task</h2>}
+                <label className="focus-task-search">
+                  Search tasks
+                  <input
+                    type="search"
+                    aria-label="Search focus tasks"
+                    placeholder="Find a task or project"
+                    value={focusSearch}
+                    onChange={(e) => {
+                      setFocusSearch(e.target.value);
+                      setFocusSelection("");
+                    }}
+                  />
+                  {!focusMatches.length && (
+                    <small role="status">No matching tasks.</small>
+                  )}
+                </label>
                 <label className="focus-task-select">
                   Select task
                   <select
                     aria-label="Focus task selector"
-                    disabled={!writable || !pending.length}
+                    disabled={!writable || !focusMatches.length}
                     value={focusChoice?.id || ""}
                     onChange={(e) => setFocusSelection(e.target.value)}
                   >
-                    {!pending.length && <option value="">No open tasks</option>}
-                    {pending.map((t) => (
+                    {!focusMatches.length && (
+                      <option value="">No matching tasks</option>
+                    )}
+                    {focusMatches.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.display_title || t.title}
                       </option>

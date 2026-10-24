@@ -107,6 +107,10 @@ test(
       );
       await page.reload();
       await page.getByRole("button", { name: "Focus", exact: true }).click();
+      await page.getByLabel("Search focus tasks", { exact: true }).fill("no-matching-task-query");
+      assert.equal(await page.getByRole("button", { name: "Start", exact: true }).isDisabled(), true);
+      await page.getByLabel("Search focus tasks", { exact: true }).fill(title);
+      assert.equal(await page.getByLabel("Focus task selector").locator("option").count(), 1);
       await page.getByLabel("Focus task selector").selectOption(id);
       await page.getByRole("button", { name: "Start", exact: true }).click();
       await page.getByRole("button", { name: "Pause", exact: true }).waitFor();

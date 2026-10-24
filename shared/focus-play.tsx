@@ -52,7 +52,7 @@ export function RandomTaskPicker({
         onClick={spin}
       >
         <Shuffle size={14} />
-        {rolling ? "Shuffling…" : "Shuffle"}
+        {rolling ? "Picking…" : "Pick Random"}
       </button>
       {available && (
         <>

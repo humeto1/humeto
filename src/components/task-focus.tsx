@@ -93,6 +93,7 @@ export default function TaskFocus({
     [received, setReceived] = useState(0),
     [now, setNow] = useState(Date.now()),
     [selected, setSelected] = useState(""),
+    [focusSearch, setFocusSearch] = useState(""),
     [minutes, setMinutes] = useState(25),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -171,6 +172,12 @@ export default function TaskFocus({
   }, [memberKey]);
   const candidates = [...tasks]
     .filter((t) => t.stage !== "Done" && t.id !== active?.task_id)
+    .filter((t) =>
+      [t.title, t.display_title, t.project_title, t.category]
+        .join(" ")
+        .toLowerCase()
+        .includes(focusSearch.trim().toLowerCase()),
+    )
     .sort(
       (a, b) =>
         Number(b.important) - Number(a.important) ||
@@ -354,8 +361,26 @@ export default function TaskFocus({
   const stalePreview =
     !!preview &&
     (preview.sessionId !== active?.id || preview.revision !== active?.revision);
+  const searchField = (
+    <label className="focus-task-search">
+      Search tasks
+      <input
+        type="search"
+        aria-label="Search focus tasks"
+        placeholder="Find a task or project"
+        value={focusSearch}
+        onChange={(e) => {
+          setFocusSearch(e.target.value);
+          setSelected("");
+          setSwitching(false);
+        }}
+      />
+      {!candidates.length && <small role="status">No matching tasks.</small>}
+    </label>
+  );
   const taskPicker = (switchTask = false) => (
     <div className={styles.pick}>
+      {searchField}
       <label>
         Select task
         <select
@@ -363,6 +388,7 @@ export default function TaskFocus({
           value={chosen?.id || ""}
           onChange={(e) => setSelected(e.target.value)}
         >
+          {!candidates.length && <option value="">No matching tasks</option>}
           {candidates.map((t) => (
             <option key={t.id} value={t.id}>
               {t.important ? "★ " : ""}
@@ -439,6 +465,7 @@ export default function TaskFocus({
           <div className={styles.grid}>
             <div>
               <p className={styles.eyebrow}>ONE THING AT A TIME</p>
+              {searchField}
               <label className="focus-task-select">
                 Select task
                 <select
@@ -882,11 +909,7 @@ export default function TaskFocus({
           <p className={styles.eyebrow}>ONE THING AT A TIME</p>
           <h2>Choose a task</h2>
           <p className={styles.message}>Select a task, then Start.</p>
-          {chosen ? (
-            <>{taskPicker()}</>
-          ) : (
-            <p>No unfinished tasks. Add a task above when you’re ready.</p>
-          )}
+          {taskPicker()}
         </>
       )}
       {error && (

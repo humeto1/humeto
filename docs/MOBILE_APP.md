@@ -84,3 +84,7 @@ Startup tagline: “AI task management app”. Home leads with “Ask AI to add 
 
 ### Android 0.2.13 (build 15)
 Clear filters shares the Filters header row on web and Android. It stays at the top right when expanded, works while collapsed, and preserves both the selected task view and the panel's expanded state.
+
+
+### Android 0.2.14 (build 16)
+Focus has a search field above task selection, matching task titles, project names and categories. Empty results keep search visible and disable starting an unrelated task. The shared random task button is now named Pick Random. Selecting or searching never starts a timer without Start.

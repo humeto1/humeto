@@ -56,6 +56,25 @@ test("focus UI hides the board, restores a paused timer and completes the chosen
     await page
       .getByRole("button", { name: "Choose this task", exact: true })
       .click();
+    await page
+      .getByLabel("Search focus tasks", { exact: true })
+      .fill("no-task-matches-this-query");
+    assert.equal(
+      await page
+        .getByRole("button", { name: "Start", exact: true })
+        .isDisabled(),
+      true,
+    );
+    await page
+      .getByLabel("Search focus tasks", { exact: true })
+      .fill("UI Focus QA");
+    assert.equal(
+      await page
+        .getByLabel("Focus task", { exact: true })
+        .locator("option")
+        .count(),
+      1,
+    );
     await page.getByLabel("Focus task", { exact: true }).selectOption(taskId);
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await page.getByText("Tracking time", { exact: true }).waitFor();
