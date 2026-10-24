@@ -1,3 +1,4 @@
+import { GoalField } from "../../shared/goal-field";
 import { taskGoals } from "../../shared/task-relations";
 import { HomeTasks } from "../../shared/home-tasks";
 import { useChatViewport } from "../../shared/chat-viewport";
@@ -1916,6 +1917,7 @@ function App() {
                     ))}
                 </select>
               </label>
+              <GoalField goals={data.goals} />
               <label>
                 Assigned to
                 <select name="assignee" defaultValue={data.actor.name}>
@@ -1937,18 +1939,7 @@ function App() {
                   Urgent
                 </label>
               </div>
-              <fieldset>
-                <legend>Contributes to goals</legend>
-                {data.goals.map((g) => (
-                  <label className="check" key={g.id}>
-                    <input type="checkbox" name="goalIds" value={g.id} />
-                    {g.title}
-                  </label>
-                ))}
-                {!data.goals.length && (
-                  <small>No goals yet. Add one in Plans.</small>
-                )}
-              </fieldset>
+
               <button className="primary full" disabled={!writable}>
                 Create task <Plus size={17} />
               </button>
@@ -2490,7 +2481,7 @@ function App() {
             <LogOut size={16} /> Sign out
           </button>
           <small className="muted">
-            Humeto mobile · 0.2.9 testing build
+            Humeto mobile · 0.2.10 testing build
             <br />
             Cloud sync requires an internet connection. No private documents or
             passwords are stored in the app bundle.
@@ -2561,27 +2552,7 @@ function TaskRelations({
           }
         </small>
       )}
-      <fieldset>
-        <legend>Goals</legend>
-        {goals.map((g) => (
-          <label className="check" key={g.id}>
-            <input
-              type="checkbox"
-              name="goalIds"
-              value={g.id}
-              checked={goalIds.includes(g.id)}
-              onChange={(e) =>
-                setGoalIds((old) =>
-                  e.target.checked
-                    ? [...old, g.id]
-                    : old.filter((id) => id !== g.id),
-                )
-              }
-            />
-            {g.title}
-          </label>
-        ))}
-      </fieldset>
+      <GoalField goals={goals} value={goalIds} onChange={setGoalIds} />
       <button className="secondary full" disabled={!writable}>
         Save project & goals
       </button>

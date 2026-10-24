@@ -1,4 +1,5 @@
 "use client";
+import { GoalField } from "../../shared/goal-field";
 import { taskGoals } from "../../shared/task-relations";
 import { HomeTasks } from "../../shared/home-tasks";
 import { TaskDetailGroup } from "../../shared/task-detail-group";
@@ -3550,17 +3551,7 @@ export default function Workspace({
                         ))}
                     </select>
                   </label>
-                  <fieldset className="new-task-goals">
-                    <legend>Contributes to goals · optional</legend>
-                    {(data.goals || [])
-                      .filter((g) => g.status !== "Archived")
-                      .map((g) => (
-                        <label key={g.id}>
-                          <input type="checkbox" name="goalIds" value={g.id} />
-                          {g.title}
-                        </label>
-                      ))}
-                  </fieldset>
+                  <GoalField goals={data.goals || []} />
                   <div className="checkbox-options">
                     <label>
                       <input type="checkbox" name="important" />

@@ -1,4 +1,5 @@
 "use client";
+import { GoalField } from "../../shared/goal-field";
 import { useState } from "react";
 import type { Task, Workstream } from "@/lib/types";
 export default function TaskLinks({
@@ -67,21 +68,11 @@ export default function TaskLinks({
           </select>
         </label>
         {inherited && <small>Via project: {inherited.title}</small>}
-        <fieldset>
-          <legend>Contributes to goals</legend>
-          {goals.map((g) => (
-            <label className="goal-checkbox" key={g.id}>
-              <input
-                type="checkbox"
-                name="goals"
-                value={g.id}
-                defaultChecked={task.goals?.some((x) => x.id === g.id)}
-              />
-              {g.title}
-            </label>
-          ))}
-          {!goals.length && <p>Create a goal in Plans.</p>}
-        </fieldset>
+        <GoalField
+          goals={goals}
+          name="goals"
+          initialIds={task.goals?.map((g) => g.id) || []}
+        />
         <small>
           Changes affect future completions. History keeps the original links.
         </small>

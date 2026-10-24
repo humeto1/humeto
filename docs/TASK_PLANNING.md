@@ -147,3 +147,8 @@ Validation: web and mobile builds passed; 12 targeted browser/API checks passed,
 
 ### Relationship audit follow-up
 A task contributes to directly linked goals and to its project's goal. Counts and filters on both clients use the deduplicated union; direct task links remain independently editable. Future completion snapshots capture this same union, so later changes to a project's goal do not rewrite history. Android project/goal navigation opens an exact ID and clears unrelated filters. Web contributing-task titles open the full task detail. See [connection audit](CONNECTION_AUDIT.md) for the workflow map and external-service limits.
+
+### Goal selection and planned milestones
+Task creation and project/goal link editing now have separate Project and Goal dropdowns on web and Android. The Goal dropdown replaces the checkbox list. Older tasks with additional direct goal links retain them under Other saved goal links; changing the main selection preserves those extras, and removing a link or selecting No goal is explicit. Inherited project goals remain separate and continue to contribute through the project.
+
+Milestones are the next planned layer within both Projects and Goals, not a replacement for either. Each parent should offer Add milestone; tasks/activities can link to milestones using the grouped selection pattern previously used for goals. A milestone represents a checkpoint reached by its contributing activities (for example, the fourth completed task finishes milestone 1). Milestone storage, editing, completion rules and activity selectors are deferred; no placeholder controls are presented as working functionality.

@@ -1,0 +1,37 @@
+.goal-field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.goal-field > label {
+  display: grid;
+  gap: 8px;
+}
+.goal-field select {
+  width: 100%;
+  min-height: 44px;
+}
+.goal-field-existing {
+  display: grid;
+  gap: 5px;
+}
+.goal-field-existing > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+.goal-field-existing button {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #dce5cf;
+  border-radius: 8px;
+  background: #f6f8f1;
+  color: #456334;
+}
+.goal-field-empty,
+.goal-field-existing > small {
+  color: #536449;
+  font-size: 12px;
+}

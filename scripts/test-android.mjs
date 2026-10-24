@@ -450,6 +450,17 @@ try {
       );
       await new Promise((resolve) => setTimeout(resolve, 500));
       await cdp.select("select[name=projectId]", project.id);
+      await cdp.select('select[aria-label="Goal"]', goal.id);
+      await cdp.click("Save project & goals");
+      await cdp.wait(
+        `document.body.innerText.includes('Project links saved.')`,
+      );
+      assert.ok(
+        (await nativeApi("/api/mobile")).data.tasks
+          .find((t) => t.id === taskId)
+          .goals.some((g) => g.id === goal.id),
+      );
+      await cdp.select('select[aria-label="Goal"]', "");
 
       await cdp.click("Save project & goals");
       await cdp.wait(
