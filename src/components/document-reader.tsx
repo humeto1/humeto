@@ -107,10 +107,6 @@ export default function DocumentReader({
     [jid, setJid] = useState(""),
     [pageNumber, setPageNumber] = useState(1),
     [highlight, setHighlight] = useState<Fact | null>(null),
-    [selected, setSelected] = useState<string[]>([]),
-    [values, setValues] = useState<Record<string, string>>({}),
-    [recordIds, setRecordIds] = useState<Record<string, string>>({}),
-    [replace, setReplace] = useState<Record<string, boolean>>({}),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -160,14 +156,10 @@ export default function DocumentReader({
   useEffect(() => {
     setData(null);
     setJid("");
-    setSelected([]);
-    setValues({});
     setHighlight(null);
     setPageNumber(1);
     setError("");
     setNotice("");
-    setRecordIds({});
-    setReplace({});
     void load().catch((e) => setError(e.message));
     const interval = setInterval(() => {
       if (
@@ -207,73 +199,12 @@ export default function DocumentReader({
       setBusy(false);
     }
   }
-  function edit(f: Fact, value: string) {
-    setValues((old) => ({ ...old, [f.id]: value }));
-    setSelected((old) => old.filter((id) => id !== f.id));
-  }
   function locate(f: Fact) {
     setPageNumber(f.page_number);
     setHighlight(f);
     setTab("facts");
     if (window.matchMedia("(max-width:1050px)").matches)
       sourceRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-  async function review(f: Fact, kind: string) {
-    const value = values[f.id] ?? f.chosen_value;
-    const result = await run(
-      {
-        action: "review",
-        factId: f.id,
-        revision: f.revision,
-        review: kind,
-        value,
-      },
-      "Review saved. The form is unchanged until you apply selected facts.",
-    );
-    if (result) {
-      setValues((old) => {
-        const next = { ...old };
-        delete next[f.id];
-        return next;
-      });
-      setSelected((old) => old.filter((id) => id !== f.id));
-    }
-  }
-  function ready(f: Fact) {
-    return (
-      !f.source_stale &&
-      f.applicant_review !== "rejected" &&
-      f.staff_review !== "rejected" &&
-      (data?.canConfirm
-        ? f.applicant_review === "confirmed"
-        : data?.canStaffReview && f.staff_review === "accepted") &&
-      (values[f.id] === undefined || values[f.id] === f.chosen_value)
-    );
-  }
-  async function apply(sectionKey: string) {
-    const chosen = facts.filter(
-        (f) => f.section_key === sectionKey && selected.includes(f.id),
-      ),
-      section = sections.find((s) => s.key === sectionKey)!;
-    if (!chosen.length) return;
-    const recordId = recordIds[sectionKey] || "";
-    const result = await run(
-      {
-        action: "apply",
-        factIds: chosen.map((f) => f.id),
-        sectionKey,
-        intakeRevision:
-          data?.intake.find((r) => r.section_key === sectionKey)?.revision || 0,
-        newRecord: section.repeatable && recordId === "new",
-        recordId: recordId === "new" ? "" : recordId,
-        replaceExisting: !!replace[sectionKey],
-      },
-      "Reviewed facts saved to a draft section. Other fields and application statuses were preserved.",
-    );
-    if (result)
-      setSelected((old) =>
-        old.filter((id) => !chosen.some((f) => f.id === id)),
-      );
   }
   const mapDefinition = sections.find((s) => s.key === mapSection)!;
   return (
@@ -395,7 +326,6 @@ export default function DocumentReader({
                   onChange={(e) => {
                     setJid(e.target.value);
                     setPageNumber(1);
-                    setSelected([]);
                     setHighlight(null);
                   }}
                 >
@@ -584,11 +514,8 @@ export default function DocumentReader({
                 {tab === "facts" && (
                   <>
                     <p className={styles.hint}>
-                      {data?.canConfirm
-                        ? "Confirm or correct each value after checking the source."
-                        : "Staff acceptance is recorded separately from student confirmation."}{" "}
-                      Then select reviewed facts to save them to a draft form.
-                      No application is submitted.
+                      Extracted details fill the main form automatically. Review
+                      and edit them there. This view shows the source evidence.
                     </p>
                     {!facts.length && (
                       <p>
@@ -617,7 +544,7 @@ export default function DocumentReader({
                                   data?.applications.filter(
                                     (a) => a.fact_id === f.id,
                                   ) || [],
-                                value = values[f.id] ?? f.chosen_value;
+                                value = f.chosen_value;
                               return (
                                 <article
                                   key={f.id}
@@ -627,26 +554,6 @@ export default function DocumentReader({
                                 >
                                   <div className={styles.factTop}>
                                     <label>
-                                      <input
-                                        type="checkbox"
-                                        aria-label={`Select ${f.label}`}
-                                        checked={selected.includes(f.id)}
-                                        disabled={
-                                          !writable ||
-                                          busy ||
-                                          !ready(f) ||
-                                          stale
-                                        }
-                                        onChange={(e) =>
-                                          setSelected(
-                                            e.target.checked
-                                              ? [...selected, f.id]
-                                              : selected.filter(
-                                                  (id) => id !== f.id,
-                                                ),
-                                          )
-                                        }
-                                      />
                                       <strong>{f.label}</strong>
                                     </label>
                                     <button
@@ -666,10 +573,7 @@ export default function DocumentReader({
                                       <select
                                         aria-label={`Value for ${f.label}`}
                                         value={value}
-                                        disabled={!writable || stale || busy}
-                                        onChange={(e) =>
-                                          edit(f, e.target.value)
-                                        }
+                                        disabled
                                       >
                                         <option value="">Choose…</option>
                                         {section.fields
@@ -690,10 +594,7 @@ export default function DocumentReader({
                                         }
                                         value={value}
                                         maxLength={10000}
-                                        disabled={!writable || stale || busy}
-                                        onChange={(e) =>
-                                          edit(f, e.target.value)
-                                        }
+                                        disabled
                                       />
                                     )}
                                   </label>
@@ -710,8 +611,9 @@ export default function DocumentReader({
                                     </p>
                                   ))}
                                   <div className={styles.badges}>
-                                    <span>Student: {f.applicant_review}</span>
-                                    <span>Staff: {f.staff_review}</span>
+                                    <span>
+                                      Review and edit in the main form
+                                    </span>
                                     {f.confidence !== null && (
                                       <span>
                                         OCR score {Math.round(f.confidence)}/100
@@ -738,135 +640,14 @@ export default function DocumentReader({
                                         : "Saved answer or source changed since this fact was applied. Review again."}
                                     </p>
                                   )}
-                                  <div className={styles.reviewActions}>
-                                    {data?.canConfirm && (
-                                      <>
-                                        <button
-                                          disabled={!writable || busy || stale}
-                                          onClick={() =>
-                                            void review(f, "confirm")
-                                          }
-                                        >
-                                          <Check size={13} />
-                                          Confirm value
-                                        </button>
-                                        <button
-                                          disabled={!writable || busy || stale}
-                                          onClick={() =>
-                                            void review(f, "reject")
-                                          }
-                                        >
-                                          <X size={13} />
-                                          Reject
-                                        </button>
-                                      </>
-                                    )}
-                                    {data?.canStaffReview && (
-                                      <>
-                                        <button
-                                          disabled={!writable || busy || stale}
-                                          onClick={() =>
-                                            void review(f, "staff-accept")
-                                          }
-                                        >
-                                          <Check size={13} />
-                                          Accept as staff
-                                        </button>
-                                        <button
-                                          disabled={!writable || busy || stale}
-                                          onClick={() =>
-                                            void review(f, "staff-reject")
-                                          }
-                                        >
-                                          <X size={13} />
-                                          Reject as staff
-                                        </button>
-                                      </>
-                                    )}
-                                  </div>
                                 </article>
                               );
                             })}
                             <div className={styles.apply}>
-                              {section.repeatable && (
-                                <label>
-                                  Where should these details go?
-                                  <select
-                                    aria-label={`Target record for ${section.title}`}
-                                    value={recordIds[sectionKey] || ""}
-                                    onChange={(e) =>
-                                      setRecordIds({
-                                        ...recordIds,
-                                        [sectionKey]: e.target.value,
-                                      })
-                                    }
-                                  >
-                                    <option value="">
-                                      Choose a record explicitly
-                                    </option>
-                                    <option value="new">
-                                      Create a new {section.title.toLowerCase()}{" "}
-                                      record
-                                    </option>
-                                    {records.map((r, i) => (
-                                      <option
-                                        key={r._id || i}
-                                        value={r._id}
-                                        disabled={!r._id}
-                                      >
-                                        Record {i + 1} ·{" "}
-                                        {r.institution ||
-                                          r.number ||
-                                          r.type ||
-                                          r.employer ||
-                                          r.givenNames ||
-                                          "Saved details"}
-                                        {!r._id
-                                          ? " (open the form to update this record manually)"
-                                          : ""}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                              )}
-                              {!!intake && (
-                                <details>
-                                  <summary>Compare saved answers</summary>
-                                  <pre>
-                                    {JSON.stringify(intake.data, null, 2)}
-                                  </pre>
-                                </details>
-                              )}
-                              <label className={styles.replace}>
-                                <input
-                                  type="checkbox"
-                                  checked={!!replace[sectionKey]}
-                                  onChange={(e) =>
-                                    setReplace({
-                                      ...replace,
-                                      [sectionKey]: e.target.checked,
-                                    })
-                                  }
-                                />
-                                Allow replacing differing saved answers in this
-                                selection
-                              </label>
-                              <button
-                                className="btn primary small"
-                                disabled={
-                                  !writable ||
-                                  busy ||
-                                  stale ||
-                                  !group.some((f) => selected.includes(f.id))
-                                }
-                                onClick={() => void apply(sectionKey)}
-                              >
-                                Save selected facts to form
-                              </button>
                               <a
                                 href={`/workspace/students/${doc.person_id}?section=${sectionKey}`}
                               >
-                                Open form <ArrowUpRight size={12} />
+                                Review main form <ArrowUpRight size={12} />
                               </a>
                             </div>
                           </div>

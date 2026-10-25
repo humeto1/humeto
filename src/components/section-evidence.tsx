@@ -97,8 +97,8 @@ export default function SectionEvidence({
             {r.source_stale
               ? "Source replaced; review again"
               : !r.currentMatches || !r.reviewMatches
-                ? "Answer or source review changed since this value was applied"
-                : `Student ${r.applicant_review} · Staff ${r.staff_review}`}
+                ? "Answer edited or source changed; the original document remains available"
+                : "Filled from document. Review and edit in this form."}
           </div>
         </div>
       ))}

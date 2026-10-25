@@ -330,7 +330,7 @@ test("digital PDFs use embedded text and scanned PDFs use OCR, retaining page ev
   assert.equal(same.status(), 200);
   assert.equal((await same.json()).id, upload1.readingJobId);
 });
-test("document reader UI reviews education facts and saves to an explicitly chosen new record", async () => {
+test("document reader shows education evidence and directs corrections to the main form", async () => {
   await snapshot("education");
   const context = await browser.newContext({
     baseURL: base,
@@ -350,23 +350,32 @@ test("document reader UI reviews education facts and saves to an explicitly chos
     const card = page
       .getByTestId("document-fact")
       .filter({ has: page.getByText("Institution name", { exact: true }) });
-    await card
-      .getByRole("button", { name: "Accept as staff", exact: true })
-      .click();
-    await card.getByText("Staff: accepted", { exact: true }).waitFor();
-    await card.getByLabel("Select Institution name", { exact: true }).check();
-    await page
-      .getByLabel("Target record for Education history", { exact: true })
-      .selectOption("new");
-    await page
-      .getByRole("button", { name: "Save selected facts to form", exact: true })
-      .click();
-    await page
-      .getByText(
-        "Reviewed facts saved to a draft section. Other fields and application statuses were preserved.",
-        { exact: true },
-      )
-      .waitFor();
+    assert.equal(
+      await card
+        .getByLabel("Value for Institution name", { exact: true })
+        .isDisabled(),
+      true,
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "Accept as staff", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await page
+        .getByRole("button", {
+          name: "Save selected facts to form",
+          exact: true,
+        })
+        .count(),
+      0,
+    );
+    assert.ok(
+      await page
+        .getByRole("link", { name: "Review main form", exact: true })
+        .count(),
+    );
     const source = page.getByRole("img", {
       name: "Original document rendering, page 1",
     });

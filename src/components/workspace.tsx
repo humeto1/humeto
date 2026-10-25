@@ -370,6 +370,7 @@ export default function Workspace({
     [search, setSearch] = useState(""),
     [modal, setModal] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
+    [uploadProgress, setUploadProgress] = useState(""),
     [error, setError] = useState(""),
     [toast, setToast] = useState(""),
     [mobileNav, setMobileNav] = useState(false),
@@ -3399,58 +3400,102 @@ export default function Workspace({
               {modal === "upload" && (
                 <>
                   <span className="eyebrow">BRING WHAT YOU HAVE</span>
-                  <h2 id="modal-title">One file. A clearer picture.</h2>
+                  <h2 id="modal-title">Your documents. One clearer picture.</h2>
                   <p>
-                    PDF, PNG or JPEG up to 15 MB. Use fictional files during
-                    local development.
+                    Choose up to 20 PDFs, PNGs or JPEGs, up to 15 MB each.
+                    Review the extracted details in the main form.
                   </p>
                   <form
                     onSubmit={async (e) => {
                       e.preventDefault();
                       const form = new FormData(e.currentTarget);
-                      const file = form.get("file");
-                      if (!(file instanceof File) || !file.size) {
-                        setError("Choose a file.");
+                      const files = form
+                        .getAll("file")
+                        .filter(
+                          (file): file is File =>
+                            file instanceof File && file.size > 0,
+                        );
+                      if (!files.length || files.length > 20) {
+                        setError("Choose between 1 and 20 documents.");
+                        return;
+                      }
+                      if (
+                        files.some(
+                          (file) =>
+                            file.size > 15 * 1024 * 1024 ||
+                            ![
+                              "application/pdf",
+                              "image/png",
+                              "image/jpeg",
+                            ].includes(file.type),
+                        )
+                      ) {
+                        setError(
+                          "Each document must be a PDF, PNG or JPEG up to 15 MB.",
+                        );
                         return;
                       }
                       setBusy(true);
                       setError("");
+                      const failures: string[] = [];
+                      let completed = 0;
                       try {
-                        const direct = await uploadDocumentDirect({
-                          personId: String(form.get("personId") || ""),
-                          sectionKey: String(form.get("sectionKey") || ""),
-                          title: String(form.get("title") || ""),
-                          category: String(form.get("category") || "Other"),
-                          file,
-                          readInformation:
-                            form.get("readInformation") === "true",
-                        });
-                        if (direct) {
-                          await refresh();
-                          if (isPlatform) await loadPlatform();
-                          setModal(null);
-                          notify(
-                            direct.readingError
-                              ? "Document uploaded privately. Reading: " +
-                                  direct.readingError
-                              : direct.readingJobId
-                                ? "Document uploaded privately. Local reading queued."
-                                : "Document uploaded privately.",
+                        for (let i = 0; i < files.length; i++) {
+                          const file = files[i];
+                          setUploadProgress(
+                            `Uploading ${i + 1} of ${files.length}: ${file.name}`,
                           );
-                          return;
+                          try {
+                            const title =
+                              files.length === 1
+                                ? String(form.get("title") || file.name)
+                                : file.name;
+                            let result = await uploadDocumentDirect({
+                              personId: String(form.get("personId") || ""),
+                              sectionKey: String(form.get("sectionKey") || ""),
+                              title,
+                              category: String(form.get("category") || "Other"),
+                              file,
+                              readInformation:
+                                form.get("readInformation") === "true",
+                            });
+                            if (!result) {
+                              const single = new FormData();
+                              for (const [key, value] of form.entries())
+                                if (key !== "file" && key !== "title")
+                                  single.append(key, value);
+                              single.set("file", file);
+                              single.set("title", title);
+                              const response = await fetch(
+                                "/api/workspace/documents",
+                                { method: "POST", body: single },
+                              );
+                              result = await response.json();
+                              if (!response.ok)
+                                throw Error(result.error || "Upload failed");
+                            }
+                            completed++;
+                            if (result.readingError)
+                              failures.push(
+                                `${file.name}: uploaded, but reading could not start (${result.readingError})`,
+                              );
+                          } catch (err) {
+                            failures.push(
+                              `${file.name}: ${(err as Error).message}`,
+                            );
+                          }
                         }
-                        // Supabase isn't configured (local dev): fall back to
-                        // the original single-request upload.
+                        await refresh();
+                        if (isPlatform) await loadPlatform();
+                        if (completed) setModal(null);
+                        const message = `${completed} of ${files.length} documents uploaded. Details will fill the main form automatically.`;
+                        if (failures.length) {
+                          setError(failures.join("; "));
+                          notify(message + " " + failures.join("; "));
+                        } else notify(message);
+                      } finally {
                         setBusy(false);
-                        await mutate(
-                          "documents",
-                          "POST",
-                          form,
-                          "Document uploaded privately.",
-                        );
-                      } catch (err) {
-                        setError((err as Error).message);
-                        setBusy(false);
+                        setUploadProgress("");
                       }
                     }}
                   >
@@ -3465,7 +3510,7 @@ export default function Workspace({
                       </select>
                     </label>
                     <label>
-                      Document title
+                      Document title (single file only)
                       <input name="title" placeholder="e.g. Final transcript" />
                     </label>
                     <label>
@@ -3504,10 +3549,12 @@ export default function Workspace({
                     </label>
                     <label className="upload-field">
                       <Upload size={25} />
-                      <strong>Choose an original file</strong>
+                      <strong>Choose original documents</strong>
                       <input
                         name="file"
                         type="file"
+                        multiple
+                        disabled={busy}
                         accept="application/pdf,image/png,image/jpeg"
                         required
                       />
@@ -3521,10 +3568,11 @@ export default function Workspace({
                         value="true"
                         defaultChecked
                       />
-                      Read this file locally and suggest profile information
+                      Read documents and fill the main form automatically
                     </label>
+                    {uploadProgress && <p role="status">{uploadProgress}</p>}
                     <button className="btn primary full" disabled={busy}>
-                      {busy ? "Uploading…" : "Upload private document"}
+                      {busy ? "Uploading…" : "Upload private documents"}
                       <Upload size={15} />
                     </button>
                   </form>

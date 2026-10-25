@@ -341,11 +341,196 @@ const reviewInput = z.object({
   review: z.enum(["confirm", "reject", "staff-accept", "staff-reject"]),
   value: z.string().trim().max(10000),
 });
+// Copy source-linked values to drafts without treating extraction as human approval.
+export async function autofillProfile(a: Actor, personId: string) {
+  await writable(a);
+  if (!(await canSeePerson(a, personId))) bad("Applicant not found.", 404);
+  return withTransaction(async () => {
+    await db()
+      .prepare("SELECT id FROM people WHERE id=? AND tenant_id=? FOR UPDATE")
+      .get(personId, a.tenantId);
+    const rows = await db()
+      .prepare(
+        `SELECT f.*,d.section_key AS source_section FROM document_facts f
+      JOIN documents d ON d.id=f.document_id AND d.tenant_id=f.tenant_id
+      JOIN ocr_jobs j ON j.id=f.job_id AND j.tenant_id=f.tenant_id
+      WHERE f.tenant_id=? AND f.person_id=? AND NOT f.source_stale
+      AND d.current_version=f.document_version AND j.status='completed'
+      AND f.applicant_review<>'rejected' AND f.staff_review<>'rejected'
+      AND NOT EXISTS(SELECT 1 FROM fact_applications x WHERE x.fact_id=f.id AND x.tenant_id=f.tenant_id)
+      ORDER BY f.created_at,f.id FOR UPDATE OF f FOR SHARE OF d`,
+      )
+      .all(a.tenantId, personId);
+    const eligible = rows.filter((f) => {
+      if (
+        sections.find((s) => s.key === f.source_section)?.restricted &&
+        !["owner", "student"].includes(a.role)
+      )
+        return false;
+      try {
+        valueCheck(
+          String(f.section_key),
+          String(f.field_key),
+          String(f.chosen_value),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    for (const section of sections) {
+      const facts = eligible.filter((f) => f.section_key === section.key);
+      if (!facts.length) continue;
+      const current = await db()
+        .prepare(
+          "SELECT * FROM intake WHERE tenant_id=? AND person_id=? AND section_key=? FOR UPDATE",
+        )
+        .get(a.tenantId, personId, section.key);
+      const data = current
+        ? JSON.parse(String(current.data))
+        : section.repeatable
+          ? { items: [] }
+          : {};
+      if (section.repeatable && !Array.isArray(data.items)) continue;
+      const groups = section.repeatable
+        ? [
+            ...new Set(
+              facts.map(
+                (f) => String(f.document_id) + "|" + String(f.group_key),
+              ),
+            ),
+          ]
+        : [""];
+      const applied: { fact: (typeof facts)[number]; recordId: string }[] = [];
+      for (const group of groups) {
+        const candidates = facts.filter(
+          (f) =>
+            !section.repeatable ||
+            String(f.document_id) + "|" + String(f.group_key) === group,
+        );
+        let record = data,
+          recordId = "",
+          fresh = false;
+        if (section.repeatable) {
+          const first = candidates[0];
+          const prior = await db()
+            .prepare(
+              `SELECT x.record_id FROM fact_applications x JOIN document_facts f ON f.id=x.fact_id AND f.tenant_id=x.tenant_id
+            WHERE x.tenant_id=? AND x.person_id=? AND x.section_key=? AND f.document_id=? AND f.group_key=? ORDER BY x.created_at DESC LIMIT 1`,
+            )
+            .get(
+              a.tenantId,
+              personId,
+              section.key,
+              first.document_id,
+              first.group_key,
+            );
+          if (prior) {
+            record = data.items.find(
+              (r: Record<string, unknown>) => r._id === prior.record_id,
+            );
+            if (!record) continue; // A manually removed record stays removed.
+          } else {
+            const number = candidates.find(
+              (f) => f.field_key === "number",
+            )?.chosen_value;
+            record = number
+              ? data.items.find(
+                  (r: Record<string, unknown>) => r.number === number,
+                )
+              : undefined;
+            if (!record) {
+              if (data.items.length >= 100) continue;
+              record = { _id: id() };
+              fresh = true;
+            }
+          }
+          recordId = record._id;
+        }
+        const before = applied.length;
+        for (const f of candidates) {
+          const key = String(f.field_key),
+            value = String(f.chosen_value);
+          if (
+            record[key] !== undefined &&
+            record[key] !== null &&
+            String(record[key]).trim() !== ""
+          )
+            continue;
+          if (
+            candidates.some(
+              (other) =>
+                other.field_key === key && other.chosen_value !== value,
+            )
+          )
+            continue;
+          record[key] = value;
+          applied.push({ fact: f, recordId });
+        }
+        if (fresh && applied.length > before) data.items.push(record);
+      }
+      if (!applied.length || JSON.stringify(data).length > 100000) continue;
+      const revision = Number(current?.revision || 0) + 1;
+      if (current)
+        await db()
+          .prepare(
+            "UPDATE intake SET data=?,state='draft',revision=revision+1,updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') WHERE tenant_id=? AND person_id=? AND section_key=?",
+          )
+          .run(JSON.stringify(data), a.tenantId, personId, section.key);
+      else
+        await db()
+          .prepare(
+            "INSERT INTO intake(tenant_id,person_id,section_key,data,state,revision) VALUES(?,?,?,?,'draft',1)",
+          )
+          .run(a.tenantId, personId, section.key, JSON.stringify(data));
+      for (const { fact: f, recordId } of applied) {
+        await db()
+          .prepare(
+            "INSERT INTO fact_applications(id,tenant_id,person_id,fact_id,section_key,field_key,record_id,applied_value,intake_revision,actor_id) VALUES(?,?,?,?,?,?,?,?,?,?)",
+          )
+          .run(
+            id(),
+            a.tenantId,
+            personId,
+            f.id,
+            section.key,
+            f.field_key,
+            recordId,
+            f.chosen_value,
+            revision,
+            a.id,
+          );
+        await event(
+          a,
+          String(f.id),
+          "autofilled",
+          String(f.chosen_value),
+          "Filled an empty draft field from a document. Human review remains unchanged.",
+        );
+      }
+    }
+    return (
+      await db()
+        .prepare("SELECT * FROM intake WHERE tenant_id=? AND person_id=?")
+        .all(a.tenantId, personId)
+    )
+      .filter(
+        (r) =>
+          !sections.find((s) => s.key === r.section_key)?.restricted ||
+          ["owner", "student"].includes(a.role),
+      )
+      .map((r) => ({ ...r, data: JSON.parse(String(r.data)) }));
+  });
+}
 export async function readingWrite(a: Actor, body: unknown) {
   await writable(a);
   const base = z
-    .object({ action: z.enum(["queue", "review", "apply", "map"]) })
+    .object({ action: z.enum(["queue", "review", "apply", "map", "autofill"]) })
     .parse(body);
+  if (base.action === "autofill") {
+    const v = z.object({ personId: z.string().min(1).max(100) }).parse(body);
+    return NextResponse.json({ intake: await autofillProfile(a, v.personId) });
+  }
   if (base.action === "queue") {
     const v = z
       .object({

@@ -1,166 +1,103 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { Intake, Section } from "@/lib/types";
-
-type Fact = {
-  id: string;
-  section_key: string;
-  field_key: string;
-  group_key: string;
-  document_id: string;
-  document_title: string;
-  document_version: number;
-  current_version: number;
-  source_stale: boolean;
-  page_number: number;
-  chosen_value: string;
-  revision: number;
-  warnings: string[];
-  applicant_review: string;
-  staff_review: string;
-};
+import type { Intake } from "@/lib/types";
 type Reading = {
-  facts: Fact[];
+  facts: {
+    id: string;
+    revision: number;
+    source_stale: boolean;
+    applicant_review: string;
+    staff_review: string;
+  }[];
   applications: { fact_id: string }[];
   intake: Intake[];
-  jobs: { status: string; error: string }[];
+  jobs: { status: string }[];
   workerOnline: boolean;
-  canConfirm: boolean;
-  canStaffReview: boolean;
 };
-export function useDocumentSuggestions(personId: string, section: Section) {
+export function useDocumentAutofill(
+  personId: string,
+  readOnly: boolean,
+  canSync: () => boolean,
+  onSync: (rows: Intake[]) => void,
+) {
   const [reading, setReading] = useState<Reading | null>(null);
-  const [edits, setEdits] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(!readOnly);
   const [error, setError] = useState("");
-  const lock = useRef(false);
+  const callbacks = useRef({ canSync, onSync });
+  callbacks.current = { canSync, onSync };
   useEffect(() => {
-    let active = true;
+    let active = true,
+      loading = false,
+      signature = "";
     async function load() {
+      if (loading || !callbacks.current.canSync()) {
+        if (active) setBusy(false);
+        return;
+      }
+      loading = true;
       try {
         const r = await fetch(
           `/api/workspace/reading?personId=${encodeURIComponent(personId)}`,
         );
         if (!r.ok)
           throw Error(
-            "Document suggestions could not be loaded. Retry by refreshing this page.",
+            "Document details could not be loaded. Refresh to retry.",
           );
-        const result = await r.json();
-        if (active && !lock.current) {
+        let result: Reading = await r.json();
+        const applied = new Set(result.applications.map((a) => a.fact_id));
+        const pending = result.facts.filter(
+          (f) =>
+            !applied.has(f.id) &&
+            !f.source_stale &&
+            f.applicant_review !== "rejected" &&
+            f.staff_review !== "rejected",
+        );
+        const nextSignature = pending
+          .map((f) => `${f.id}:${f.revision}`)
+          .join("|");
+        if (
+          active &&
+          !readOnly &&
+          pending.length &&
+          signature !== nextSignature &&
+          callbacks.current.canSync()
+        ) {
+          setBusy(true);
+          const fill = await fetch("/api/workspace/reading", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "autofill", personId }),
+          });
+          const filled = await fill.json();
+          if (!fill.ok)
+            throw Error(
+              filled.error ||
+                "Document details could not be filled. Refresh to retry.",
+            );
+          result = { ...result, intake: filled.intake };
+          signature = nextSignature;
+        }
+        if (active) {
           setReading(result);
           setError("");
+          if (callbacks.current.canSync())
+            callbacks.current.onSync(result.intake);
         }
       } catch (e) {
         if (active) setError((e as Error).message);
+      } finally {
+        loading = false;
+        if (active) setBusy(false);
       }
     }
     void load();
     const timer = setInterval(() => {
-      if (!lock.current && !document.hidden) void load();
+      if (!document.hidden) void load();
     }, 5000);
     return () => {
       active = false;
       clearInterval(timer);
     };
-  }, [personId, section.key]);
-  const applied = new Set(reading?.applications.map((a) => a.fact_id));
-  const facts = (reading?.facts || []).filter(
-    (f) =>
-      f.section_key === section.key &&
-      !f.source_stale &&
-      f.document_version === f.current_version &&
-      !applied.has(f.id) &&
-      f.applicant_review !== "rejected" &&
-      f.staff_review !== "rejected" &&
-      section.fields.some(
-        (field) => field.key === f.field_key && !field.sensitive,
-      ) &&
-      !section.restricted &&
-      f.chosen_value.trim(),
-  );
-  const groups = [
-    ...new Set(facts.map((f) => `${f.document_id}|${f.group_key}`)),
-  ];
-  function candidates(group?: string) {
-    return facts.filter(
-      (f) => !group || `${f.document_id}|${f.group_key}` === group,
-    );
-  }
-  function value(f: Fact) {
-    return edits[f.id] ?? f.chosen_value;
-  }
-  async function approve(
-    selected: Fact[],
-    intakeRevision: number,
-    recordId: string,
-    newRecord: boolean,
-  ) {
-    if (lock.current || !selected.length) return null;
-    lock.current = true;
-    setBusy(true);
-    setError("");
-    async function post(body: unknown) {
-      const r = await fetch("/api/workspace/reading", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const result = await r.json();
-      if (!r.ok)
-        throw Error(result.error || "Could not approve document details.");
-      return result;
-    }
-    try {
-      for (const f of selected)
-        await post({
-          action: "review",
-          factId: f.id,
-          revision: f.revision,
-          review: reading?.canConfirm ? "confirm" : "staff-accept",
-          value: value(f),
-        });
-      await post({
-        action: "apply",
-        factIds: selected.map((f) => f.id),
-        sectionKey: section.key,
-        intakeRevision,
-        recordId,
-        newRecord,
-        replaceExisting: false,
-      });
-      const r = await fetch(
-        `/api/workspace/reading?personId=${encodeURIComponent(personId)}`,
-      );
-      if (!r.ok)
-        throw Error("Details were saved. Refresh to see the updated form.");
-      const result: Reading = await r.json();
-      setReading(result);
-      setEdits({});
-      return (
-        result.intake.find((row) => row.section_key === section.key) || null
-      );
-    } catch (e) {
-      setError((e as Error).message);
-      // Reviews can succeed before a later apply fails. Reload revisions before retrying.
-      const r = await fetch(
-        `/api/workspace/reading?personId=${encodeURIComponent(personId)}`,
-      ).catch(() => null);
-      if (r?.ok) setReading(await r.json());
-      return null;
-    } finally {
-      lock.current = false;
-      setBusy(false);
-    }
-  }
-  return {
-    reading,
-    candidates,
-    groups,
-    value,
-    edit: (f: Fact, value: string) =>
-      setEdits((old) => ({ ...old, [f.id]: value })),
-    approve,
-    busy,
-    error,
-  };
+  }, [personId, readOnly]);
+  return { reading, busy, error };
 }
