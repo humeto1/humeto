@@ -4,7 +4,7 @@ import { notebookLines } from "../src/lib/ocr/notebook.mjs";
 import { randomUUID, createHash } from "node:crypto";
 import { readFile, rm } from "node:fs/promises";
 import { resolve, join, basename } from "node:path";
-export async function processNotebookOne(d = database()) {
+export async function processNotebookOne(d = database(), progress = () => {}) {
   const token = randomUUID(),
     root = resolve(process.env.HUMETO_DATA_DIR || ".data");
   const job = await d.transaction(async () => {
@@ -18,6 +18,7 @@ export async function processNotebookOne(d = database()) {
       )
     ).rows[0];
   });
+  progress();
   if (!job) return false;
   const dir = join(root, "ocr", "notebook-" + job.id + "-" + token);
   let saved = false;
@@ -39,9 +40,13 @@ export async function processNotebookOne(d = database()) {
       createHash("sha256").update(bytes).digest("hex") !== job.source_sha256
     )
       throw Error("Source integrity check failed.");
-    const result = await readDocument(input, job.mime_type, dir, pulse),
+    const result = await readDocument(input, job.mime_type, dir, async () => {
+        progress();
+        await pulse();
+      }),
       page = result.pages[0],
       lines = notebookLines(page);
+    progress();
     await d.transaction(async () => {
       const current = (
         await d.query(

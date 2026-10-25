@@ -1,4 +1,5 @@
 // A separate durable local worker; no request-scoped background promises or network OCR.
+import { workerWatchdog } from "./lib/worker-watchdog.mjs";
 import { processNotebookOne } from "./notebook-worker.mjs";
 import { database } from "../src/lib/postgres.mjs";
 import { engineInfo, readDocument } from "../src/lib/ocr/engine.mjs";
@@ -10,7 +11,8 @@ import { getObject, putObject } from "../src/lib/storage.mjs";
 const d = database(),
   root = resolve(process.env.HUMETO_DATA_DIR || ".data"),
   workerId = randomUUID();
-let stopping = false;
+let stopping = false,
+  health;
 process.on("SIGTERM", () => {
   stopping = true;
 });
@@ -30,6 +32,7 @@ export async function processOne(database = d) {
       )
     ).rows[0];
   });
+  health?.touch();
   if (!job) return false;
   const attempt = job.id + "-" + token,
     dir = join(root, "ocr-scratch", attempt);
@@ -59,10 +62,12 @@ export async function processOne(database = d) {
     ).rows[0];
     if (!source || source.current_version !== job.document_version)
       throw Error("Source changed. Read the current file version instead.");
+    health?.touch();
     const filename = String(source.stored_name);
     if (basename(filename) !== filename)
       throw Error("The stored source path is invalid.");
     const bytes = await getObject("uploads/" + filename);
+    health?.touch();
     if (bytes.length > 15 * 1024 * 1024)
       throw Error("The source exceeds the 15 MB reading limit.");
     if (createHash("sha256").update(bytes).digest("hex") !== job.source_sha256)
@@ -85,6 +90,7 @@ export async function processOne(database = d) {
       source.mime_type,
       dir,
       async (n, count) => {
+        health?.touch();
         await pulse();
         await database.query(
           "UPDATE ocr_jobs SET progress=$1,page_count=$2 WHERE id=$3 AND lease_token=$4",
@@ -97,6 +103,7 @@ export async function processOne(database = d) {
     // app, which may run on a different host. Upload each to storage under
     // the same key the app will request later, then the scratch dir can be
     // discarded regardless of outcome.
+    health?.touch();
     for (const page of result.pages) {
       const previewBytes = await readFile(page.preview);
       await putObject(
@@ -104,6 +111,7 @@ export async function processOne(database = d) {
         previewBytes,
         page.preview.endsWith(".jpg") ? "image/jpeg" : "image/png",
       );
+      health?.touch();
     }
     const facts = extractFacts(result.pages),
       engine = await engineInfo();
@@ -198,6 +206,7 @@ export async function processOne(database = d) {
   return true;
 }
 if (process.argv[1]?.endsWith("ocr-worker.mjs")) {
+  health = workerWatchdog();
   try {
     if (process.env.HUMETO_OCR_ENABLED !== "true")
       throw Error(
@@ -214,8 +223,11 @@ if (process.argv[1]?.endsWith("ocr-worker.mjs")) {
         );
         lastPulse = Date.now();
       }
+      health.touch();
       const handledDocument = await processOne();
-      const handledNotebook = await processNotebookOne(d);
+      health.touch();
+      const handledNotebook = await processNotebookOne(d, () => health.touch());
+      health.touch();
       const handled = handledDocument || handledNotebook;
       if (process.argv.includes("--once")) break;
       if (!handled) await new Promise((r) => setTimeout(r, 1000));
@@ -228,5 +240,6 @@ if (process.argv[1]?.endsWith("ocr-worker.mjs")) {
       .query("DELETE FROM ocr_worker_heartbeats WHERE worker_id=$1", [workerId])
       .catch(() => {});
     await d.close();
+    health.stop();
   }
 }

@@ -217,7 +217,8 @@ export default function DocumentReader({
             <br />A lot more certainty.
           </h1>
           <p>
-            Read locally. Check the source. Save only the details you trust.
+            Documents fill your main form automatically. Review and edit the
+            details there.
           </p>
         </div>
         <a className="btn secondary small" href="/workspace/documents">
@@ -267,7 +268,7 @@ export default function DocumentReader({
             }
           >
             <ScanText size={16} />
-            Read current file
+            Read document
           </button>
         )}
         <button
@@ -298,7 +299,7 @@ export default function DocumentReader({
               ? data.enabled
                 ? data.workerOnline
                   ? "Local reader is ready · English printed text"
-                  : "Reader offline · queued work is saved until the worker starts"
+                  : "Reader unavailable · queued documents will resume when it reconnects"
                 : "Document reading is disabled on this server"
               : "Loading your reading space…"}
             <small>
@@ -340,7 +341,7 @@ export default function DocumentReader({
                 {job?.status === "running"
                   ? `Reading page ${job.progress || 1}${job.page_count ? " of " + job.page_count : ""}…`
                   : job?.status === "queued"
-                    ? "Waiting in the local queue"
+                    ? "Waiting in the reading queue"
                     : job?.status === "completed"
                       ? `${pages.length} pages · ${facts.length} suggested facts`
                       : job?.status}
