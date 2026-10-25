@@ -88,3 +88,7 @@ Clear filters shares the Filters header row on web and Android. It stays at the 
 
 ### Android 0.2.14 (build 16)
 Focus has a search field above task selection, matching task titles, project names and categories. Empty results keep search visible and disable starting an unrelated task. The shared random task button is now named Pick Random. Selecting or searching never starts a timer without Start.
+
+
+### Android 0.2.15 (build 17)
+Chat includes Humeto AI, Project chats and global opt-in Break chat. Project teams/clients can send text, one-minute voice notes (automatic send at the limit), re-encoded image previews and scanned document attachments. Break chat has animal aliases, strict text-only validation, language screening, report/block controls, sanctions and a platform moderation queue. See CHAT.md for access, privacy, quotas and scanner requirements. Android acceptance passed 29 checks, including actual microphone capture, validated audio metadata and rendered image previews.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ProjectVoiceNote, ProjectMediaPreview } from "./project-media";
 type Transport = (path: string, body?: any) => Promise<any>;
 export function ProjectCollaboration({
   projectId,
@@ -19,7 +20,9 @@ export function ProjectCollaboration({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [url, setUrl] = useState(""),
-    [sent, setSent] = useState(false);
+    [sent, setSent] = useState(false),
+    [older, setOlder] = useState<any[]>([]),
+    [cursor, setCursor] = useState<string | null | undefined>(undefined);
   const path =
     "/api/project-sharing?" +
     (token
@@ -31,6 +34,8 @@ export function ProjectCollaboration({
   useEffect(() => {
     let live = true;
     setState(null);
+    setOlder([]);
+    setCursor(undefined);
     request(path)
       .then((s) => {
         if (live) setState(s);
@@ -88,16 +93,16 @@ export function ProjectCollaboration({
     });
   }
   async function upload(file?: File) {
-    if (!file) return;
+    if (!file) return false;
     if (file.size > 2 * 1024 * 1024) {
       setError("Maximum file size is 2 MB.");
-      return;
+      return false;
     }
     const bytes = new Uint8Array(await file.arrayBuffer());
     let binary = "";
     for (let i = 0; i < bytes.length; i++)
       binary += String.fromCharCode(bytes[i]);
-    await act({
+    return await act({
       operation: "upload",
       name: file.name,
       bytes: btoa(binary),
@@ -232,7 +237,37 @@ export function ProjectCollaboration({
           )}
           <h4>Project conversation</h4>
           <small>Team & client replies · refreshes automatically</small>
-          {state.comments.map((c: any) => (
+          {(cursor === undefined ? state.nextCursor : cursor) && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  const r = await request(
+                    path +
+                      "&before=" +
+                      encodeURIComponent(
+                        cursor === undefined ? state.nextCursor : cursor,
+                      ),
+                  );
+                  setOlder((previous) => [...r.comments, ...previous]);
+                  setCursor(r.nextCursor);
+                } catch (e) {
+                  setError((e as Error).message);
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Load older project messages
+            </button>
+          )}
+          {[
+            ...new Map(
+              [...older, ...state.comments].map((c: any) => [c.id, c]),
+            ).values(),
+          ].map((c: any) => (
             <article key={c.id}>
               <strong>{c.author}</strong>{" "}
               <small>{new Date(c.created_at).toLocaleString()}</small>
@@ -261,7 +296,7 @@ export function ProjectCollaboration({
               }}
             >
               <label>
-                Add information or a question
+                Message your team and clients
                 <textarea name="content" required maxLength={2000} />
               </label>
               <input
@@ -270,18 +305,27 @@ export function ProjectCollaboration({
                 autoComplete="off"
                 style={{ display: "none" }}
               />
-              <button disabled={busy}>Add comment</button>
+              <button disabled={busy}>Send message</button>
             </form>
           )}
-          <h4>Attachments</h4>
+          {canWrite && <ProjectVoiceNote disabled={busy} onSend={upload} />}
+          <h4>Images, voice notes & files</h4>
           <p>
-            PDF, DOCX, XLSX, PNG, JPEG or WebP · 2 MB each · 20 files / 20 MB
-            per project. Files stay quarantined until security scanning clears
-            them.
+            Voice notes, PDF, DOCX, XLSX, PNG, JPEG or WebP · 2 MB each · 20
+            files / 20 MB per project. Documents stay quarantined until security
+            scanning clears them. Images are re-encoded and voice-note duration
+            is validated.
           </p>
           {state.attachments.map((f: any) => (
             <p key={f.id}>
               {f.name} · {Math.ceil(f.size / 1024)} KB · {f.status}{" "}
+              {f.status === "clean" && /^(image\/|audio\/)/.test(f.mime) && (
+                <ProjectMediaPreview
+                  path={path + "&attachment=" + f.id}
+                  mime={f.mime}
+                  request={request}
+                />
+              )}
               {f.status === "clean" &&
                 (downloadFile ? (
                   <button
@@ -329,7 +373,7 @@ export function ProjectCollaboration({
               />
             </label>
           )}
-          {!token && (
+          {!token && state.canManage && (
             <>
               <h4>Share this project</h4>
               <form onSubmit={(e) => form(e, "share")}>

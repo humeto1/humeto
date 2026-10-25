@@ -127,6 +127,7 @@ import {
 } from "@/lib/pipeline";
 import ImportHistory from "./import-history";
 import TaskAssistant from "./task-assistant";
+import { ChatHub, BreakChat } from "../../shared/social-chat";
 import ReminderBell from "./reminder-bell";
 import ImportPanel from "./import-panel";
 import ApplicationChecklist from "./application-checklist";
@@ -2116,7 +2117,9 @@ export default function Workspace({
               />
             )}
             {view === "assistant" && staff && (
-              <TaskAssistant actor={actor} onChange={refresh} />
+              <ChatHub>
+                <TaskAssistant actor={actor} onChange={refresh} />
+              </ChatHub>
             )}
             {view === "tasks" && (
               <>
@@ -2813,7 +2816,10 @@ export default function Workspace({
               </>
             )}
             {isPlatform && (view === "platform" || view === "overview") && (
-              <VoucherCenter platform onChange={refresh} />
+              <>
+                <VoucherCenter platform onChange={refresh} />
+                <BreakChat />
+              </>
             )}
             {(view === "platform" || (isPlatform && view === "overview")) && (
               <>

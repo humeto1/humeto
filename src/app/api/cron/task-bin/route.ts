@@ -12,5 +12,6 @@ export async function GET(req: Request) {
   )
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   const result = await db().query("SELECT humeto_purge_task_bin() AS removed");
-  return Response.json({ removed: result.rows[0].removed });
+  const breakChat = await db().query("SELECT humeto_purge_break_chat() AS removed");
+  return Response.json({ removed: result.rows[0].removed, breakMessagesRemoved: breakChat.rows[0].removed });
 }

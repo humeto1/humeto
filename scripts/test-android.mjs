@@ -211,6 +211,12 @@ try {
   ]);
   let pid = "";
   for (let i = 0; i < 100; i++) {
+    // A freshly booted emulator can start the activity before its WebView provider is ready.
+    if (i === 30) {
+      console.log("Retrying QA activity after cold WebView startup.");
+      adbRun(["shell", "am", "force-stop", "com.humeto.tasks.qa"]);
+      adbRun(["shell", "am", "start", "-n", "com.humeto.tasks.qa/com.humeto.tasks.MainActivity"]);
+    }
     try {
       pid = adbRun(["shell", "pidof", "com.humeto.tasks.qa"]);
       adbRun([
@@ -268,7 +274,12 @@ try {
       await cdp.fill("input[name=category]", "Personal");
       await cdp.select("select[name=valueType]", "profit");
       await cdp.fill("input[name=valueAmount]", "25000");
-      assert.equal(await cdp.evaluate(`document.querySelector('input[name=valueAmount]').value`), "25,000");
+      assert.equal(
+        await cdp.evaluate(
+          `document.querySelector('input[name=valueAmount]').value`,
+        ),
+        "25,000",
+      );
       await cdp.select("select[name=valueCurrency]", "EUR");
       await cdp.select("select[name=valueTiming]", "deferred");
       await cdp.select("select[name=paymentPattern]", "installments");
@@ -290,23 +301,46 @@ try {
       await d.close();
     },
   );
-  await check("Native task options archive, bin and restore the same task", async () => {
-    await cdp.evaluate(`document.querySelector('[aria-label="Task options: Android native acceptance task"]').click()`);
-    await cdp.click("Archive", true);
-    await cdp.wait(`!document.querySelector('[aria-label="Task options: Android native acceptance task"]')`);
-    await cdp.evaluate(`[...document.querySelectorAll('[aria-label="Task locations"] button')].find(b=>b.textContent.startsWith('Archive')).click()`);
-    await cdp.wait(`document.querySelector('[aria-label="Task Archive"]')?.textContent.includes('Android native acceptance task')`);
-    await cdp.evaluate(`[...document.querySelectorAll('[aria-label="Task Archive"] article')].find(a=>a.textContent.includes('Android native acceptance task')).querySelectorAll('button')[1].click()`);
-    await cdp.evaluate(`[...document.querySelectorAll('[aria-label="Task locations"] button')].find(b=>b.textContent.startsWith('Bin')).click()`);
-    await cdp.wait(`document.querySelector('[aria-label="Task Bin"]')?.textContent.includes('Android native acceptance task')`);
-    await cdp.evaluate(`[...document.querySelectorAll('[aria-label="Task Bin"] article')].find(a=>a.textContent.includes('Android native acceptance task')).querySelector('button').click()`);
-    await cdp.wait(`!document.querySelector('[aria-label="Task Bin"]')?.textContent.includes('Android native acceptance task')`);
-    await cdp.click("Active tasks", true);
-    const task = (await nativeApi("/api/mobile")).data.tasks.find(t=>t.id===taskId);
-    assert.equal(task.value_currency, "EUR");
-    assert.equal(task.value_timing, "deferred");
-    assert.equal(task.payment_pattern, "installments");
-  });
+  await check(
+    "Native task options archive, bin and restore the same task",
+    async () => {
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Task options: Android native acceptance task"]').click()`,
+      );
+      await cdp.click("Archive", true);
+      await cdp.wait(
+        `!document.querySelector('[aria-label="Task options: Android native acceptance task"]')`,
+      );
+      await cdp.evaluate(
+        `[...document.querySelectorAll('[aria-label="Task locations"] button')].find(b=>b.textContent.startsWith('Archive')).click()`,
+      );
+      await cdp.wait(
+        `document.querySelector('[aria-label="Task Archive"]')?.textContent.includes('Android native acceptance task')`,
+      );
+      await cdp.evaluate(
+        `[...document.querySelectorAll('[aria-label="Task Archive"] article')].find(a=>a.textContent.includes('Android native acceptance task')).querySelectorAll('button')[1].click()`,
+      );
+      await cdp.evaluate(
+        `[...document.querySelectorAll('[aria-label="Task locations"] button')].find(b=>b.textContent.startsWith('Bin')).click()`,
+      );
+      await cdp.wait(
+        `document.querySelector('[aria-label="Task Bin"]')?.textContent.includes('Android native acceptance task')`,
+      );
+      await cdp.evaluate(
+        `[...document.querySelectorAll('[aria-label="Task Bin"] article')].find(a=>a.textContent.includes('Android native acceptance task')).querySelector('button').click()`,
+      );
+      await cdp.wait(
+        `!document.querySelector('[aria-label="Task Bin"]')?.textContent.includes('Android native acceptance task')`,
+      );
+      await cdp.click("Active tasks", true);
+      const task = (await nativeApi("/api/mobile")).data.tasks.find(
+        (t) => t.id === taskId,
+      );
+      assert.equal(task.value_currency, "EUR");
+      assert.equal(task.value_timing, "deferred");
+      assert.equal(task.payment_pattern, "installments");
+    },
+  );
   await check(
     "Edit task title and priority in the native detail sheet",
     async () => {
@@ -1274,6 +1308,84 @@ try {
         join(out, "calendar.png"),
         execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
       );
+    },
+  );
+  await check(
+    "Native project chat records audio and break chat stays text-only with anonymous aliases",
+    async () => {
+      await cdp.click("Chat");
+      await cdp.click("Project chats");
+      await cdp.wait(
+        `!!document.querySelector('select[aria-label="Project chat"] option[value="demo-project-intake"]')`,
+      );
+      await cdp.select(
+        'select[aria-label="Project chat"]',
+        "demo-project-intake",
+      );
+      await cdp.wait(`document.body.innerText.includes('Record voice note')`);
+      adbRun([
+        "shell",
+        "pm",
+        "grant",
+        "com.humeto.tasks.qa",
+        "android.permission.RECORD_AUDIO",
+      ]);
+      await cdp.click("Record voice note");
+      await cdp.wait(`document.body.innerText.includes('Send voice note')`);
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await cdp.click("Send voice note");
+      await cdp.wait(`document.body.innerText.includes('Play voice note')`);
+      await cdp.click("Play voice note");
+      await cdp.wait(`!!document.querySelector('audio[controls]')`);
+      await cdp.wait(`document.querySelector('audio')?.readyState>=1`);
+      assert.ok(
+        await cdp.evaluate(`document.querySelector('audio').duration<=60`),
+      );
+      const imageReply = await nativeApi(
+        "/api/project-sharing?projectId=demo-project-intake",
+        {
+          operation: "upload",
+          name: "native-preview.webp",
+          bytes: readFileSync(join(root, "public/assets/campus.webp")).toString(
+            "base64",
+          ),
+        },
+      );
+      assert.equal(imageReply.status, 200);
+      await cdp.wait(`document.body.innerText.includes('View image')`);
+      await cdp.click("View image");
+      await cdp.wait(
+        `!![...document.querySelectorAll('img')].find(i=>i.alt==='Shared project attachment' && i.naturalWidth>0)`,
+      );
+
+      await cdp.click("Break chat");
+      await cdp.wait(
+        `document.body.innerText.includes('Keep this a kind place')`,
+      );
+      await cdp.evaluate(
+        `document.querySelector('.break-rules input[type=checkbox]').click()`,
+      );
+      await cdp.evaluate(
+        `[...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Join as ')).click()`,
+      );
+      await cdp.wait(
+        `!!document.querySelector('textarea[aria-label="Break chat message"]')`,
+      );
+      assert.equal(
+        await cdp.evaluate(
+          `document.querySelector('[aria-label="Anonymous break chat"]').querySelectorAll('input[type=file],audio').length`,
+        ),
+        0,
+      );
+      await cdp.fill(
+        'textarea[aria-label="Break chat message"]',
+        "f.u.c.k off",
+      );
+      await cdp.click("Send message");
+      await cdp.wait(
+        `document.body.innerText.includes('Please use respectful language')`,
+      );
+      await cdp.click("Humeto AI");
     },
   );
   await check(

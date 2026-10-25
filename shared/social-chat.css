@@ -1,0 +1,112 @@
+.chat-mode-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+  flex-shrink: 0;
+}
+.chat-mode-tabs button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid #ccd8c0;
+  border-radius: 12px;
+  background: #fafbf6;
+  color: #294737;
+  font: inherit;
+}
+.chat-mode-tabs button[aria-pressed="true"] {
+  background: #244d3b;
+  color: #fff;
+}
+.social-chat {
+  padding: 18px;
+  border: 1px solid #dce5ce;
+  border-radius: 16px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+.social-chat h2 {
+  font-size: 22px;
+}
+.social-chat label {
+  display: grid;
+  gap: 7px;
+  margin: 12px 0;
+}
+.social-chat input:not([type="checkbox"]),
+.social-chat select,
+.social-chat textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #cbd8bf;
+  border-radius: 10px;
+  background: #fff;
+  color: #254637;
+  font: inherit;
+}
+.social-chat button {
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #ccd8c0;
+  border-radius: 10px;
+  background: #f0f4e7;
+  color: #294737;
+  margin: 4px;
+  font: inherit;
+}
+.social-chat small,
+.social-chat time {
+  color: #526347;
+  font-size: 12px;
+}
+.break-feed {
+  max-height: 60vh;
+  overflow: auto;
+  overscroll-behavior: auto;
+}
+.break-feed article {
+  padding: 14px 0;
+  border-bottom: 1px solid #e4eadb;
+}
+.break-feed header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.break-feed p {
+  white-space: pre-wrap;
+}
+.break-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.break-actions button {
+  font-size: 12px;
+}
+.break-rules label {
+  display: flex;
+  align-items: flex-start;
+}
+.project-voice-note {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.project-voice-note small {
+  flex-basis: 100%;
+}
+.social-chat audio {
+  max-width: 100%;
+}
+.social-chat button:focus-visible,
+.chat-mode-tabs button:focus-visible {
+  outline: 2px solid #244d3b;
+  outline-offset: 2px;
+}
+.chat-screen .chat-mode-tabs {
+  margin: 0 0 12px;
+}

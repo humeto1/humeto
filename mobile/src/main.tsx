@@ -1,4 +1,10 @@
 import {
+  ChatNavigation,
+  ProjectChatList,
+  BreakChat,
+  type ChatMode,
+} from "../../shared/social-chat";
+import {
   TaskCurrencyProvider,
   CurrencyPreferences,
 } from "../../shared/task-currency";
@@ -387,6 +393,7 @@ function App() {
     [ownerFilter, setOwnerFilter] = useState("all"),
     [planView, setPlanView] = useState("projects"),
     [focusSelection, setFocusSelection] = useState(""),
+    [chatMode, setChatMode] = useState<ChatMode>("ai"),
     [focusQuery, setFocusQuery] = useState(""),
     [focusSearch, setFocusSearch] = useState(""),
     [focus, setFocus] = useState<any>(null),
@@ -401,7 +408,7 @@ function App() {
   const chatHistory = useChatHistory(agent, setAgentRaw, (query) =>
     api("/api/agent" + query),
   );
-  useChatViewport(tab === "assistant");
+  useChatViewport(tab === "assistant" && chatMode === "ai");
   const busyLock = useRef(false);
   const refreshSequence = useRef(0);
   const dataRef = useRef(data);
@@ -733,7 +740,12 @@ function App() {
     : 0;
   return (
     <TaskCurrencyProvider request={api} syncToken={data.tasks}>
-      <div className={"app" + (tab === "assistant" ? " chat-screen" : "")}>
+      <div
+        className={
+          "app" +
+          (tab === "assistant" && chatMode === "ai" ? " chat-screen" : "")
+        }
+      >
         <header className="top">
           <div className="brand">
             <b>h</b> humeto.
@@ -1419,179 +1431,197 @@ function App() {
           )}
           {tab === "assistant" && (
             <>
-              <div className="section-title">
-                <div>
-                  <span className="eyebrow">A LITTLE HELP MOVING FORWARD</span>
-                  <h1>Chat</h1>
-                </div>
-                <button
-                  className="icon"
-                  aria-label="New conversation"
-                  onClick={() =>
-                    setAgent({ ...agent, threadId: null, messages: [] })
-                  }
-                >
-                  <Plus />
-                </button>
-              </div>
-              <div className="assistant-note">
-                <Sparkles size={17} />
-                {agent?.modelConfigured
-                  ? "GPT-5.4 mini · Changes need your approval"
-                  : "Humeto AI · Reviewed actions"}
-              </div>
-              {!agent?.messages?.length && (
-                <div className="chat-welcome">
-                  <Sparkles size={35} />
-                  <h2>What’s on your mind?</h2>
-                  <p>Turn a thought into a next step.</p>
-                  {[
-                    "Create a task to review the proposal tomorrow",
-                    "Show my important pending tasks",
-                    "What tasks are overdue?",
-                  ].map((x) => (
-                    <button key={x} onClick={() => setDraft(x)}>
-                      {x}
-                      <ArrowUpRight size={15} />
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div
-                className="messages"
-                tabIndex={0}
-                aria-label="Conversation messages"
-                ref={chatHistory.scroller}
-                onScroll={chatHistory.onScroll}
-                style={{
-                  overflowY: "auto",
-                  overflowAnchor: "none",
-                }}
-              >
-                {agent?.history?.hasOlder && (
-                  <button
-                    onClick={() => void chatHistory.loadOlder()}
-                    disabled={chatHistory.loadingOlder}
-                  >
-                    {chatHistory.loadingOlder
-                      ? "Loading older messages…"
-                      : "Load older messages"}
-                  </button>
-                )}
-                {chatHistory.historyError && (
-                  <p role="alert">
-                    {chatHistory.historyError} Try loading again.
-                  </p>
-                )}
-                {agent?.messages?.map((m: any) => (
-                  <article key={m.id} className={"message " + m.role}>
-                    <small>{m.role === "user" ? "You" : "Humeto"}</small>
-                    <p>{m.content}</p>
-                    {m.result?.tasks?.map((t: Task) => (
-                      <div className="chat-task" key={t.id}>
-                        {t.title} · {formatDate(t.due_date)}
-                      </div>
-                    ))}
-                    {m.result?.action && (
-                      <div className="action-review">
-                        <span className="eyebrow">REVIEW BEFORE APPLYING</span>
-                        <h3>{m.result.action.payload.title}</h3>
-                        <p>
-                          {m.result.action.payload.stageTitle ||
-                            label(m.result.action.payload.stage)}{" "}
-                          · {formatDate(m.result.action.payload.dueDate)}
-                        </p>
-                        {m.result.action.payload.projectTitle && (
-                          <p>
-                            Project: {m.result.action.payload.projectTitle}
-                            {m.result.action.payload.createProject
-                              ? " · will be created"
-                              : ""}
-                          </p>
-                        )}
-                        {m.result.action.payload.reminderAt && (
-                          <p>
-                            Reminder:{" "}
-                            {new Date(
-                              m.result.action.payload.reminderAt,
-                            ).toLocaleString()}
-                          </p>
-                        )}
-                        {m.result.action.status === "pending" ? (
-                          <div className="button-row">
-                            {["apply", "cancel"].map((decision) => (
-                              <button
-                                className={
-                                  decision === "apply" ? "primary" : "secondary"
-                                }
-                                key={decision}
-                                disabled={!writable}
-                                onClick={() =>
-                                  void run(
-                                    async () => {
-                                      setAgent(
-                                        await api("/api/agent", {
-                                          operation: "action",
-                                          actionId: m.result.action.id,
-                                          decision,
-                                          timezone,
-                                        }),
-                                      );
-                                    },
-                                    decision === "apply"
-                                      ? "Applied."
-                                      : "Proposal cancelled.",
-                                  )
-                                }
-                              >
-                                {decision === "apply" ? "Apply" : "Cancel"}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <small>{m.result.action.status}</small>
-                        )}
-                      </div>
-                    )}
-                  </article>
-                ))}
-              </div>
-              <form
-                className="composer"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const message = draft.trim();
-                  if (!message) return;
-                  void run(async () => {
-                    setAgent(
-                      await api("/api/agent", {
-                        operation: "message",
-                        threadId: agent?.threadId || undefined,
-                        message,
-                        clientKey: crypto.randomUUID(),
-                        timezone,
-                      }),
-                    );
-                    setDraft("");
-                  }, "");
-                }}
-              >
-                <textarea
-                  value={draft}
-                  maxLength={2000}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Capture a task, plan your day…"
-                  aria-label="Message Humeto"
-                  rows={2}
+              <ChatNavigation mode={chatMode} onChange={setChatMode} />
+              {chatMode === "projects" ? (
+                <ProjectChatList
+                  request={api}
+                  downloadFile={downloadProjectFile}
                 />
-                <button
-                  className="primary round"
-                  aria-label="Send message"
-                  disabled={!writable || !draft.trim()}
-                >
-                  <Send size={18} />
-                </button>
-              </form>
+              ) : chatMode === "break" ? (
+                <BreakChat request={api} />
+              ) : (
+                <>
+                  <div className="section-title">
+                    <div>
+                      <span className="eyebrow">
+                        A LITTLE HELP MOVING FORWARD
+                      </span>
+                      <h1>Chat</h1>
+                    </div>
+                    <button
+                      className="icon"
+                      aria-label="New conversation"
+                      onClick={() =>
+                        setAgent({ ...agent, threadId: null, messages: [] })
+                      }
+                    >
+                      <Plus />
+                    </button>
+                  </div>
+                  <div className="assistant-note">
+                    <Sparkles size={17} />
+                    {agent?.modelConfigured
+                      ? "GPT-5.4 mini · Changes need your approval"
+                      : "Humeto AI · Reviewed actions"}
+                  </div>
+                  {!agent?.messages?.length && (
+                    <div className="chat-welcome">
+                      <Sparkles size={35} />
+                      <h2>What’s on your mind?</h2>
+                      <p>Turn a thought into a next step.</p>
+                      {[
+                        "Create a task to review the proposal tomorrow",
+                        "Show my important pending tasks",
+                        "What tasks are overdue?",
+                      ].map((x) => (
+                        <button key={x} onClick={() => setDraft(x)}>
+                          {x}
+                          <ArrowUpRight size={15} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <div
+                    className="messages"
+                    tabIndex={0}
+                    aria-label="Conversation messages"
+                    ref={chatHistory.scroller}
+                    onScroll={chatHistory.onScroll}
+                    style={{
+                      overflowY: "auto",
+                      overflowAnchor: "none",
+                    }}
+                  >
+                    {agent?.history?.hasOlder && (
+                      <button
+                        onClick={() => void chatHistory.loadOlder()}
+                        disabled={chatHistory.loadingOlder}
+                      >
+                        {chatHistory.loadingOlder
+                          ? "Loading older messages…"
+                          : "Load older messages"}
+                      </button>
+                    )}
+                    {chatHistory.historyError && (
+                      <p role="alert">
+                        {chatHistory.historyError} Try loading again.
+                      </p>
+                    )}
+                    {agent?.messages?.map((m: any) => (
+                      <article key={m.id} className={"message " + m.role}>
+                        <small>{m.role === "user" ? "You" : "Humeto"}</small>
+                        <p>{m.content}</p>
+                        {m.result?.tasks?.map((t: Task) => (
+                          <div className="chat-task" key={t.id}>
+                            {t.title} · {formatDate(t.due_date)}
+                          </div>
+                        ))}
+                        {m.result?.action && (
+                          <div className="action-review">
+                            <span className="eyebrow">
+                              REVIEW BEFORE APPLYING
+                            </span>
+                            <h3>{m.result.action.payload.title}</h3>
+                            <p>
+                              {m.result.action.payload.stageTitle ||
+                                label(m.result.action.payload.stage)}{" "}
+                              · {formatDate(m.result.action.payload.dueDate)}
+                            </p>
+                            {m.result.action.payload.projectTitle && (
+                              <p>
+                                Project: {m.result.action.payload.projectTitle}
+                                {m.result.action.payload.createProject
+                                  ? " · will be created"
+                                  : ""}
+                              </p>
+                            )}
+                            {m.result.action.payload.reminderAt && (
+                              <p>
+                                Reminder:{" "}
+                                {new Date(
+                                  m.result.action.payload.reminderAt,
+                                ).toLocaleString()}
+                              </p>
+                            )}
+                            {m.result.action.status === "pending" ? (
+                              <div className="button-row">
+                                {["apply", "cancel"].map((decision) => (
+                                  <button
+                                    className={
+                                      decision === "apply"
+                                        ? "primary"
+                                        : "secondary"
+                                    }
+                                    key={decision}
+                                    disabled={!writable}
+                                    onClick={() =>
+                                      void run(
+                                        async () => {
+                                          setAgent(
+                                            await api("/api/agent", {
+                                              operation: "action",
+                                              actionId: m.result.action.id,
+                                              decision,
+                                              timezone,
+                                            }),
+                                          );
+                                        },
+                                        decision === "apply"
+                                          ? "Applied."
+                                          : "Proposal cancelled.",
+                                      )
+                                    }
+                                  >
+                                    {decision === "apply" ? "Apply" : "Cancel"}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <small>{m.result.action.status}</small>
+                            )}
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                  <form
+                    className="composer"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const message = draft.trim();
+                      if (!message) return;
+                      void run(async () => {
+                        setAgent(
+                          await api("/api/agent", {
+                            operation: "message",
+                            threadId: agent?.threadId || undefined,
+                            message,
+                            clientKey: crypto.randomUUID(),
+                            timezone,
+                          }),
+                        );
+                        setDraft("");
+                      }, "");
+                    }}
+                  >
+                    <textarea
+                      value={draft}
+                      maxLength={2000}
+                      onChange={(e) => setDraft(e.target.value)}
+                      placeholder="Capture a task, plan your day…"
+                      aria-label="Message Humeto"
+                      rows={2}
+                    />
+                    <button
+                      className="primary round"
+                      aria-label="Send message"
+                      disabled={!writable || !draft.trim()}
+                    >
+                      <Send size={18} />
+                    </button>
+                  </form>
+                </>
+              )}
             </>
           )}
           {tab === "projects" && (

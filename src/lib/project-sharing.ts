@@ -1,4 +1,5 @@
 import "server-only";
+import { prepareProjectMedia } from "./project-media";
 import { randomBytes, randomInt } from "node:crypto";
 import { cookies } from "next/headers";
 import { z } from "zod";
@@ -79,7 +80,11 @@ async function guestAllowed(share: any) {
       .get(tokenHash(token), share.id, Date.now()))
   );
 }
-async function snapshot(tenant: string, projectId: string) {
+async function snapshot(
+  tenant: string,
+  projectId: string,
+  before: string | null,
+) {
   const task = await db()
     .prepare(
       "SELECT id,title,status AS stage,target_date AS due_date FROM projects WHERE id=? AND tenant_id=?",
@@ -92,11 +97,16 @@ async function snapshot(tenant: string, projectId: string) {
       "SELECT id,label,url FROM project_links WHERE tenant_id=? AND project_id=? ORDER BY created_at,id LIMIT 50",
     )
     .all(tenant, projectId);
-  const comments = await db()
+  const commentRows = await db()
     .prepare(
-      "SELECT id,author,content,created_at FROM project_comments WHERE tenant_id=? AND project_id=? ORDER BY created_at DESC,id LIMIT 100",
+      "SELECT id,author,content,created_at FROM project_comments WHERE tenant_id=? AND project_id=?" +
+        (before
+          ? " AND (created_at,id)<(SELECT created_at,id FROM project_comments WHERE id=? AND tenant_id=? AND project_id=?)"
+          : "") +
+        " ORDER BY created_at DESC,id DESC LIMIT 101",
     )
-    .all(tenant, projectId);
+    .all(tenant, projectId, ...(before ? [before, tenant, projectId] : []));
+  const comments = commentRows.slice(0, 100).reverse();
   const attachments = await db()
     .prepare(
       "SELECT id,name,mime,size,status,author,created_at FROM project_attachments WHERE tenant_id=? AND project_id=? ORDER BY created_at DESC,id LIMIT 20",
@@ -106,6 +116,7 @@ async function snapshot(tenant: string, projectId: string) {
     project: { ...task, stageTitle: task.stage },
     links,
     comments,
+    nextCursor: commentRows.length > 100 ? comments[0].id : null,
     attachments,
   };
 }
@@ -222,6 +233,19 @@ export async function taskSharing(req: Request) {
       .then((t) => {
         if (!t) throw new ShareError("Project not found.", 404);
       });
+    if (
+      a &&
+      a.role !== "owner" &&
+      !(await db()
+        .prepare(
+          "SELECT user_id FROM work_assignments WHERE tenant_id=? AND entity_type='project' AND entity_id=? AND user_id=?",
+        )
+        .get(tenant, projectId, a.id))
+    )
+      throw new ShareError(
+        "Only this project's team and invited clients can open its conversation.",
+        403,
+      );
     const allowed = !share || (await guestAllowed(share));
     if (req.method === "GET") {
       if (!allowed)
@@ -240,6 +264,17 @@ export async function taskSharing(req: Request) {
             "This file is awaiting a security scan or was rejected.",
             403,
           );
+        if (query.get("media") === "1") {
+          if (!/^(image\/(png|jpeg|webp)|audio\/wav)$/.test(String(file.mime)))
+            throw new ShareError("Preview unavailable.");
+          return Response.json(
+            {
+              mime: file.mime,
+              bytes: Buffer.from(file.bytes as Buffer).toString("base64"),
+            },
+            { headers: { "Cache-Control": "private, no-store" } },
+          );
+        }
         return new Response(new Uint8Array(file.bytes as Buffer), {
           headers: {
             "Content-Type": "application/octet-stream",
@@ -250,7 +285,7 @@ export async function taskSharing(req: Request) {
           },
         });
       }
-      const state = await snapshot(tenant, projectId);
+      const state = await snapshot(tenant, projectId, query.get("before"));
       if (share) {
         const challenge = id();
         await db()
@@ -275,7 +310,11 @@ export async function taskSharing(req: Request) {
         )
         .all(tenant, projectId);
       return Response.json(
-        { ...state, shares },
+        {
+          ...state,
+          shares: a?.role === "owner" ? shares : [],
+          canManage: a?.role === "owner",
+        },
         { headers: { "Cache-Control": "no-store" } },
       );
     }
@@ -283,6 +322,11 @@ export async function taskSharing(req: Request) {
     const body = await boundedJson(req);
     let createdUrl: string | undefined;
     const operation = z.string().parse(body.operation);
+    if (a && a.role !== "owner" && ["share", "revoke"].includes(operation))
+      throw new ShareError(
+        "Only workspace owners can manage client invitations.",
+        403,
+      );
     if (share && operation === "request-code") {
       if (!share.email || email.parse(body.email) !== share.email)
         throw new ShareError("Use the invited email address.", 403);
@@ -416,13 +460,6 @@ export async function taskSharing(req: Request) {
             safeUrl(body.url),
           );
       } else if (operation === "comment") {
-        const count = await db()
-          .prepare(
-            "SELECT count(*)::int AS n FROM project_comments WHERE project_id=? AND tenant_id=?",
-          )
-          .get(projectId, tenant);
-        if (Number(count?.n) >= 100)
-          throw new ShareError("Maximum 100 comments per project.");
         await db()
           .prepare(
             "INSERT INTO project_comments(id,tenant_id,project_id,share_id,author,content) VALUES(?,?,?,?,?,?)",
@@ -450,7 +487,14 @@ export async function taskSharing(req: Request) {
         const bytes = Buffer.from(encoded, "base64");
         if (bytes.length < 12 || bytes.length > 2 * 1024 * 1024)
           throw new ShareError("Choose a file up to 2 MB.");
-        const mime = fileType(name, bytes);
+        let media;
+        try {
+          media = await prepareProjectMedia(name, bytes);
+        } catch (e) {
+          throw new ShareError((e as Error).message);
+        }
+        const mime = media?.mime || fileType(name, bytes);
+        const storedBytes = media?.bytes || bytes;
         const usage = await db()
           .prepare(
             "SELECT count(*)::int AS n,coalesce(sum(size),0) AS size FROM project_attachments WHERE project_id=? AND tenant_id=?",
@@ -463,13 +507,15 @@ export async function taskSharing(req: Request) {
           .get(tenant);
         if (
           Number(usage?.n) >= 20 ||
-          Number(usage?.size) + bytes.length > 20 * 1024 * 1024 ||
-          Number(total?.size) + bytes.length > 100 * 1024 * 1024
+          Number(usage?.size) + storedBytes.length > 20 * 1024 * 1024 ||
+          Number(total?.size) + storedBytes.length > 100 * 1024 * 1024
         )
-          throw new ShareError("Project or workspace attachment limit reached.");
+          throw new ShareError(
+            "Project or workspace attachment limit reached.",
+          );
         await db()
           .prepare(
-            "INSERT INTO project_attachments(id,tenant_id,project_id,share_id,author,name,mime,bytes,size) VALUES(?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO project_attachments(id,tenant_id,project_id,share_id,author,name,mime,bytes,size,status) VALUES(?,?,?,?,?,?,?,?,?,?)",
           )
           .run(
             id(),
@@ -479,8 +525,9 @@ export async function taskSharing(req: Request) {
             author,
             name,
             mime,
-            bytes,
-            bytes.length,
+            storedBytes,
+            storedBytes.length,
+            media?.clean ? "clean" : "quarantined",
           );
       } else if (a && operation === "share") {
         const count = await db()

@@ -1,0 +1,6 @@
+-- Global opt-in break room. Identity mapping stays server-side; tenant data is never joined into its public feed.
+CREATE TABLE break_members(id TEXT PRIMARY KEY,user_id TEXT NOT NULL UNIQUE REFERENCES users(id),alias TEXT NOT NULL UNIQUE,strikes INTEGER NOT NULL DEFAULT 0,banned_until BIGINT NOT NULL DEFAULT 0,accepted INTEGER NOT NULL DEFAULT 0,created_at TIMESTAMPTZ NOT NULL DEFAULT now());
+CREATE TABLE break_messages(id TEXT PRIMARY KEY,member_id TEXT NOT NULL REFERENCES break_members(id),client_id TEXT NOT NULL,content TEXT NOT NULL CHECK(length(content) BETWEEN 1 AND 500),hidden BOOLEAN NOT NULL DEFAULT false,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),UNIQUE(member_id,client_id));
+CREATE INDEX break_feed ON break_messages(created_at DESC) WHERE hidden=false;
+CREATE TABLE break_reports(message_id TEXT NOT NULL REFERENCES break_messages(id) ON DELETE CASCADE,reporter_id TEXT NOT NULL REFERENCES break_members(id),reason TEXT NOT NULL CHECK(reason IN ('abuse','personal_information','spam','other')),reviewed BOOLEAN NOT NULL DEFAULT false,created_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(message_id,reporter_id));
+CREATE TABLE break_blocks(member_id TEXT NOT NULL REFERENCES break_members(id),blocked_id TEXT NOT NULL REFERENCES break_members(id),PRIMARY KEY(member_id,blocked_id),CHECK(member_id<>blocked_id));
