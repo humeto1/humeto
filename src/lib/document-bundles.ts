@@ -1,13 +1,13 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { readFile, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename } from "node:path";
 import { createHash } from "node:crypto";
 import { actor, canSeePerson, ensureOrigin } from "./auth";
-import { db, dataDir } from "./db";
+import { db } from "./db";
 import { sections } from "./sections";
 import { bundleZip, bundleName } from "./bundle-zip.mjs";
+import { getObject } from "./storage.mjs";
 const fail = (error: string, status = 400) =>
   NextResponse.json({ error }, { status });
 const schema = z.object({
@@ -126,14 +126,12 @@ export async function bundleRoute(req: Request) {
         return fail("Source unavailable.", 404);
       let bytes: Buffer;
       try {
-        const path = join(dataDir, "uploads", file.storedName);
-        const info = await stat(path);
-        if (info.size !== file.size || info.size > 15 * 1024 * 1024)
+        bytes = await getObject("uploads/" + file.storedName);
+        if (bytes.length > 15 * 1024 * 1024)
           return fail(
             "A source file changed. Review or restore it before downloading.",
             409,
           );
-        bytes = await readFile(path);
       } catch {
         return fail(
           "A source file is missing. Restore it before downloading.",

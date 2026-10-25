@@ -21,6 +21,7 @@ export default async function Page({
       "leads",
       "documents",
       "reading",
+      "section-review",
       "applications",
       "tasks",
       "progress",

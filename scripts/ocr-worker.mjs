@@ -4,8 +4,9 @@ import { database } from "../src/lib/postgres.mjs";
 import { engineInfo, readDocument } from "../src/lib/ocr/engine.mjs";
 import { extractFacts } from "../src/lib/ocr/extract.mjs";
 import { randomUUID, createHash } from "node:crypto";
-import { readFile, mkdir, rm } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rm } from "node:fs/promises";
 import { resolve, join, basename } from "node:path";
+import { getObject, putObject } from "../src/lib/storage.mjs";
 const d = database(),
   root = resolve(process.env.HUMETO_DATA_DIR || ".data"),
   workerId = randomUUID();
@@ -32,7 +33,6 @@ export async function processOne(database = d) {
   if (!job) return false;
   const attempt = job.id + "-" + token,
     dir = join(root, "ocr", attempt);
-  let persisted = false;
   const pulse = async () => {
     if (stopping)
       throw Error(
@@ -62,15 +62,24 @@ export async function processOne(database = d) {
     const filename = String(source.stored_name);
     if (basename(filename) !== filename)
       throw Error("The stored source path is invalid.");
-    const input = resolve(root, "uploads", filename),
-      bytes = await readFile(input);
+    const bytes = await getObject("uploads/" + filename);
     if (bytes.length > 15 * 1024 * 1024)
       throw Error("The source exceeds the 15 MB reading limit.");
     if (createHash("sha256").update(bytes).digest("hex") !== job.source_sha256)
       throw Error(
         "Source integrity check failed. Replace this file with a fresh upload.",
       );
-    await mkdir(join(root, "ocr"), { recursive: true, mode: 0o700 });
+    // readDocument shells out to pdfinfo/pdftoppm/tesseract, which need a
+    // local file; this is scratch space, not durable storage.
+    await mkdir(dir, { recursive: true, mode: 0o700 });
+    const sourceExt =
+        source.mime_type === "application/pdf"
+          ? ".pdf"
+          : source.mime_type === "image/png"
+            ? ".png"
+            : ".jpg",
+      input = join(dir, "source" + sourceExt);
+    await writeFile(input, bytes, { mode: 0o600 });
     const result = await readDocument(
       input,
       source.mime_type,
@@ -83,6 +92,19 @@ export async function processOne(database = d) {
         );
       },
     );
+    // Preview images are generated on local scratch disk by readDocument
+    // (pdftoppm output), but must be durable and reachable by the Next.js
+    // app, which may run on a different host. Upload each to storage under
+    // the same key the app will request later, then the scratch dir can be
+    // discarded regardless of outcome.
+    for (const page of result.pages) {
+      const previewBytes = await readFile(page.preview);
+      await putObject(
+        "ocr/" + attempt + "/" + basename(page.preview),
+        previewBytes,
+        page.preview.endsWith(".jpg") ? "image/jpeg" : "image/png",
+      );
+    }
     const facts = extractFacts(result.pages),
       engine = await engineInfo();
     await database.transaction(async () => {
@@ -155,7 +177,6 @@ export async function processOne(database = d) {
         "UPDATE ocr_jobs SET status='completed',engine=$1,warnings=$2::jsonb,lease_token=NULL,lease_until=NULL,revision=revision+1,updated_at=now() WHERE id=$3 AND lease_token=$4",
         [engine, JSON.stringify(warnings), job.id, token],
       );
-      persisted = true;
     });
   } catch (e) {
     await database.query(
@@ -170,7 +191,9 @@ export async function processOne(database = d) {
     );
   } finally {
     clearInterval(heartbeat);
-    if (!persisted) await rm(dir, { recursive: true, force: true });
+    // Previews are durably uploaded to storage above; local scratch is
+    // discarded either way now, not kept around on success as before.
+    await rm(dir, { recursive: true, force: true });
   }
   return true;
 }

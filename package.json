@@ -31,6 +31,7 @@
   "dependencies": {
     "@neon/config": "^1.9.3",
     "@neon/env": "^1.6.4",
+    "@supabase/supabase-js": "^2.118.0",
     "@vercel/functions": "^3.10.3",
     "@whiskeysockets/baileys": "^6.7.24",
     "lucide-react": "^0.577.0",

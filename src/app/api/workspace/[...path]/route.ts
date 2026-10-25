@@ -38,9 +38,13 @@ import { crmMutation, transaction } from "@/lib/crm";
 import { applicationStages } from "@/lib/pipeline";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { mkdirSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
-import { resolve } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
+import {
+  putObject,
+  getObject,
+  deleteObject,
+  createUploadTarget,
+} from "@/lib/storage.mjs";
 import {
   actor,
   canSeePerson,
@@ -48,14 +52,7 @@ import {
   canMutate,
   ensureOrigin,
 } from "@/lib/auth";
-import {
-  db,
-  id,
-  audit,
-  dataDir,
-  hashPassword,
-  createChecklist,
-} from "@/lib/db";
+import { db, id, audit, hashPassword, createChecklist } from "@/lib/db";
 import { bootstrap, intake, person, documents } from "@/lib/repository";
 import { sections } from "@/lib/sections";
 import type { Actor } from "@/lib/types";
@@ -327,7 +324,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
           !["owner", "student"].includes(a.role))
       )
         return fail("Document not found.", 404);
-      const bytes = readFileSync(resolve(dataDir, "uploads", row.stored_name));
+      const bytes = await getObject("uploads/" + row.stored_name);
       const inline = new URL(req.url).searchParams.get("inline") === "1";
       return new Response(bytes, {
         headers: {
@@ -355,6 +352,170 @@ async function handle(req: Request, parts: string[], a: Actor) {
     return fail("Not found.", 404);
   }
   ensureOrigin(req);
+  // Large files (a real phone-camera passport photo easily exceeds a few
+  // MB) must not pass through this serverless function as a request body:
+  // Vercel rejects bodies over ~4.5 MB with a plain-text "Request Entity
+  // Too Large" error before Next.js even sees the request, which breaks
+  // the client's `r.json()` parse. The browser instead uploads the file
+  // bytes directly to storage using a signed URL ("prepare"), and only
+  // small JSON metadata passes through here ("finalize"). Falls back to
+  // the FormData path below when Supabase isn't configured (local dev).
+  if (
+    resource === "documents" &&
+    req.method === "POST" &&
+    !rid &&
+    (req.headers.get("content-type") || "").includes("application/json")
+  ) {
+    if (a.role === "platform_admin" || !(await writable(a)))
+      return fail("Workspace is read-only.", 403);
+    const body = (await req.json()) as Record<string, unknown>;
+    const act = String(body.action || "");
+    if (act === "prepare") {
+      const v = z
+        .object({ personId: z.string().min(1), sectionKey: z.string().max(80).default("") })
+        .parse(body);
+      if (!(await canSeePerson(a, v.personId)))
+        return fail("Applicant not found.", 404);
+      if (
+        sections.find((s) => s.key === v.sectionKey)?.restricted &&
+        !["owner", "student"].includes(a.role)
+      )
+        return fail("Restricted evidence section.", 403);
+      const stored = id();
+      const target = await createUploadTarget("uploads/" + stored);
+      if (!target) return NextResponse.json({ direct: false });
+      return NextResponse.json({
+        direct: true,
+        stored,
+        bucket: process.env.SUPABASE_STORAGE_BUCKET,
+        path: target.path,
+        token: target.token,
+      });
+    }
+    if (act === "finalize") {
+      const v = z
+        .object({
+          personId: z.string().min(1),
+          sectionKey: z.string().max(80).default(""),
+          title: z.string().max(200).default(""),
+          category: z.string().max(80).default("Other"),
+          originalName: z.string().max(220).default("document"),
+          stored: z.string().min(1).max(100),
+          readInformation: z.boolean().default(false),
+        })
+        .parse(body);
+      if (!(await canSeePerson(a, v.personId)))
+        return fail("Applicant not found.", 404);
+      if (
+        sections.find((s) => s.key === v.sectionKey)?.restricted &&
+        !["owner", "student"].includes(a.role)
+      )
+        return fail("Restricted evidence section.", 403);
+      let bytes: Buffer;
+      try {
+        bytes = await getObject("uploads/" + v.stored);
+      } catch {
+        return fail(
+          "The upload did not complete. Choose the file again.",
+          409,
+        );
+      }
+      if (bytes.length === 0 || bytes.length > 15 * 1024 * 1024) {
+        await deleteObject("uploads/" + v.stored).catch(() => {});
+        return fail("Choose a PDF, PNG or JPEG up to 15 MB.");
+      }
+      let mime = "";
+      if (bytes.subarray(0, 5).toString() === "%PDF-") mime = "application/pdf";
+      else if (
+        bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      )
+        mime = "image/png";
+      else if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255)
+        mime = "image/jpeg";
+      if (!mime) {
+        await deleteObject("uploads/" + v.stored).catch(() => {});
+        return fail("Only PDF, PNG and JPEG file contents are supported.");
+      }
+      const quota = (await db()
+        .prepare("SELECT storage_mb FROM subscriptions WHERE tenant_id=?")
+        .get(a.tenantId)) as { storage_mb: number };
+      const usage = (await db()
+        .prepare(
+          "SELECT coalesce(sum(byte_size),0) AS total FROM document_versions WHERE tenant_id=?",
+        )
+        .get(a.tenantId)) as { total: number };
+      if (usage.total + bytes.length > quota.storage_mb * 1024 * 1024) {
+        await deleteObject("uploads/" + v.stored).catch(() => {});
+        return fail("Workspace storage allowance reached.", 403);
+      }
+      const sha = createHash("sha256").update(bytes).digest("hex");
+      const duplicate = (await db()
+        .prepare(
+          "SELECT d.id FROM document_versions dv JOIN documents d ON d.id=dv.document_id AND d.tenant_id=dv.tenant_id WHERE dv.sha256=? AND dv.tenant_id=? AND d.person_id=? LIMIT 1",
+        )
+        .get(sha, a.tenantId, v.personId)) as { id: string } | undefined;
+      if (duplicate) {
+        await deleteObject("uploads/" + v.stored).catch(() => {});
+        return NextResponse.json({ id: duplicate.id, duplicate: true });
+      }
+      const docId = id();
+      try {
+        await withTransaction(async () => {
+          await db()
+            .prepare(
+              "INSERT INTO documents(id,tenant_id,person_id,title,category,section_key) VALUES(?,?,?,?,?,?)",
+            )
+            .run(
+              docId,
+              a.tenantId,
+              v.personId,
+              (v.title || v.originalName).slice(0, 200),
+              v.category.slice(0, 80),
+              v.sectionKey.slice(0, 80),
+            );
+          await db()
+            .prepare(
+              "INSERT INTO document_versions(id,tenant_id,document_id,version,original_name,stored_name,mime_type,byte_size,sha256) VALUES(?,?,?,1,?,?,?,?,?)",
+            )
+            .run(
+              id(),
+              a.tenantId,
+              docId,
+              v.originalName.replace(/[\r\n]/g, "").slice(0, 220),
+              v.stored,
+              mime,
+              bytes.length,
+              sha,
+            );
+          await audit(
+            a.tenantId,
+            a.id,
+            "uploaded",
+            "document",
+            docId,
+            "Uploaded document version 1",
+          );
+        });
+      } catch (e) {
+        await deleteObject("uploads/" + v.stored).catch(() => {});
+        throw e;
+      }
+      let readingJobId = "",
+        readingError = "";
+      if (v.readInformation) {
+        try {
+          readingJobId = String((await queueReading(a, docId, 1)).id);
+        } catch (e) {
+          readingError =
+            e instanceof ReadingError
+              ? e.message
+              : "File saved. Use Document reader to retry reading.";
+        }
+      }
+      return NextResponse.json({ id: docId, readingJobId, readingError });
+    }
+    return fail("Unknown upload action.");
+  }
   if (
     resource === "documents" &&
     req.method === "POST" &&
@@ -504,8 +665,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       }
     }
     const stored = id();
-    mkdirSync(resolve(dataDir, "uploads"), { recursive: true, mode: 0o700 });
-    writeFileSync(resolve(dataDir, "uploads", stored), bytes, { mode: 0o600 });
+    await putObject("uploads/" + stored, bytes, mime);
     try {
       const transactionResult = await withTransaction(async () => {
         if (!rid)
@@ -574,7 +734,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       });
       if (transactionResult !== undefined) return transactionResult;
     } catch (e) {
-      unlinkSync(resolve(dataDir, "uploads", stored));
+      await deleteObject("uploads/" + stored);
       throw e;
     }
     let readingJobId = "",

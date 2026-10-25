@@ -47,6 +47,7 @@ export function featureForView(view) {
     [
       "documents",
       "reading",
+      "section-review",
       "imports",
       "facts",
       "assist",

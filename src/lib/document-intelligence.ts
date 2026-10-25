@@ -2,11 +2,10 @@ import { subscriptionAccess } from "./subscription-access.mjs";
 import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { readFileSync } from "node:fs";
-import { resolve, sep } from "node:path";
-import { db, id, audit, withTransaction, dataDir } from "./db";
+import { db, id, audit, withTransaction } from "./db";
 import { canSeePerson, isStaff } from "./auth";
 import { sections } from "./sections";
+import { getObject } from "./storage.mjs";
 import type { Actor } from "./types";
 export class ReadingError extends Error {
   constructor(
@@ -183,12 +182,18 @@ export async function readingRead(req: Request, parts: string[], a: Actor) {
       .get(u.searchParams.get("id") || "", a.tenantId);
     if (!page) bad("Page not found.", 404);
     await document(a, String(page!.document_id));
-    const root = resolve(dataDir, "ocr"),
-      file = resolve(root, String(page!.preview_name));
-    if (!file.startsWith(root + sep)) bad("Page not found.", 404);
-    return new NextResponse(new Uint8Array(readFileSync(file)), {
+    const previewName = String(page!.preview_name);
+    let bytes: Buffer;
+    try {
+      bytes = await getObject("ocr/" + previewName);
+    } catch {
+      bad("Page not found.", 404);
+    }
+    return new NextResponse(new Uint8Array(bytes!), {
       headers: {
-        "Content-Type": file.endsWith(".jpg") ? "image/jpeg" : "image/png",
+        "Content-Type": previewName.endsWith(".jpg")
+          ? "image/jpeg"
+          : "image/png",
         "Cache-Control": "private, no-store",
         "X-Content-Type-Options": "nosniff",
       },

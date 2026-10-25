@@ -1,4 +1,5 @@
 "use client";
+import { createClient } from "@supabase/supabase-js";
 import {
   TaskCurrencyProvider,
   CurrencyPreferences,
@@ -28,6 +29,7 @@ import Announcements from "./announcements";
 import CompanyWhatsApp from "./company-whatsapp";
 import DocumentBundle from "./document-bundle";
 import DocumentReader from "./document-reader";
+import SectionReview from "./section-review";
 import JourneyInsights from "./journey-insights";
 import FinanceCenter from "./finance-center";
 import WorkAssignment from "./work-assignment";
@@ -208,6 +210,7 @@ const navItems = [
   ["finance", "Finance", Wallet],
   ["documents", "Documents", FolderOpen],
   ["reading", "Document reader", ScanText],
+  ["section-review", "Review by section", CheckCircle2],
   ["assistant", "Chat", MessageSquare],
   ["requests", "Requests", MessageSquare],
   ["notifications", "Notifications", Bell],
@@ -282,6 +285,70 @@ function Empty({
       {action}
     </div>
   );
+}
+let publicSupabase: ReturnType<typeof createClient> | null | undefined;
+function supabasePublic() {
+  if (publicSupabase !== undefined) return publicSupabase;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL,
+    key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  publicSupabase = url && key ? createClient(url, key) : null;
+  return publicSupabase;
+}
+// Uploads a document without passing the file bytes through this app's own
+// API route: Vercel rejects request bodies over ~4.5 MB with a plain-text
+// error (not JSON), which breaks a normal FormData POST for any real
+// phone-camera scan. Instead this asks the server for a one-time signed
+// upload slot, puts the file straight to Supabase Storage with the public
+// anon key (authorized only by that single-use token, not by the key
+// itself), and then sends just the small metadata back to finalize the
+// document record. Falls back to the original single-request FormData
+// upload when the server reports storage isn't configured (local dev,
+// where Vercel's body-size ceiling doesn't apply anyway).
+async function uploadDocumentDirect(fields: {
+  personId: string;
+  sectionKey: string;
+  title: string;
+  category: string;
+  file: File;
+  readInformation: boolean;
+}) {
+  const prepareResponse = await fetch("/api/workspace/documents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "prepare",
+      personId: fields.personId,
+      sectionKey: fields.sectionKey,
+    }),
+  });
+  const prepared = await prepareResponse.json();
+  if (!prepareResponse.ok) throw new Error(prepared.error || "Could not start the upload.");
+  if (!prepared.direct) return null; // caller falls back to FormData
+  const sb = supabasePublic();
+  if (!sb) return null;
+  const { error: uploadError } = await sb.storage
+    .from(prepared.bucket)
+    .uploadToSignedUrl(prepared.path, prepared.token, fields.file);
+  if (uploadError)
+    throw new Error("Upload failed: " + uploadError.message);
+  const finalizeResponse = await fetch("/api/workspace/documents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "finalize",
+      personId: fields.personId,
+      sectionKey: fields.sectionKey,
+      title: fields.title,
+      category: fields.category,
+      originalName: fields.file.name,
+      stored: prepared.stored,
+      readInformation: fields.readInformation,
+    }),
+  });
+  const result = await finalizeResponse.json();
+  if (!finalizeResponse.ok)
+    throw new Error(result.error || "Could not finish the upload.");
+  return result;
 }
 export default function Workspace({
   actor,
@@ -1963,6 +2030,14 @@ export default function Workspace({
                 onChange={refresh}
               />
             )}
+            {view === "section-review" && (
+              <SectionReview
+                documents={data.documents}
+                actor={actor}
+                writable={writable}
+                onChange={refresh}
+              />
+            )}
             {view === "documents" && (
               <>
                 {title(
@@ -3325,12 +3400,51 @@ export default function Workspace({
                   <form
                     onSubmit={async (e) => {
                       e.preventDefault();
-                      await mutate(
-                        "documents",
-                        "POST",
-                        new FormData(e.currentTarget),
-                        "Document uploaded privately.",
-                      );
+                      const form = new FormData(e.currentTarget);
+                      const file = form.get("file");
+                      if (!(file instanceof File) || !file.size) {
+                        setError("Choose a file.");
+                        return;
+                      }
+                      setBusy(true);
+                      setError("");
+                      try {
+                        const direct = await uploadDocumentDirect({
+                          personId: String(form.get("personId") || ""),
+                          sectionKey: String(form.get("sectionKey") || ""),
+                          title: String(form.get("title") || ""),
+                          category: String(form.get("category") || "Other"),
+                          file,
+                          readInformation:
+                            form.get("readInformation") === "true",
+                        });
+                        if (direct) {
+                          await refresh();
+                          if (isPlatform) await loadPlatform();
+                          setModal(null);
+                          notify(
+                            direct.readingError
+                              ? "Document uploaded privately. Reading: " +
+                                  direct.readingError
+                              : direct.readingJobId
+                                ? "Document uploaded privately. Local reading queued."
+                                : "Document uploaded privately.",
+                          );
+                          return;
+                        }
+                        // Supabase isn't configured (local dev): fall back to
+                        // the original single-request upload.
+                        setBusy(false);
+                        await mutate(
+                          "documents",
+                          "POST",
+                          form,
+                          "Document uploaded privately.",
+                        );
+                      } catch (err) {
+                        setError((err as Error).message);
+                        setBusy(false);
+                      }
                     }}
                   >
                     <label>
