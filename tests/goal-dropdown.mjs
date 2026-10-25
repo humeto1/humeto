@@ -60,6 +60,10 @@ test("Goal dropdown creates linked tasks and preserves existing extra goal links
       },
     });
     assert.equal(r.status(), 200);
+    const linked = (
+      await (await c.request.get("/api/mobile")).json()
+    ).tasks.find((t) => t.id === task.id);
+    const preservedGoal = linked.goals[1].id;
     await p.goto("/workspace/progress");
     await p.locator(".progress-linker > summary").click();
     const row = p
@@ -78,7 +82,7 @@ test("Goal dropdown creates linked tasks and preserves existing extra goal links
     task = state.tasks.find((t) => t.title === title);
     assert.deepEqual(
       new Set(task.goals.map((g) => g.id)),
-      new Set([goals[1].id, goals[2].id]),
+      new Set([preservedGoal, goals[2].id]),
     );
     await row.getByLabel("Goal", { exact: true }).selectOption("");
     const saved = p.waitForResponse(

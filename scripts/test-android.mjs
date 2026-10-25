@@ -81,6 +81,10 @@ try {
     HUMETO_LOCAL_DEMO: "true",
     HUMETO_EMAIL_MODE: "capture",
     HUMETO_ISOLATED_QA: "true",
+    // QA uploads stay local even when the developer has production storage credentials.
+    NEXT_PUBLIC_SUPABASE_URL: "",
+    SUPABASE_SERVICE_ROLE_KEY: "",
+    SUPABASE_STORAGE_BUCKET: "",
     HUMETO_HTTPS: "false",
     VERCEL: "0",
     HUMETO_PUBLIC_APP_URL: qaOrigin,
@@ -215,7 +219,13 @@ try {
     if (i === 30) {
       console.log("Retrying QA activity after cold WebView startup.");
       adbRun(["shell", "am", "force-stop", "com.humeto.tasks.qa"]);
-      adbRun(["shell", "am", "start", "-n", "com.humeto.tasks.qa/com.humeto.tasks.MainActivity"]);
+      adbRun([
+        "shell",
+        "am",
+        "start",
+        "-n",
+        "com.humeto.tasks.qa/com.humeto.tasks.MainActivity",
+      ]);
     }
     try {
       pid = adbRun(["shell", "pidof", "com.humeto.tasks.qa"]);
@@ -1221,6 +1231,12 @@ try {
       );
       assert.ok(
         channels.channels.some(
+          (c) => c.id.startsWith("humeto-quiet-") && !c.sound,
+        ),
+        "Gentle channels must have no Android sound",
+      );
+      assert.ok(
+        channels.channels.some(
           (c) => c.id === "humeto-bell-still-v1" && c.vibration === false,
         ),
       );
@@ -1228,7 +1244,7 @@ try {
     },
   );
   await check(
-    "Native calendar has shared goal deadlines and yearly subscription routines schedule device alerts",
+    "Native calendar preserves repeating history while Later routines remain quiet",
     async () => {
       await cdp.click("Plans");
       await cdp.wait(`document.querySelector('h1')?.textContent==='Plans'`);
@@ -1286,8 +1302,12 @@ try {
       });
       assert.equal(annual.status, 200);
       await cdp.evaluate(`window.dispatchEvent(new Event('online'))`);
-      await cdp.wait(
-        `window.Capacitor.Plugins.LocalNotifications.getPending().then(r=>r.notifications.some(n=>n.body==='Android annual renewal'))`,
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      assert.equal(
+        await cdp.evaluate(
+          `window.Capacitor.Plugins.LocalNotifications.getPending().then(r=>r.notifications.some(n=>n.body==='Android annual renewal'))`,
+        ),
+        false,
       );
       const planning = (await nativeApi("/api/workspace/planning")).data;
       assert.ok(

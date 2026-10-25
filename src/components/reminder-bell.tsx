@@ -1,67 +1,95 @@
 "use client";
-import { playTone } from "../../shared/alert-controls";
-import { localDay } from "@/lib/scheduling-clock.mjs";
 import { useEffect, useState } from "react";
 import { Bell } from "lucide-react";
+import { playTone } from "../../shared/alert-controls";
 export default function ReminderBell() {
   const [count, setCount] = useState(0);
   useEffect(() => {
-    let live = true;
-    const refresh = () => {
-      if (document.hidden) return;
-      fetch("/api/workspace/scheduling", {
-        cache: "no-store",
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (live && d) {
-            setCount(d.reminders?.filter((r: any) => r.ready).length || 0);
-            if (
-              typeof Notification === "undefined" ||
-              Notification.permission !== "granted" ||
-              !d.preferences?.enabled ||
-              d.quietUntil
-            )
-              return;
-            const store =
-              "humeto-browser-nudges:" +
-              d.actorKey +
-              ":" +
-              localDay(new Date(), d.preferences.timezone);
-            let sent: string[] = [];
-            try {
-              sent = JSON.parse(localStorage.getItem(store) || "[]");
-            } catch {}
-            for (const r of d.reminders || []) {
-              const key = r.id + ":" + r.remind_at;
-              if (
-                !r.due ||
-                sent.includes(key) ||
-                sent.length >= d.preferences.daily_limit
-              )
-                continue;
-              new Notification("Humeto · Task reminder", {
-                body: r.title,
-                tag: r.id,
-                silent: true,
-              });
-              if (d.preferences.vibration && "vibrate" in navigator)
-                navigator.vibrate([200, 100, 200]);
-              void playTone(d.preferences.tone || "chime").catch(() => {});
-              sent.push(key);
-              localStorage.setItem(store, JSON.stringify(sent));
-            }
+    let live = true,
+      polling = false;
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    let device = localStorage.getItem("humeto-web-notification-device");
+    if (!device) {
+      device = crypto.randomUUID();
+      localStorage.setItem("humeto-web-notification-device", device);
+    }
+    const refresh = async () => {
+      if (document.hidden || polling) return;
+      polling = true;
+      try {
+        const summary = await fetch("/api/workspace/scheduling", {
+          cache: "no-store",
+        });
+        if (summary.ok) {
+          const s = await summary.json();
+          if (live)
+            setCount(s.reminders?.filter((r: any) => r.due).length || 0);
+        }
+        if (
+          typeof Notification === "undefined" ||
+          Notification.permission !== "granted"
+        )
+          return;
+        const response = await fetch("/api/notification-plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            deviceId: device,
+            platform: "web",
+            activeProjectId:
+              document.documentElement.dataset.humetoActiveProject,
+          }),
+        });
+        if (!response.ok) return;
+        const plan = await response.json();
+        if (!live) return;
+        const valid = new Set(plan.events.map((e: any) => e.key));
+        for (const [key, timer] of timers)
+          if (!valid.has(key)) {
+            clearTimeout(timer);
+            timers.delete(key);
           }
-        })
-        .catch(() => {});
+        for (const e of plan.events) {
+          const store = "humeto-alert:" + plan.actorKey + ":" + e.key;
+          if (localStorage.getItem(store) || timers.has(e.key)) continue;
+          const delay = Math.max(0, Date.parse(e.at) - Date.now());
+          if (delay > 60000) continue;
+          timers.set(
+            e.key,
+            setTimeout(() => {
+              timers.delete(e.key);
+              if (!live || localStorage.getItem(store)) return;
+              localStorage.setItem(store, "sent");
+              new Notification(
+                e.kind === "focus"
+                  ? "Humeto · Focus"
+                  : "Humeto · Task reminder",
+                { body: e.body || e.title, tag: e.key, silent: true },
+              );
+              if (
+                e.tier !== "silent" &&
+                plan.preferences.vibration &&
+                "vibrate" in navigator
+              )
+                navigator.vibrate(100);
+              if (e.tier === "audible")
+                void playTone(plan.preferences.tone || "chime").catch(() => {});
+            }, delay),
+          );
+        }
+      } catch {
+      } finally {
+        polling = false;
+      }
     };
-    refresh();
-    const poll = window.setInterval(refresh, 15000);
+    void refresh();
+    const timer = setInterval(refresh, 15000);
     window.addEventListener("humeto-reminders", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       live = false;
-      window.clearInterval(poll);
+      clearInterval(timer);
+      for (const t of timers.values()) clearTimeout(t);
       window.removeEventListener("humeto-reminders", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
@@ -71,7 +99,7 @@ export default function ReminderBell() {
       className="notification-button"
       href="/workspace/tasks#task-followups"
       aria-label={`Task reminders${count ? `: ${count} due` : ""}`}
-      title={count ? `${count} reminders due` : "Task reminders"}
+      title="Task reminders"
     >
       <Bell size={18} />
       {count > 0 && <span />}

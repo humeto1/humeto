@@ -41,13 +41,8 @@ const command = z.discriminatedUnion("action", [
     quietEnabled: z.boolean(),
     quietStart: time,
     quietEnd: time,
-    dailyLimit: z.number().int().min(1).max(20),
-    followupMinutes: z.union([
-      z.literal(0),
-      z.literal(60),
-      z.literal(240),
-      z.literal(1440),
-    ]),
+    dailyLimit: z.number().int().min(1).max(3),
+    followupMinutes: z.literal(0),
   }),
   z.object({
     action: z.literal("series"),
@@ -484,7 +479,9 @@ export async function schedulingWrite(a: Actor, body: unknown) {
       else {
         at = new Date(Date.now() + v.minutes * 60000).toISOString();
         await d
-          .prepare("UPDATE task_reminders SET remind_at=? WHERE id=?")
+          .prepare(
+            "UPDATE task_reminders SET remind_at=?,origin='manual',source_key='' WHERE id=?",
+          )
           .run(at, r.id);
         await d
           .prepare(

@@ -430,6 +430,11 @@ function App() {
     setHistory(h);
     await syncNotifications(s.reminders, f.active, s.preferences, s.series);
   }
+  useEffect(() => {
+    const refreshAlerts = () => void load();
+    window.addEventListener("humeto-reminders", refreshAlerts);
+    return () => window.removeEventListener("humeto-reminders", refreshAlerts);
+  }, []);
   const loadingRequest = useRef(false);
   async function load() {
     if (loadingRequest.current) return;
@@ -2561,8 +2566,8 @@ function App() {
               onClick={() =>
                 void run(
                   async () => {
-                    await api("/api/auth/logout", {});
                     await clearNotifications();
+                    await api("/api/auth/logout", {});
                     refreshSequence.current++;
                     setData(null);
                     setSheet(null);

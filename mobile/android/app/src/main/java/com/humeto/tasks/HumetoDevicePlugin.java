@@ -1,6 +1,8 @@
 package com.humeto.tasks;
 
 import android.app.NotificationManager;
+import android.app.NotificationChannel;
+import android.os.Build;
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioManager;
@@ -14,6 +16,17 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(name = "HumetoDevice")
 public class HumetoDevicePlugin extends Plugin {
+ @PluginMethod public void quietChannel(PluginCall call) {
+  if(Build.VERSION.SDK_INT>=26){
+   String id=call.getString("id");
+   if(id==null || !id.startsWith("humeto-quiet-")){call.reject("Invalid notification channel");return;}
+   boolean vibrate=Boolean.TRUE.equals(call.getBoolean("vibration",false));
+   NotificationChannel channel=new NotificationChannel(id,call.getString("name","Quiet reminders"),vibrate?NotificationManager.IMPORTANCE_DEFAULT:NotificationManager.IMPORTANCE_LOW);
+   channel.setSound(null,null);channel.enableVibration(vibrate);channel.setVibrationPattern(vibrate?new long[]{0,100}:new long[]{0});
+   ((NotificationManager)getContext().getSystemService(Context.NOTIFICATION_SERVICE)).createNotificationChannel(channel);
+  }
+  call.resolve();
+ }
  @PluginMethod public void status(PluginCall call) {
   NotificationManager n=(NotificationManager)getContext().getSystemService(Context.NOTIFICATION_SERVICE);
   AudioManager audio=(AudioManager)getContext().getSystemService(Context.AUDIO_SERVICE);

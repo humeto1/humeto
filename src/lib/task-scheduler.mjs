@@ -181,7 +181,7 @@ export async function runTaskScheduler({
           )
             await d
               .prepare(
-                "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone) VALUES(?,?,?,?,?,?)",
+                "INSERT INTO task_reminders(id,tenant_id,user_id,task_id,remind_at,timezone,origin,source_key) VALUES(?,?,?,?,?,?,'automatic',?)",
               )
               .run(
                 randomUUID(),
@@ -190,6 +190,7 @@ export async function runTaskScheduler({
                 taskId,
                 now.toISOString(),
                 s.timezone,
+                s.id + ":" + occurrenceDay,
               );
           created++;
         }
@@ -229,14 +230,14 @@ export async function runTaskScheduler({
       const today = localDay(now, prefs.timezone);
       const count = await d
         .prepare(
-          "SELECT count(*) AS n FROM task_reminder_events WHERE tenant_id=? AND user_id=? AND event='notified' AND timezone(?,created_at)::date=?::date",
+          "SELECT count(*) AS n FROM task_reminder_events e JOIN task_reminders rr ON rr.id=e.reminder_id WHERE e.tenant_id=? AND e.user_id=? AND e.event='notified' AND rr.origin='automatic' AND timezone(?,e.created_at)::date=?::date",
         )
         .get(tenant, user, prefs.timezone, today);
       let budget = prefs.daily_limit - Number(count.n);
-      if (budget <= 0) return;
+
       const reminders = await d
         .prepare(
-          "SELECT r.*,n.notified_at,n.nudge_count FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id LEFT JOIN task_followup_notifications n ON n.reminder_id=r.id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND r.remind_at<=? AND t.stage!='Done' AND (n.reminder_id IS NULL OR (? > 0 AND n.notified_at <= ?::timestamptz - (? * interval '1 minute'))) ORDER BY r.remind_at LIMIT 100",
+          "SELECT r.*,t.important,t.urgent,n.notified_at,n.nudge_count FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id LEFT JOIN task_followup_notifications n ON n.reminder_id=r.id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND r.remind_at<=? AND t.stage!='Done' AND t.storage_state='active' AND (n.reminder_id IS NULL OR (? > 0 AND n.notified_at <= ?::timestamptz - (? * interval '1 minute'))) ORDER BY r.remind_at LIMIT 100",
         )
         .all(
           tenant,
@@ -247,7 +248,11 @@ export async function runTaskScheduler({
           prefs.followup_minutes,
         );
       for (const r of reminders) {
-        if (budget <= 0) break;
+        if (
+          r.origin === "automatic" &&
+          (budget <= 0 || (!r.important && !r.urgent))
+        )
+          continue;
         if (
           r.notified_at &&
           (!prefs.followup_minutes ||
@@ -265,7 +270,7 @@ export async function runTaskScheduler({
             "INSERT INTO task_reminder_events(id,reminder_id,tenant_id,user_id,event,created_at) VALUES(?,?,?,?,'notified',?)",
           )
           .run(randomUUID(), r.id, tenant, user, now.toISOString());
-        budget--;
+        if (r.origin === "automatic") budget--;
         notified++;
       }
     });

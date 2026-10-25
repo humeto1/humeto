@@ -72,6 +72,7 @@ export function ProjectCollaboration({
       if (result.url) setUrl(result.url);
       if (result.sent) setSent(true);
       await load();
+      window.dispatchEvent(new Event("humeto-reminders"));
       return true;
     } catch (e) {
       setError((e as Error).message);
@@ -111,6 +112,14 @@ export function ProjectCollaboration({
         "Guest",
     });
   }
+  useEffect(() => {
+    if (!projectId || token) return;
+    document.documentElement.dataset.humetoActiveProject = projectId;
+    return () => {
+      if (document.documentElement.dataset.humetoActiveProject === projectId)
+        delete document.documentElement.dataset.humetoActiveProject;
+    };
+  }, [projectId, token]);
   const canWrite = !token || state?.permission === "contribute";
   return (
     <section
@@ -236,6 +245,29 @@ export function ProjectCollaboration({
             </label>
           )}
           <h4>Project conversation</h4>
+          {!token && (
+            <div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  void act({
+                    operation: "chat-alerts",
+                    muted: !state.chatMuted,
+                  })
+                }
+              >
+                {state.chatMuted
+                  ? "Turn on project alerts"
+                  : "Mute project alerts"}
+              </button>
+              <small>
+                Muted by default. Optional gentle updates while Humeto is open;
+                at most one per project every 30 minutes. No alert while reading
+                this project.
+              </small>
+            </div>
+          )}
           <small>Team & client replies · refreshes automatically</small>
           {(cursor === undefined ? state.nextCursor : cursor) && (
             <button

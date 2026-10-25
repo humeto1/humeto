@@ -316,7 +316,8 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
           sessionStorage.setItem("qa-alert-permission", "granted");
           return "granted";
         }
-        constructor() {
+        constructor(title) {
+          if (title !== "Humeto · Focus") return;
           sessionStorage.setItem(
             "qa-alert-count",
             String(Number(sessionStorage.getItem("qa-alert-count") || 0) + 1),
@@ -369,6 +370,9 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
       .getByText("50% done, need 15 minutes", { exact: true })
       .waitFor();
     await page.getByRole("button", { name: "Alerts", exact: true }).click();
+    await page
+      .getByText("Optional focus alerts enabled.", { exact: true })
+      .waitFor();
     const scheduling = await (
       await context.request.get("/api/workspace/scheduling")
     ).json();
@@ -383,7 +387,7 @@ test("interactive focus UI reviews conversation, checks in, switches tasks and k
             quietEnabled: false,
             quietStart: "22:00",
             quietEnd: "08:00",
-            dailyLimit: 5,
+            dailyLimit: 3,
             followupMinutes: 0,
           },
         })

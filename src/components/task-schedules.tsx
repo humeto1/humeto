@@ -635,7 +635,7 @@ export default function TaskSchedules({
                       quietStart: prefs.quiet_start,
                       quietEnd: prefs.quiet_end,
                       dailyLimit: prefs.daily_limit,
-                      followupMinutes: prefs.followup_minutes,
+                      followupMinutes: 0,
                     });
                   }}
                 >
@@ -647,7 +647,7 @@ export default function TaskSchedules({
                         updatePrefs({ enabled: e.target.checked })
                       }
                     />
-                    Enable follow-ups
+                    Enable task notifications
                   </label>
                   <label className={styles.checkbox}>
                     <input
@@ -700,7 +700,7 @@ export default function TaskSchedules({
                       aria-label="Daily nudge limit"
                       type="number"
                       min="1"
-                      max="20"
+                      max="3"
                       value={prefs.daily_limit}
                       onChange={(e) =>
                         updatePrefs({ daily_limit: Number(e.target.value) })
@@ -708,25 +708,10 @@ export default function TaskSchedules({
                       required
                     />
                   </label>
-                  <label>
-                    Follow up again if unfinished
-                    <select
-                      aria-label="Follow-up repeat interval"
-                      value={prefs.followup_minutes}
-                      onChange={(e) =>
-                        updatePrefs({
-                          followup_minutes: Number(
-                            e.target.value,
-                          ) as Preferences["followup_minutes"],
-                        })
-                      }
-                    >
-                      <option value={0}>Do not repeat automatically</option>
-                      <option value={60}>After 1 hour</option>
-                      <option value={240}>After 4 hours</option>
-                      <option value={1440}>After 24 hours</option>
-                    </select>
-                  </label>
+                  <p>
+                    No automatic repeat alerts. Snooze a reminder explicitly
+                    when you want another nudge.
+                  </p>
                   <div className={styles.wide}>
                     <button
                       type="submit"

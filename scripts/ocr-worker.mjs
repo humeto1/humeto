@@ -32,7 +32,7 @@ export async function processOne(database = d) {
   });
   if (!job) return false;
   const attempt = job.id + "-" + token,
-    dir = join(root, "ocr", attempt);
+    dir = join(root, "ocr-scratch", attempt);
   const pulse = async () => {
     if (stopping)
       throw Error(

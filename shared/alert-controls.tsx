@@ -154,6 +154,10 @@ export default function AlertControls({
                 tone: prefs.tone || "chime",
                 vibration: !!prefs.vibration,
                 precise: !!prefs.precise,
+                focusAlerts: !!prefs.focus_alerts,
+                quietEnabled: !!prefs.quiet_enabled,
+                quietStart: prefs.quiet_start || "22:00",
+                quietEnd: prefs.quiet_end || "08:00",
               });
               await onSaved?.();
               setNotice(
@@ -162,6 +166,38 @@ export default function AlertControls({
             });
           }}
         >
+          <label className="planning-check">
+            <input
+              type="checkbox"
+              checked={!!prefs.quiet_enabled}
+              onChange={(e) =>
+                setPrefs({ ...prefs, quiet_enabled: e.target.checked })
+              }
+            />
+            Quiet hours
+          </label>
+          <label>
+            Quiet hours start
+            <input
+              aria-label="Quiet hours start"
+              type="time"
+              value={prefs.quiet_start || "22:00"}
+              onChange={(e) =>
+                setPrefs({ ...prefs, quiet_start: e.target.value })
+              }
+            />
+          </label>
+          <label>
+            Quiet hours end
+            <input
+              aria-label="Quiet hours end"
+              type="time"
+              value={prefs.quiet_end || "08:00"}
+              onChange={(e) =>
+                setPrefs({ ...prefs, quiet_end: e.target.value })
+              }
+            />
+          </label>
           <label>
             Tone
             <select
@@ -173,6 +209,22 @@ export default function AlertControls({
               <option value="bell">Clear bell</option>
               <option value="silent">Silent</option>
             </select>
+          </label>
+          <p>
+            Automatic task nudges: at most three per day and one audible nudge.
+            Urgent & important can sound; the other priority columns use gentle
+            vibration. Later stays in-app. Explicit reminders keep their chosen
+            time, quietly during quiet hours.
+          </p>
+          <label className="planning-check">
+            <input
+              type="checkbox"
+              checked={!!prefs.focus_alerts}
+              onChange={(e) =>
+                setPrefs({ ...prefs, focus_alerts: e.target.checked })
+              }
+            />
+            Optional focus check-ins and break-end alerts
           </label>
           <label className="planning-check">
             <input

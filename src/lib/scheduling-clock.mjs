@@ -138,7 +138,8 @@ export const defaultPreferences = {
   quiet_enabled: true,
   quiet_start: "22:00",
   quiet_end: "08:00",
-  daily_limit: 5,
+  daily_limit: 3,
+  focus_alerts: false,
   followup_minutes: 0,
   revision: 0,
 };

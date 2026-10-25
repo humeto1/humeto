@@ -32,6 +32,10 @@ const env = {
   HUMETO_AGENT_PROVIDER: "local",
   HUMETO_TEST_URL: url,
   HUMETO_ISOLATED_QA: "true",
+  // QA uploads stay local even when the developer has production storage credentials.
+  NEXT_PUBLIC_SUPABASE_URL: "",
+  SUPABASE_SERVICE_ROLE_KEY: "",
+  SUPABASE_STORAGE_BUCKET: "",
   HUMETO_EMAIL_MODE: "capture",
   HUMETO_SUPER_ADMIN_EMAIL: "designated-admin@example.com",
   HUMETO_PUBLIC_APP_URL: url,

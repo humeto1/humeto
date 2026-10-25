@@ -92,3 +92,6 @@ Focus has a search field above task selection, matching task titles, project nam
 
 ### Android 0.2.15 (build 17)
 Chat includes Humeto AI, Project chats and global opt-in Break chat. Project teams/clients can send text, one-minute voice notes (automatic send at the limit), re-encoded image previews and scanned document attachments. Break chat has animal aliases, strict text-only validation, language screening, report/block controls, sanctions and a platform moderation queue. See CHAT.md for access, privacy, quotas and scanner requirements. Android acceptance passed 29 checks, including actual microphone capture, validated audio metadata and rendered image previews.
+
+### Android 0.2.16 (build 18)
+Shared quiet notification policy: at most three automatic nudges/day and one audible nudge; gentle vibration for the other priority columns; Later stays in-app. Explicit reminders and Snooze remain separate. Quiet hours default to 22:00–08:00; optional focus alerts and project mute controls are available. Android uses dedicated channels with explicit null sound for gentle/silent delivery. See NOTIFICATIONS.md for delivery ownership and offline-sync limits. Native acceptance passed 29 checks.

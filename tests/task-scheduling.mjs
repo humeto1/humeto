@@ -59,7 +59,7 @@ async function preferences(c, extra = {}) {
     quietEnabled: false,
     quietStart: "22:00",
     quietEnd: "08:00",
-    dailyLimit: 5,
+    dailyLimit: 3,
     followupMinutes: 0,
     ...extra,
   });
@@ -267,7 +267,7 @@ test("follow-ups honor quiet hours, daily limits, cooldown, snooze, completion a
     quietStart: minute,
     quietEnd: end,
     dailyLimit: 1,
-    followupMinutes: 60,
+    followupMinutes: 0,
   });
   const id = await reminder(c, t);
   await runTaskScheduler({ d, now });
@@ -277,7 +277,7 @@ test("follow-ups honor quiet hours, daily limits, cooldown, snooze, completion a
       .get(id),
     undefined,
   );
-  await preferences(c, { dailyLimit: 20, followupMinutes: 60 });
+  await preferences(c, { dailyLimit: 3, followupMinutes: 0 });
   await runTaskScheduler({ d, now });
   const first = await d
     .prepare("SELECT * FROM task_followup_notifications WHERE reminder_id=?")
@@ -303,7 +303,7 @@ test("follow-ups honor quiet hours, daily limits, cooldown, snooze, completion a
         )
         .get(id)
     ).nudge_count,
-    2,
+    1,
   );
   let r = (await read(c)).reminders.find((r) => r.id === id);
   assert.ok(r);
@@ -360,21 +360,21 @@ test("follow-ups honor quiet hours, daily limits, cooldown, snooze, completion a
       .get(id),
     undefined,
   );
-  // A fresh member-local date avoids coupling a daily-cap assertion to earlier test nudges.
+  // Explicit reminders stay outside the automatic budget and notify only once.
   const t2 = await create(c),
     id2 = await reminder(c, t2),
     tomorrow = new Date(
       new Date(now.getTime() + 3 * 86400000).toISOString().slice(0, 10) +
         "T12:00:00Z",
     );
-  await preferences(c, { dailyLimit: 1, followupMinutes: 60 });
+  await preferences(c, { dailyLimit: 1, followupMinutes: 0 });
   await runTaskScheduler({ d, now: tomorrow });
   await runTaskScheduler({ d, now: new Date(tomorrow.getTime() + 61 * 60000) });
   const count = await d
     .prepare(
-      "SELECT count(*) AS n FROM task_reminder_events WHERE tenant_id='northstar' AND user_id='ayesha' AND event='notified' AND timezone('UTC',created_at)::date=?::date",
+      "SELECT count(*) AS n FROM task_reminder_events WHERE tenant_id='northstar' AND user_id='ayesha' AND event='notified' AND reminder_id=? AND timezone('UTC',created_at)::date=?::date",
     )
-    .get(tomorrow.toISOString().slice(0, 10));
+    .get(id2, tomorrow.toISOString().slice(0, 10));
   assert.equal(Number(count.n), 1);
 });
 test("scheduling preferences reject stale writes and readonly workspaces cannot advance schedules", async () => {
@@ -390,7 +390,7 @@ test("scheduling preferences reject stale writes and readonly workspaces cannot 
         quietEnabled: false,
         quietStart: "22:00",
         quietEnd: "08:00",
-        dailyLimit: 5,
+        dailyLimit: 3,
         followupMinutes: 0,
       })
     ).status(),

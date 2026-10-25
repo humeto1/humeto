@@ -162,13 +162,21 @@ export default function TaskFocus({
   }, []);
   useEffect(() => {
     setCanNotify("Notification" in window);
-    try {
-      setAlerts(
-        localStorage.getItem("humeto-focus-alerts:" + memberKey) === "on" &&
-          "Notification" in window &&
-          Notification.permission === "granted",
-      );
-    } catch {}
+    let live = true;
+    void fetch("/api/workspace/scheduling")
+      .then((r) => r.json())
+      .then((s) => {
+        if (live)
+          setAlerts(
+            !!s.preferences?.focus_alerts &&
+              "Notification" in window &&
+              Notification.permission === "granted",
+          );
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [memberKey]);
   const candidates = [...tasks]
     .filter((t) => t.stage !== "Done" && t.id !== active?.task_id)
@@ -203,88 +211,34 @@ export default function TaskFocus({
     !!active?.break_until &&
     active.state !== "running" &&
     Date.parse(active.break_until) <= serverTime;
-  useEffect(() => {
-    if (
-      (!checkDue && !breakDue) ||
-      !active ||
-      !alerts ||
-      !canNotify ||
-      Notification.permission !== "granted"
-    )
-      return;
-    const key = breakDue
-        ? `${active.id}:break:${active.break_until}`
-        : `${active.id}:${active.check_in_at}`,
-      store = "humeto-focus-last-alert:" + memberKey;
-    if (sentAlert.current === key) return;
-    sentAlert.current = key;
-    try {
-      if (localStorage.getItem(store) === key) return;
-      localStorage.setItem(store, key);
-      void fetch("/api/workspace/scheduling")
-        .then((r) => r.json())
-        .then((s) => {
-          if (!s.preferences?.enabled || s.quietUntil) return;
-          new Notification(
-            breakDue
-              ? "Humeto · Break finished"
-              : "Humeto · Time for a check-in",
-            {
-              body: breakDue
-                ? "Ready to return? Your work clock stays paused until you resume."
-                : "How is your task going? Come back to finish, continue or change your plan.",
-              tag: "humeto-focus-" + memberKey,
-              silent: true,
-            },
-          );
-          if (s.preferences.vibration && "vibrate" in navigator)
-            navigator.vibrate([200, 100, 200]);
-          void playTone(s.preferences.tone || "chime").catch(() =>
-            setAlertStatus(
-              "Sound is blocked by browser settings. Your check-in is shown here.",
-            ),
-          );
-        })
-        .catch(() =>
-          setAlertStatus(
-            "Unable to check alert preferences. Your check-in is still shown here.",
-          ),
-        );
-    } catch {
-      setAlertStatus(
-        "Browser alerts are unavailable. Your check-in is still shown here.",
-      );
-    }
-  }, [
-    checkDue,
-    breakDue,
-    active?.id,
-    active?.check_in_at,
-    active?.break_until,
-    alerts,
-    canNotify,
-    memberKey,
-  ]);
   async function toggleAlerts() {
-    if (alerts) {
-      setAlerts(false);
-      try {
-        localStorage.setItem("humeto-focus-alerts:" + memberKey, "off");
-      } catch {}
-      return;
-    }
     try {
-      const permission = await Notification.requestPermission();
-      if (permission === "granted") {
-        setAlerts(true);
-        localStorage.setItem("humeto-focus-alerts:" + memberKey, "on");
-        setAlertStatus("Alerts enabled while Humeto remains open.");
-      } else
-        setAlertStatus(
-          "Browser alerts were not enabled. Check-ins still appear in this app.",
-        );
-    } catch {
-      setAlertStatus("Your browser does not support these alerts.");
+      const enabled = !alerts;
+      if (enabled && (await Notification.requestPermission()) !== "granted")
+        throw Error("Enable notifications in browser settings first.");
+      const snapshot = await (await fetch("/api/workspace/scheduling")).json();
+      const p = snapshot.preferences;
+      const r = await fetch("/api/workspace/planning", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "alerts",
+          revision: p.revision,
+          tone: p.tone,
+          vibration: p.vibration,
+          precise: p.precise,
+          focusAlerts: enabled,
+        }),
+      });
+      if (!r.ok)
+        throw Error((await r.json()).error || "Unable to save alerts.");
+      setAlerts(enabled);
+      setAlertStatus(
+        enabled ? "Optional focus alerts enabled." : "Focus alerts off.",
+      );
+      window.dispatchEvent(new Event("humeto-reminders"));
+    } catch (e) {
+      setAlertStatus((e as Error).message);
     }
   }
   async function act(action: string, extra: Record<string, unknown> = {}) {

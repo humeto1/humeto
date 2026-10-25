@@ -304,6 +304,11 @@ export async function taskSharing(req: Request) {
           { headers: { "Cache-Control": "no-store" } },
         );
       }
+      const chatPref = await db()
+        .prepare(
+          "UPDATE project_chat_preferences SET last_seen_at=now() WHERE tenant_id=? AND project_id=? AND user_id=? RETURNING muted",
+        )
+        .get(tenant, projectId, a!.id);
       const shares = await db()
         .prepare(
           "SELECT id,email,permission,expires_at,revoked FROM project_shares WHERE tenant_id=? AND project_id=? ORDER BY created_at DESC LIMIT 50",
@@ -314,6 +319,7 @@ export async function taskSharing(req: Request) {
           ...state,
           shares: a?.role === "owner" ? shares : [],
           canManage: a?.role === "owner",
+          chatMuted: chatPref?.muted ?? true,
         },
         { headers: { "Cache-Control": "no-store" } },
       );
@@ -440,7 +446,14 @@ export async function taskSharing(req: Request) {
           "SELECT id FROM projects WHERE id=? AND tenant_id=? FOR UPDATE",
         )
         .get(projectId, tenant);
-      if (operation === "link") {
+      if (a && operation === "chat-alerts") {
+        const muted = z.boolean().parse(body.muted);
+        await db()
+          .prepare(
+            "INSERT INTO project_chat_preferences(tenant_id,project_id,user_id,muted,last_seen_at) VALUES(?,?,?,?,now()) ON CONFLICT(tenant_id,project_id,user_id) DO UPDATE SET muted=excluded.muted,last_seen_at=now()",
+          )
+          .run(tenant, projectId, a.id, muted);
+      } else if (operation === "link") {
         const count = await db()
           .prepare(
             "SELECT count(*)::int AS n FROM project_links WHERE project_id=? AND tenant_id=?",

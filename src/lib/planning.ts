@@ -128,6 +128,16 @@ const input = z.discriminatedUnion("action", [
     tone: z.enum(["chime", "bell", "silent"]),
     vibration: z.boolean(),
     precise: z.boolean(),
+    focusAlerts: z.boolean().optional(),
+    quietEnabled: z.boolean().optional(),
+    quietStart: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .optional(),
+    quietEnd: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .optional(),
   }),
 ]);
 export async function planningWrite(a: Actor, body: unknown) {
@@ -145,6 +155,8 @@ export async function planningWrite(a: Actor, body: unknown) {
       )
       .get(a.tenantId, a.id);
     if (v.action === "alerts") {
+      if (v.quietEnabled && v.quietStart === v.quietEnd)
+        return fail("Quiet hours must have different start and end times.");
       const p = await db()
         .prepare(
           "SELECT revision FROM task_followup_preferences WHERE tenant_id=? AND user_id=? FOR UPDATE",
@@ -154,9 +166,23 @@ export async function planningWrite(a: Actor, body: unknown) {
         return fail("Preferences changed. Refresh first.", 409);
       await db()
         .prepare(
-          "INSERT INTO task_followup_preferences(tenant_id,user_id,tone,vibration,precise) VALUES(?,?,?,?,?) ON CONFLICT(tenant_id,user_id) DO UPDATE SET tone=excluded.tone,vibration=excluded.vibration,precise=excluded.precise,revision=task_followup_preferences.revision+1",
+          "INSERT INTO task_followup_preferences(tenant_id,user_id,tone,vibration,precise,focus_alerts,quiet_enabled,quiet_start,quiet_end) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id,user_id) DO UPDATE SET tone=excluded.tone,vibration=excluded.vibration,precise=excluded.precise,focus_alerts=COALESCE(?,task_followup_preferences.focus_alerts),quiet_enabled=COALESCE(?,task_followup_preferences.quiet_enabled),quiet_start=COALESCE(?,task_followup_preferences.quiet_start),quiet_end=COALESCE(?,task_followup_preferences.quiet_end),revision=task_followup_preferences.revision+1",
         )
-        .run(a.tenantId, a.id, v.tone, v.vibration, v.precise);
+        .run(
+          a.tenantId,
+          a.id,
+          v.tone,
+          v.vibration,
+          v.precise,
+          v.focusAlerts ?? false,
+          v.quietEnabled ?? true,
+          v.quietStart ?? "22:00",
+          v.quietEnd ?? "08:00",
+          v.focusAlerts ?? null,
+          v.quietEnabled ?? null,
+          v.quietStart ?? null,
+          v.quietEnd ?? null,
+        );
       return Response.json({ ok: true });
     }
     try {

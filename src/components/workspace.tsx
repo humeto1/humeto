@@ -322,15 +322,15 @@ async function uploadDocumentDirect(fields: {
     }),
   });
   const prepared = await prepareResponse.json();
-  if (!prepareResponse.ok) throw new Error(prepared.error || "Could not start the upload.");
+  if (!prepareResponse.ok)
+    throw new Error(prepared.error || "Could not start the upload.");
   if (!prepared.direct) return null; // caller falls back to FormData
   const sb = supabasePublic();
   if (!sb) return null;
   const { error: uploadError } = await sb.storage
     .from(prepared.bucket)
     .uploadToSignedUrl(prepared.path, prepared.token, fields.file);
-  if (uploadError)
-    throw new Error("Upload failed: " + uploadError.message);
+  if (uploadError) throw new Error("Upload failed: " + uploadError.message);
   const finalizeResponse = await fetch("/api/workspace/documents", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -467,6 +467,7 @@ export default function Workspace({
   }
   async function refresh() {
     setData(await api("bootstrap"));
+    window.dispatchEvent(new Event("humeto-reminders"));
     if (staff)
       api("team")
         .then((r) => setTeam(r.members))

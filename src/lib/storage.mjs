@@ -4,7 +4,7 @@ import { resolve, basename } from "node:path";
 
 // Mirrors db.ts's dataDir without a cross-extension TS import (ocr-worker.mjs
 // runs under plain node, which cannot load .ts files).
-const dataDir = resolve(process.env.HUMETO_DATA_DIR || ".data");
+const dataDir = resolve(/* turbopackIgnore: true */ process.env.HUMETO_DATA_DIR || ".data");
 
 // Dual-backend object storage for uploaded documents and OCR previews.
 // Supabase Storage is used when configured (required in production, since

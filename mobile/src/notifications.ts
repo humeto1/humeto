@@ -1,3 +1,4 @@
+import { api } from "./api";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { browserAlerts, type DeviceAlerts } from "../../shared/alert-controls";
@@ -8,6 +9,11 @@ import {
 } from "../../src/lib/scheduling-clock.mjs";
 const Device = registerPlugin<{
   status: () => Promise<any>;
+  quietChannel: (options: {
+    id: string;
+    name: string;
+    vibration: boolean;
+  }) => Promise<void>;
   settings: () => Promise<void>;
 }>("HumetoDevice");
 type Prefs = {
@@ -28,6 +34,16 @@ export async function enableNotifications() {
 async function channel(p: Prefs) {
   const tone = p.tone || "chime",
     id = "humeto-" + tone + "-" + (p.vibration ? "vibrate" : "still") + "-v1";
+  if (Capacitor.getPlatform() === "android" && tone === "silent") {
+    const quietId =
+      "humeto-quiet-" + (p.vibration ? "vibrate" : "still") + "-v2";
+    await Device.quietChannel({
+      id: quietId,
+      name: p.vibration ? "Gentle task nudges" : "Quiet reminders",
+      vibration: !!p.vibration,
+    });
+    return quietId;
+  }
   if (Capacitor.getPlatform() === "android")
     await LocalNotifications.createChannel({
       id,
@@ -102,153 +118,67 @@ export async function syncNotifications(
   series: any[] = [],
 ) {
   if (!Capacitor.isNativePlatform()) return;
-  const pending = await LocalNotifications.getPending();
+  let device = localStorage.getItem("humeto-native-notification-device");
+  if (!device) {
+    device = crypto.randomUUID();
+    localStorage.setItem("humeto-native-notification-device", device);
+  }
   if ((await LocalNotifications.checkPermissions()).display !== "granted")
     return;
-  const seenKey = "humeto-device-alerts-seen";
-  let seen: string[] = [];
-  try {
-    seen = JSON.parse(localStorage.getItem(seenKey) || "[]");
-  } catch {}
-  const protectedIds = new Set<number>();
-  function nativeId(key: string) {
-    let h = 0;
-    for (const c of key) h = (h * 31 + c.charCodeAt(0)) | 0;
-    return ((h >>> 0) % 2000000000) + 1;
-  }
-  const futureRoutines: {
-    key: string;
-    title: string;
-    body: string;
-    at: Date;
-  }[] = [];
-  for (const r of series.filter(
-    (r) => r.track_occurrences && r.status === "active",
-  )) {
-    let day = r.next_day;
-    for (let i = 0; i < 8; i++) {
-      if (r.end_day && day > r.end_day) break;
-      const at = new Date(scheduledAt(day, r.local_time, r.timezone));
-      if (at.getTime() > Date.now())
-        futureRoutines.push({
-          key: "routine:" + r.id + ":" + day,
-          title: "Humeto · " + r.routine_kind,
-          body: r.title,
-          at,
-        });
-      day = nextDay(
-        day,
-        r.frequency,
-        r.interval_count,
-        Number(r.first_day.slice(8)),
-      );
-    }
-  }
-  const desired = [
-    ...futureRoutines,
-    ...reminders.map((r) => ({
-      key: "reminder:" + r.id,
-      title: "A little nudge",
-      body: r.title,
-      at: new Date(r.remind_at),
-    })),
-    ...(focus &&
-    !focus.ended_at &&
-    focus.state !== "running" &&
-    focus.break_until
-      ? [
-          {
-            key: "break:" + focus.id,
-            title: "Break finished. Ready to return?",
-            body: focus.title,
-            at: new Date(focus.break_until),
-          },
-        ]
-      : []),
-    ...(focus &&
-    !focus.ended_at &&
-    focus.state === "running" &&
-    focus.check_in_at
-      ? [
-          {
-            key: "focus:" + focus.id,
-            title: "How is your focus task going?",
-            body: focus.title,
-            at: new Date(focus.check_in_at),
-          },
-        ]
-      : []),
-  ]
-    .sort(
-      (a, b) =>
-        Number(!/^(focus|break):/.test(a.key)) -
-          Number(!/^(focus|break):/.test(b.key)) ||
-        a.at.getTime() - b.at.getTime(),
-    )
-    .filter((r) => Number.isFinite(r.at.getTime()))
-    .filter((r) => prefs.enabled !== false)
-    .map((r) => {
-      const due = r.at.getTime() <= Date.now();
-      const stamp = r.key + ":" + r.at.toISOString();
-      if (due && seen.includes(stamp)) {
-        if (pending.notifications.some((n) => n.id === nativeId(r.key)))
-          protectedIds.add(nativeId(r.key));
-        return null;
-      }
-      let at = due ? new Date(Date.now() + 5000) : r.at;
-      if (prefs.quiet_enabled && prefs.timezone) {
-        const until = quietUntil(at, {
-          ...prefs,
-          quiet_start: prefs.quiet_start || "22:00",
-          quiet_end: prefs.quiet_end || "08:00",
-        });
-        if (until) at = new Date(until);
-      }
-      return { ...r, at, stamp, due };
-    })
-    .filter(Boolean)
-    .slice(0, 60) as {
-    key: string;
-    title: string;
-    body: string;
-    at: Date;
-    stamp: string;
-    due: boolean;
-  }[];
-  // Preserve a manually requested diagnostic test while reconciling real reminders.
-  const cancellable = pending.notifications.filter(
-    (n) => n.id !== 2000000001 && !protectedIds.has(n.id),
-  );
+  const plan = await api("/api/notification-plan", {
+    deviceId: device,
+    platform: "native",
+    activeProjectId: document.hidden
+      ? undefined
+      : document.documentElement.dataset.humetoActiveProject,
+  });
+  const pending = await LocalNotifications.getPending();
+  const cancellable = pending.notifications.filter((n) => n.id !== 2000000001);
   if (cancellable.length)
     await LocalNotifications.cancel({
       notifications: cancellable.map((n) => ({ id: n.id })),
     });
-  if (!desired.length) return;
-  const channelId = await channel(prefs),
-    exact =
-      Capacitor.getPlatform() === "android" &&
-      (await LocalNotifications.checkExactNotificationSetting()).exact_alarm ===
-        "granted";
-  function id(key: string) {
+  if (!plan.events.length) return;
+  const p = plan.preferences;
+  const channels = {
+    audible: await channel({ ...p, tone: p.tone || "chime" }),
+    gentle: await channel({ ...p, tone: "silent" }),
+    silent: await channel({ ...p, tone: "silent", vibration: false }),
+  };
+  const exact =
+    Capacitor.getPlatform() === "android" &&
+    (await LocalNotifications.checkExactNotificationSetting()).exact_alarm ===
+      "granted";
+  const nativeId = (key: string) => {
     let h = 0;
     for (const c of key) h = (h * 31 + c.charCodeAt(0)) | 0;
     return ((h >>> 0) % 2000000000) + 1;
-  }
+  };
   await LocalNotifications.schedule({
-    notifications: desired.map((r) => ({
-      id: id(r.key),
-      title: r.title,
-      body: r.body,
-      channelId,
-      isExactNotification: !!prefs.precise && exact,
-      schedule: { at: r.at, allowWhileIdle: true },
-    })),
+    notifications: plan.events
+      .filter((e: any) => Date.parse(e.at) > Date.now())
+      .map((e: any) => ({
+        id: nativeId(e.key),
+        title: e.kind === "focus" ? "Humeto · Focus" : e.title,
+        body: e.body || e.title,
+        channelId: channels[e.tier as keyof typeof channels],
+        isExactNotification: !!p.precise && exact,
+        schedule: { at: new Date(e.at), allowWhileIdle: true },
+      })),
   });
-  for (const r of desired) if (r.due) seen.push(r.stamp);
-  localStorage.setItem(seenKey, JSON.stringify(seen.slice(-300)));
 }
+
 export async function clearNotifications() {
   if (!Capacitor.isNativePlatform()) return;
+  const device = localStorage.getItem("humeto-native-notification-device");
+  if (device)
+    try {
+      await api("/api/notification-plan", {
+        deviceId: device,
+        platform: "native",
+        release: true,
+      });
+    } catch {}
   await LocalNotifications.removeAllDeliveredNotifications();
   const p = await LocalNotifications.getPending();
   if (p.notifications.length)
