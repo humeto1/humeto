@@ -125,6 +125,45 @@ const definitions = [
     "date",
   ],
   [
+    "identity",
+    "birthDate",
+    "Date of birth",
+    /^date of birth\s*[:：]?\s*(.+)$/i,
+    "date",
+  ],
+  [
+    "identity",
+    "birthPlace",
+    "Place of birth",
+    /^place of birth\s*[:：]?\s*(.+)$/i,
+  ],
+  [
+    "passports",
+    "number",
+    "Passport number",
+    /^(?:passport (?:number|no\.?)|document no\.?)\s*[:：]?\s*([A-Z0-9]{5,20})$/i,
+  ],
+  [
+    "passports",
+    "issueDate",
+    "Passport issue date",
+    /^date of issue\s*[:：]?\s*(.+)$/i,
+    "date",
+  ],
+  [
+    "passports",
+    "expiryDate",
+    "Passport expiry date",
+    /^date of expiry\s*[:：]?\s*(.+)$/i,
+    "date",
+  ],
+  [
+    "passports",
+    "issuingAuthority",
+    "Issuing authority",
+    /^(?:issuing authority|authority)\s*[:：]?\s*(.+)$/i,
+  ],
+  [
     "education",
     "institution",
     "Institution name",
@@ -202,8 +241,153 @@ const definitions = [
     "date",
   ],
 ];
+
+// ICAO TD3 passport MRZ: two 44-char lines of A-Z/0-9/"<" at the bottom of
+// the bio-data page. Far more reliable than the printed fields above since
+// it's designed to be machine-read: no label matching, fixed-width columns.
+const mrzCheckWeights = [7, 3, 1];
+function mrzCheckDigit(s) {
+  let sum = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    const v = c === "<" ? 0 : /[0-9]/.test(c) ? +c : c.charCodeAt(0) - 55;
+    sum += v * mrzCheckWeights[i % 3];
+  }
+  return sum % 10;
+}
+function mrzDate(yymmdd) {
+  if (!/^\d{6}$/.test(yymmdd)) return null;
+  const yy = +yymmdd.slice(0, 2),
+    mm = yymmdd.slice(2, 4),
+    dd = yymmdd.slice(4, 6);
+  // No century in MRZ; dates > ~10y in the future are almost always 19xx
+  // (birth dates), everything else is treated as 20xx.
+  const century = yy > (new Date().getFullYear() % 100) + 10 ? 1900 : 2000;
+  return parseDate(`${century + yy}-${mm}-${dd}`);
+}
+function parseMRZLines(pages) {
+  const out = [];
+  for (const page of pages) {
+    const lines = page.lines
+      .map((l) => ({
+        ...l,
+        clean: l.text.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9<]/g, ""),
+      }))
+      .filter((l) => l.clean.length >= 40 && l.clean.length <= 48);
+    for (let i = 0; i < lines.length - 1; i++) {
+      const l1 = lines[i].clean.padEnd(44, "<").slice(0, 44);
+      const l2raw = lines[i + 1].clean;
+      if (!/^P[A-Z<]/.test(l1)) continue;
+      const l2 = l2raw.padEnd(44, "<").slice(0, 44);
+      const names = l1.slice(5).split("<<");
+      const surname = (names[0] || "").replace(/</g, " ").trim();
+      const givenNames = (names[1] || "").replace(/</g, " ").trim();
+      const passportNumber = l2.slice(0, 9).replace(/<+$/, "");
+      const nationality = l2.slice(10, 13).replace(/</g, "");
+      const birthDate = mrzDate(l2.slice(13, 19));
+      const sex = l2.slice(20, 21);
+      const expiryDate = mrzDate(l2.slice(21, 27));
+      if (!passportNumber || !birthDate || !expiryDate) continue;
+      const checksOk =
+        mrzCheckDigit(l2.slice(0, 9)) === +(l2[9] || -1) &&
+        mrzCheckDigit(l2.slice(13, 19)) === +(l2[19] || -1) &&
+        mrzCheckDigit(l2.slice(21, 27)) === +(l2[27] || -1);
+      const evidence = {
+        text: lines[i].text + "\n" + lines[i + 1].text,
+        box: null,
+        confidence:
+          lines[i].confidence === null || lines[i + 1].confidence === null
+            ? null
+            : Math.min(lines[i].confidence, lines[i + 1].confidence),
+      };
+      const warnings = checksOk
+        ? []
+        : ["MRZ check digits did not verify: confirm every character against the document."];
+      const push = (fieldKey, label, value) =>
+        value &&
+        out.push({
+          sectionKey: "passports",
+          fieldKey,
+          label,
+          value,
+          rawValue: value,
+          pageNumber: page.pageNumber,
+          sourceExcerpt: evidence.text,
+          box: evidence.box,
+          confidence: evidence.confidence,
+          method: page.method,
+          groupKey: "passports:" + page.pageNumber,
+          warnings,
+        });
+      push("number", "Passport number", passportNumber);
+      push("issuingCountry", "Passport issuing country", nationality);
+      push("expiryDate", "Passport expiry date", expiryDate.value);
+      out.push({
+        sectionKey: "identity",
+        fieldKey: "birthDate",
+        label: "Date of birth",
+        value: birthDate.value,
+        rawValue: birthDate.value,
+        pageNumber: page.pageNumber,
+        sourceExcerpt: evidence.text,
+        box: evidence.box,
+        confidence: evidence.confidence,
+        method: page.method,
+        groupKey: "identity:" + page.pageNumber,
+        warnings,
+      });
+      if (surname)
+        out.push({
+          sectionKey: "identity",
+          fieldKey: "familyName",
+          label: "Family name",
+          value: surname,
+          rawValue: surname,
+          pageNumber: page.pageNumber,
+          sourceExcerpt: evidence.text,
+          box: evidence.box,
+          confidence: evidence.confidence,
+          method: page.method,
+          groupKey: "identity:" + page.pageNumber,
+          warnings,
+        });
+      if (givenNames)
+        out.push({
+          sectionKey: "identity",
+          fieldKey: "givenNames",
+          label: "Given names",
+          value: givenNames,
+          rawValue: givenNames,
+          pageNumber: page.pageNumber,
+          sourceExcerpt: evidence.text,
+          box: evidence.box,
+          confidence: evidence.confidence,
+          method: page.method,
+          groupKey: "identity:" + page.pageNumber,
+          warnings,
+        });
+      if (sex === "M" || sex === "F")
+        out.push({
+          sectionKey: "identity",
+          fieldKey: "sex",
+          label: "Sex",
+          value: sex,
+          rawValue: sex,
+          pageNumber: page.pageNumber,
+          sourceExcerpt: evidence.text,
+          box: evidence.box,
+          confidence: evidence.confidence,
+          method: page.method,
+          groupKey: "identity:" + page.pageNumber,
+          warnings,
+        });
+    }
+  }
+  return out;
+}
+
 export function extractFacts(pages) {
-  const facts = [];
+  const facts = parseMRZLines(pages);
   for (const page of pages) {
     for (const [lineIndex, line] of page.lines.entries()) {
       const text = line.text.trim();
