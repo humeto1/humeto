@@ -806,7 +806,13 @@ export default function Workspace({
       <article className="applicant-card" key={p.id}>
         <div className="applicant-card-top">
           <Avatar person={p} />
-          <ArrowUpRight size={17} />
+          <button
+            className="applicant-card-open"
+            aria-label={"Open " + p.name}
+            onClick={() => void navigate("/workspace/students/" + p.id)}
+          >
+            <ArrowUpRight size={17} />
+          </button>
         </div>
         {personIndicators(p.id)}
         <button
