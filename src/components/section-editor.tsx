@@ -1,5 +1,6 @@
 "use client";
 import SectionEvidence from "./section-evidence";
+import { useDocumentSuggestions } from "./use-document-suggestions";
 import {
   forwardRef,
   useImperativeHandle,
@@ -32,6 +33,7 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
   { personId, section, initial, onSaved, onDocuments, onNext, readOnly },
   ref,
 ) {
+  const suggestions = useDocumentSuggestions(personId, section);
   const [step, setStep] = useState(0),
     [activeRecord, setActiveRecord] = useState(0);
   const [data, setData] = useState<Record<string, unknown>>(
@@ -149,9 +151,63 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
       step * groupSize,
       (step + 1) * groupSize,
     );
-  const records = section.repeatable
+  const savedRecords = section.repeatable
     ? (data.items as Record<string, string>[]) || []
     : [data as Record<string, string>];
+  const records: Record<string, string>[] = section.repeatable
+    ? [
+        ...savedRecords,
+        ...suggestions.groups.map((group) => ({
+          _id: "suggestion:" + group,
+          _suggestionTitle:
+            "Review " +
+            (suggestions.candidates(group)[0]?.document_title ||
+              "document details"),
+        })),
+      ]
+    : savedRecords;
+  function recordSuggestions(record: Record<string, string>) {
+    const virtual = String(record._id || "").startsWith("suggestion:");
+    const candidates = section.repeatable
+      ? virtual
+        ? suggestions.candidates(String(record._id).slice(11))
+        : []
+      : suggestions.candidates();
+    // Competing sources remain separate until a person chooses one.
+    return candidates.filter(
+      (f, index) =>
+        !record[f.field_key] &&
+        !candidates.some(
+          (other) =>
+            other.field_key === f.field_key &&
+            other.chosen_value !== f.chosen_value,
+        ) &&
+        candidates.findIndex((other) => other.field_key === f.field_key) ===
+          index,
+    );
+  }
+  async function approveRecord(record: Record<string, string>) {
+    if (!(await flush())) return;
+    const selected = recordSuggestions(record);
+    const row = await suggestions.approve(
+      selected,
+      revision.current,
+      section.repeatable && !String(record._id).startsWith("suggestion:")
+        ? record._id
+        : "",
+      !!section.repeatable,
+    );
+    if (row) {
+      revision.current = row.revision;
+      latest.current = { data: row.data, state: row.state };
+      setData(row.data);
+      setState(row.state);
+      onSaved(row);
+      setSaveStatus("Approved document details saved");
+      if (section.repeatable)
+        setActiveRecord(((row.data.items as unknown[]) || []).length - 1);
+    }
+  }
   return (
     <section className="section-editor">
       <div className="editor-heading">
@@ -167,6 +223,53 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
           records.
         </div>
       )}
+      {suggestions.error && (
+        <div className="notice error" role="alert">
+          {suggestions.error}
+        </div>
+      )}
+      {suggestions.reading?.jobs.some((job) =>
+        ["queued", "running"].includes(job.status),
+      ) && (
+        <div className="notice" role="status">
+          {suggestions.reading.workerOnline
+            ? "Reading your document. Details will appear here for approval when ready."
+            : "Your document is waiting for the document reader to connect. Details are not available yet."}
+        </div>
+      )}
+      {suggestions.reading?.jobs.some((job) => job.status === "failed") && (
+        <div className="notice">
+          A document could not be read.{" "}
+          <a
+            href={`/workspace/reading?personId=${encodeURIComponent(personId)}`}
+          >
+            View reading status and retry
+          </a>
+        </div>
+      )}
+      {suggestions.candidates().length > 0 && (
+        <p className="editor-footnote">
+          Existing answers are preserved. If sources disagree,{" "}
+          <a
+            href={`/workspace/reading?personId=${encodeURIComponent(personId)}`}
+          >
+            compare document details
+          </a>{" "}
+          before choosing a value.
+        </p>
+      )}
+      {suggestions.reading?.jobs.some((job) => job.status === "completed") &&
+        suggestions.reading.facts.length === 0 && (
+          <div className="notice">
+            The document was read, but no supported details were extracted.{" "}
+            <a
+              href={`/workspace/reading?personId=${encodeURIComponent(personId)}`}
+            >
+              View the source and reading results
+            </a>
+            .
+          </div>
+        )}
       {error && (
         <div className="notice error" role="alert">
           <AlertCircle size={17} />
@@ -211,7 +314,8 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
             >
               {index + 1}.{" "}
               {String(
-                record.institution ||
+                record._suggestionTitle ||
+                  record.institution ||
                   record.name ||
                   record.employer ||
                   record.country ||
@@ -238,93 +342,150 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
             key={String(record._id || section.key)}
             className={section.repeatable ? "record-card" : "plain-record"}
           >
-            {section.repeatable && (
-              <div className="record-heading">
-                <strong>
-                  {String(
-                    record.institution ||
-                      record.name ||
-                      record.employer ||
-                      record.country ||
-                      record.test ||
-                      record.type ||
-                      `Record ${index + 1}`,
-                  )}
-                </strong>
+            {recordSuggestions(record).length > 0 && (
+              <div
+                className="notice"
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                }}
+              >
+                <span>
+                  Filled from your document. Check each question group, edit if
+                  needed, then approve this section to save.
+                </span>
                 <button
-                  disabled={readOnly}
-                  className="icon-btn danger-hover"
-                  aria-label={`Remove record ${index + 1}`}
-                  onClick={() => {
-                    update({ items: records.filter((_, i) => i !== index) });
-                    setActiveRecord(Math.max(0, index - 1));
-                    setStep(0);
-                  }}
+                  className="btn secondary small"
+                  disabled={
+                    readOnly ||
+                    suggestions.busy ||
+                    !(
+                      suggestions.reading?.canConfirm ||
+                      suggestions.reading?.canStaffReview
+                    )
+                  }
+                  onClick={() => void approveRecord(record)}
                 >
-                  <Trash2 size={15} />
+                  Approve document details
                 </button>
               </div>
             )}
-            <div className="field-grid">
-              {visibleFields.map((f) => (
-                <label
-                  key={f.key}
-                  className={f.type === "textarea" ? "wide" : ""}
-                >
-                  <span>
-                    {f.label}
-                    {f.sensitive && (
-                      <span className="private-tag">Private</span>
+            {section.repeatable &&
+              !String(record._id).startsWith("suggestion:") && (
+                <div className="record-heading">
+                  <strong>
+                    {String(
+                      record._suggestionTitle ||
+                        record.institution ||
+                        record.name ||
+                        record.employer ||
+                        record.country ||
+                        record.test ||
+                        record.type ||
+                        `Record ${index + 1}`,
                     )}
-                  </span>
-                  {f.type === "textarea" ? (
-                    <textarea
-                      disabled={readOnly}
-                      rows={3}
-                      value={String(record[f.key] || "")}
-                      onChange={(e) =>
-                        fieldChange(
-                          f.key,
-                          e.target.value,
-                          section.repeatable ? index : undefined,
-                        )
-                      }
-                    />
-                  ) : f.type === "select" ? (
-                    <select
-                      disabled={readOnly}
-                      value={String(record[f.key] || "")}
-                      onChange={(e) =>
-                        fieldChange(
-                          f.key,
-                          e.target.value,
-                          section.repeatable ? index : undefined,
-                        )
-                      }
-                    >
-                      <option value="">Add later / not answered</option>
-                      {f.options?.map((o) => (
-                        <option key={o}>{o}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      disabled={readOnly}
-                      type={f.type || "text"}
-                      value={String(record[f.key] || "")}
-                      onChange={(e) =>
-                        fieldChange(
-                          f.key,
-                          e.target.value,
-                          section.repeatable ? index : undefined,
-                        )
-                      }
-                      placeholder="Add what you know"
-                    />
-                  )}
-                  {f.hint && <small>{f.hint}</small>}
-                </label>
-              ))}
+                  </strong>
+                  <button
+                    disabled={readOnly || suggestions.busy}
+                    className="icon-btn danger-hover"
+                    aria-label={`Remove record ${index + 1}`}
+                    onClick={() => {
+                      update({
+                        items: savedRecords.filter((_, i) => i !== index),
+                      });
+                      setActiveRecord(Math.max(0, index - 1));
+                      setStep(0);
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              )}
+            <div className="field-grid">
+              {visibleFields.map((f) => {
+                const suggestion = recordSuggestions(record).find(
+                  (candidate) => candidate.field_key === f.key,
+                );
+                const displayed = suggestion
+                  ? suggestions.value(suggestion)
+                  : String(record[f.key] || "");
+                const disabled =
+                  readOnly ||
+                  suggestions.busy ||
+                  (String(record._id).startsWith("suggestion:") && !suggestion);
+                const change = (value: string) =>
+                  suggestion
+                    ? suggestions.edit(suggestion, value)
+                    : fieldChange(
+                        f.key,
+                        value,
+                        section.repeatable ? index : undefined,
+                      );
+                return (
+                  <label
+                    key={f.key}
+                    className={f.type === "textarea" ? "wide" : ""}
+                  >
+                    <span>
+                      {f.label}
+                      {f.sensitive && (
+                        <span className="private-tag">Private</span>
+                      )}
+                    </span>
+                    {f.type === "textarea" ? (
+                      <textarea
+                        disabled={disabled}
+                        aria-label={f.label}
+                        rows={3}
+                        value={displayed}
+                        onChange={(e) => change(e.target.value)}
+                      />
+                    ) : f.type === "select" ? (
+                      <select
+                        disabled={disabled}
+                        aria-label={f.label}
+                        value={displayed}
+                        onChange={(e) => change(e.target.value)}
+                      >
+                        <option value="">Add later / not answered</option>
+                        {f.options?.map((o) => (
+                          <option key={o}>{o}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        disabled={disabled}
+                        aria-label={f.label}
+                        type={f.type || "text"}
+                        value={displayed}
+                        onChange={(e) => change(e.target.value)}
+                        placeholder="Add what you know"
+                      />
+                    )}
+                    {suggestion && (
+                      <small style={{ display: "block", marginTop: 6 }}>
+                        Awaiting approval ·{" "}
+                        <a
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          href={`/workspace/reading?documentId=${encodeURIComponent(suggestion.document_id)}`}
+                        >
+                          View source document · {suggestion.document_title},
+                          page {suggestion.page_number}
+                        </a>
+                        {suggestion.warnings?.map((warning) => (
+                          <span key={warning} style={{ display: "block" }}>
+                            {warning}
+                          </span>
+                        ))}
+                      </small>
+                    )}
+                    {f.hint && <small>{f.hint}</small>}
+                  </label>
+                );
+              })}
             </div>
           </div>
         ),
@@ -332,10 +493,10 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
       {section.repeatable && (
         <button
           className="btn secondary"
-          disabled={readOnly}
+          disabled={readOnly || suggestions.busy}
           onClick={() => {
-            update({ items: [...records, { _id: crypto.randomUUID() }] });
-            setActiveRecord(records.length);
+            update({ items: [...savedRecords, { _id: crypto.randomUUID() }] });
+            setActiveRecord(savedRecords.length);
             setStep(0);
           }}
         >
@@ -397,7 +558,7 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
         <div className="editor-actions">
           <button
             className="btn ghost small"
-            disabled={readOnly}
+            disabled={readOnly || suggestions.busy}
             onClick={async () => {
               update(data, "skipped");
               if (await flush()) onNext();
@@ -407,7 +568,7 @@ export default forwardRef<EditorHandle, Props>(function SectionEditor(
           </button>
           <button
             className="btn primary small"
-            disabled={readOnly}
+            disabled={readOnly || suggestions.busy}
             onClick={async () => {
               update(data, "ready");
               await flush();

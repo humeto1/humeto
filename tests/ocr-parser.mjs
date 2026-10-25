@@ -65,3 +65,31 @@ test("OCR TSV and PDF bounding boxes preserve positions and confidence without i
   assert.equal(pdf.lines[0].confidence, null);
   assert.throws(() => dimensions(Buffer.from("bad"), "image/jpeg"));
 });
+
+test("MRZ fields use supported form keys and distinguish citizenship from issuing state", () => {
+  const facts = extractFacts([
+    page(
+      "P<GBRERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408122F1204159ZE184226B<<<<<10",
+    ),
+  ]);
+  const value = (section, field) =>
+    facts.find((f) => f.sectionKey === section && f.fieldKey === field)?.value;
+  assert.equal(value("identity", "givenNames"), "ANNA MARIA");
+  assert.equal(value("identity", "familyName"), "ERIKSSON");
+  assert.equal(value("identity", "birthDate"), "1974-08-12");
+  assert.equal(value("identity", "sexAsRecorded"), "Female");
+  assert.equal(value("identity", "citizenship"), "UTO");
+  assert.equal(value("passports", "issuingCountry"), "GBR");
+  assert.equal(value("passports", "number"), "L898902C3");
+  assert.ok(facts.every((f) => f.warnings.length === 0));
+});
+
+test("MRZ checksum failures remain visible warnings for inline approval", () => {
+  const facts = extractFacts([
+    page(
+      "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<<<\nL898902C36UTO7408123F1204159ZE184226B<<<<<10",
+    ),
+  ]);
+  assert.ok(facts.length > 0);
+  assert.ok(facts.every((f) => f.warnings.some((w) => /check digits/.test(w))));
+});

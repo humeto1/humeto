@@ -54,12 +54,12 @@
   flex-wrap: wrap;
   margin: 18px 0;
   font-size: 12px;
-  color: #667a5e;
+  color: #536449;
 }
 .status small {
   margin-left: auto;
   font-size: 10px;
-  color: #8c9783;
+  color: #536449;
 }
 .online,
 .offline {
@@ -86,7 +86,7 @@
 }
 .jobBar > span {
   padding: 10px 0;
-  color: #718467;
+  color: #536449;
 }
 .workspace {
   display: grid;
@@ -142,7 +142,7 @@
 }
 .sourceLinks {
   font-size: 10px;
-  color: #839078;
+  color: #536449;
   flex-wrap: wrap;
 }
 .sourceLinks a,
@@ -160,7 +160,7 @@
 .hint,
 .disclaimer {
   font-size: 12px;
-  color: #7d8a73;
+  color: #536449;
   line-height: 1.7;
 }
 .disclaimer {
@@ -200,7 +200,7 @@
   align-items: center;
   gap: 5px;
   background: #f1f5e9;
-  color: #688255;
+  color: #536449;
   border: 0;
   border-radius: 12px;
   padding: 5px 8px;
@@ -211,7 +211,7 @@
   font-size: 12px;
   line-height: 1.6;
   background: #f4f7ef;
-  color: #74806c;
+  color: #536449;
   padding: 10px 12px;
   margin: 13px 0;
   border-left: 2px solid #c4d0b6;
@@ -232,7 +232,7 @@
   background: #eff3e8;
   border-radius: 12px;
   padding: 5px 8px;
-  color: #6b7b60;
+  color: #536449;
 }
 .reviewActions {
   display: flex;
@@ -258,14 +258,14 @@
 }
 .warning {
   font-size: 12px;
-  color: #9b703c;
+  color: #805822;
   background: #faf6e9;
   border-radius: 8px;
   padding: 10px 12px;
   line-height: 1.65;
 }
 .linked {
-  color: #638052;
+  color: #536449;
   font-size: 11px;
   line-height: 1.65;
 }
@@ -299,7 +299,7 @@
 }
 .apply summary {
   cursor: pointer;
-  color: #7d896f;
+  color: #536449;
 }
 .empty {
   padding: 35px;
@@ -334,7 +334,7 @@
   padding: 9px 10px;
   border: 0;
   border-bottom: 1px solid #edf0e8;
-  color: #63745a;
+  color: #536449;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   cursor: pointer;

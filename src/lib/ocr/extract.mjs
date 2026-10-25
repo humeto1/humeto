@@ -271,7 +271,10 @@ function parseMRZLines(pages) {
     const lines = page.lines
       .map((l) => ({
         ...l,
-        clean: l.text.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9<]/g, ""),
+        clean: l.text
+          .toUpperCase()
+          .replace(/\s+/g, "")
+          .replace(/[^A-Z0-9<]/g, ""),
       }))
       .filter((l) => l.clean.length >= 40 && l.clean.length <= 48);
     for (let i = 0; i < lines.length - 1; i++) {
@@ -302,7 +305,9 @@ function parseMRZLines(pages) {
       };
       const warnings = checksOk
         ? []
-        : ["MRZ check digits did not verify: confirm every character against the document."];
+        : [
+            "MRZ check digits did not verify: confirm every character against the document.",
+          ];
       const push = (fieldKey, label, value) =>
         value &&
         out.push({
@@ -320,7 +325,11 @@ function parseMRZLines(pages) {
           warnings,
         });
       push("number", "Passport number", passportNumber);
-      push("issuingCountry", "Passport issuing country", nationality);
+      push(
+        "issuingCountry",
+        "Passport issuing country",
+        l1.slice(2, 5).replace(/</g, ""),
+      );
       push("expiryDate", "Passport expiry date", expiryDate.value);
       out.push({
         sectionKey: "identity",
@@ -336,6 +345,21 @@ function parseMRZLines(pages) {
         groupKey: "identity:" + page.pageNumber,
         warnings,
       });
+      if (nationality)
+        out.push({
+          sectionKey: "identity",
+          fieldKey: "citizenship",
+          label: "Citizenship",
+          value: nationality,
+          rawValue: nationality,
+          pageNumber: page.pageNumber,
+          sourceExcerpt: evidence.text,
+          box: evidence.box,
+          confidence: evidence.confidence,
+          method: page.method,
+          groupKey: "identity:" + page.pageNumber,
+          warnings,
+        });
       if (surname)
         out.push({
           sectionKey: "identity",
@@ -369,9 +393,9 @@ function parseMRZLines(pages) {
       if (sex === "M" || sex === "F")
         out.push({
           sectionKey: "identity",
-          fieldKey: "sex",
+          fieldKey: "sexAsRecorded",
           label: "Sex",
-          value: sex,
+          value: sex === "M" ? "Male" : "Female",
           rawValue: sex,
           pageNumber: page.pageNumber,
           sourceExcerpt: evidence.text,
