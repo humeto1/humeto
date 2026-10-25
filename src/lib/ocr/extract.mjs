@@ -1,3 +1,4 @@
+import { educationFacts } from "./education.mjs";
 // Conservative label-based proposals. Text is evidence, never instructions.
 const months = {
   JAN: 1,
@@ -185,7 +186,7 @@ const definitions = [
     "education",
     "grade",
     "Grade",
-    /^(?:final grade|overall grade|gpa|cgpa)\s*[:：]\s*(.+)$/i,
+    /^(?:final grade|overall grade|gpa|cgpa)\s*[:：]\s*([A-F][+-]?|\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?%?)\s*$/i,
   ],
   [
     "education",
@@ -411,12 +412,18 @@ function parseMRZLines(pages) {
 }
 
 export function extractFacts(pages) {
-  const facts = parseMRZLines(pages);
+  const education = educationFacts(pages);
+  const facts = [...parseMRZLines(pages), ...education.facts];
   for (const page of pages) {
     for (const [lineIndex, line] of page.lines.entries()) {
       const text = line.text.trim();
       if (!text || text.length > 600) continue;
       for (const [sectionKey, fieldKey, label, pattern, type] of definitions) {
+        if (
+          sectionKey === "education" &&
+          education.handledPages.has(page.pageNumber)
+        )
+          continue;
         let evidence = line,
           match = text.match(pattern);
         if (!match && !text.includes(":") && page.lines[lineIndex + 1]) {

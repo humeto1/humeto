@@ -108,6 +108,25 @@ test("passport details automatically persist in the main form and manual correct
             .data.givenNames,
       )
       .toBe("CORRECTED PERSON");
+    const refreshReading = spawnSync(
+      process.execPath,
+      [
+        "scripts/reparse-document-job.mjs",
+        uploaded.readingJobId,
+        "--refresh-unreviewed",
+        "--apply",
+      ],
+      { env: process.env, encoding: "utf8" },
+    );
+    assert.equal(refreshReading.status, 0, refreshReading.stderr);
+    assert.ok(JSON.parse(refreshReading.stdout).supersededFacts >= 3);
+    const afterRefresh = await read();
+    assert.equal(
+      afterRefresh.intake.find((row) => row.section_key === "identity").data
+        .givenNames,
+      "CORRECTED PERSON",
+    );
+    assert.ok(afterRefresh.facts.every((f) => !f.source_stale));
     const repeated = await context.request.post("/api/workspace/reading", {
       data: { action: "autofill", personId: "amira" },
     });
@@ -148,7 +167,7 @@ test("passport details automatically persist in the main form and manual correct
     );
     assert.ok(
       saved.applications.some(
-        (link) => link.field_key === "givenNames" && !link.currentMatches,
+        (link) => link.field_key === "familyName" && link.currentMatches,
       ),
     );
     await page.reload();

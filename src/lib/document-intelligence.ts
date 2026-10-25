@@ -251,7 +251,11 @@ export async function readingRead(req: Request, parts: string[], a: Actor) {
           " ORDER BY f.created_at,f.page_number,f.field_key",
       )
       .all(...fs.values)
-  ).filter((f) => allowed.has(String(f.document_id)));
+  ).filter(
+    (f) =>
+      allowed.has(String(f.document_id)) &&
+      (!f.source_stale || f.current_version !== f.document_version),
+  );
   const pages = did
     ? await db()
         .prepare(

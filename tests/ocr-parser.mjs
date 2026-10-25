@@ -93,3 +93,75 @@ test("MRZ checksum failures remain visible warnings for inline approval", () => 
   assert.ok(facts.length > 0);
   assert.ok(facts.every((f) => f.warnings.some((w) => /check digits/.test(w))));
 });
+
+test("transcript metadata stays separate from columns, semester grades and attestation dates", () => {
+  const transcript = page(`UNIVERSITY OF EXAMPLE
+FINAL TRANSCRIPT
+Bachelor of Studies in Commerce
+Degree Program _ Bachelor of Studies in Commerce Duration 4 Years
+Student Name FICTIONAL STUDENT Academic Session 2010-2014
+Father Name FICTIONAL PARENT University Reg. No. 2010-AA-123
+Institute Government Example College, Test City Roll No. 2010-12345
+Exam Type. Semester System
+FIRST SEMESTER SECOND SEMESTER
+CH: 16 GPA: 2.83 CH: 17 GPA: 2.4 CGPA: 2.61
+CH: 18 GPA: 3 CGPA: 2.53 CH: 18 GPA: 3.27 CGPA: 2.76
+CGPA: 2.76 O.P.M: 69.23% Total Credit Hours Earned: 138`);
+  const appendix = {
+    ...page(`Grading System
+Percent Marks | Letter Grade | Grade Points
+85 & Above A 4.00
+80-84 A- 3.70
+75-79 B+ 3.30
+70-74 B 3.00
+08 AUG 2019
+Department of Examinations, University of Example, Test City — Pakistan Website: www.example.test`),
+    pageNumber: 2,
+  };
+  const facts = extractFacts([transcript, appendix]);
+  const value = (key) =>
+    facts.find((f) => f.sectionKey === "education" && f.fieldKey === key)
+      ?.value;
+  assert.equal(value("institution"), "Government Example College, Test City");
+  assert.equal(value("qualification"), "Bachelor of Studies in Commerce");
+  assert.equal(value("subject"), "Commerce");
+  assert.equal(value("level"), "Bachelor");
+  assert.equal(value("grade"), "2.76");
+  assert.equal(value("maximumGrade"), "4");
+  assert.equal(value("country"), "Pakistan");
+  assert.ok(
+    facts.every(
+      (f) => f.sectionKey === "education" && f.groupKey === "education:1",
+    ),
+  );
+  assert.ok(
+    !facts.some((f) =>
+      ["startDate", "endDate", "awardDate"].includes(f.fieldKey),
+    ),
+  );
+  assert.equal(facts.filter((f) => f.fieldKey === "grade").length, 1);
+  assert.equal(facts.find((f) => f.fieldKey === "maximumGrade").pageNumber, 2);
+});
+
+test("semester-only grades abstain and unrelated transcript pages stay separate", () => {
+  const first = page(
+    "UNIVERSITY OF EXAMPLE\nFINAL TRANSCRIPT\nBachelor of Science\nFIRST SEMESTER\nGPA: 3.6\nCH: 20 CGPA: 3.1",
+  );
+  const second = {
+    ...page(
+      "OTHER UNIVERSITY\nFINAL TRANSCRIPT\nMaster of Arts\nInstitute Other College Roll No. 12345\nFIRST SEMESTER\nFinal CGPA: 3.9",
+    ),
+    pageNumber: 3,
+  };
+  const facts = extractFacts([first, second]);
+  assert.ok(!facts.some((f) => f.pageNumber === 1 && f.fieldKey === "grade"));
+  assert.equal(
+    facts.find((f) => f.pageNumber === 3 && f.fieldKey === "grade").value,
+    "3.9",
+  );
+  assert.equal(
+    facts.find((f) => f.pageNumber === 3 && f.fieldKey === "qualification")
+      .groupKey,
+    "education:3",
+  );
+});

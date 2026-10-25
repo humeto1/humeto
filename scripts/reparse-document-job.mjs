@@ -1,5 +1,5 @@
 // Recover an empty completed reading from its saved OCR text without re-uploading.
-// Dry run by default: node --env-file-if-exists=.env.local scripts/reparse-document-job.mjs <job-id> [--apply]
+// Dry run by default: node --env-file-if-exists=.env.local scripts/reparse-document-job.mjs <job-id> [--refresh-unreviewed] [--apply]
 import { randomUUID } from "node:crypto";
 import { database } from "../src/lib/postgres.mjs";
 import { extractFacts } from "../src/lib/ocr/extract.mjs";
@@ -21,13 +21,24 @@ try {
       );
     const existing = (
       await d.query(
-        "SELECT COUNT(*)::int AS n FROM document_facts WHERE job_id=$1",
+        "SELECT * FROM document_facts WHERE job_id=$1 AND NOT source_stale FOR UPDATE",
         [job.id],
       )
-    ).rows[0].n;
-    if (existing)
+    ).rows;
+    if (existing.length && !process.argv.includes("--refresh-unreviewed"))
       throw Error(
-        "Reading already has facts; refusing to duplicate or replace reviewed details.",
+        "Reading already has facts; use --refresh-unreviewed to repair an unreviewed extraction.",
+      );
+    if (
+      existing.some(
+        (f) =>
+          f.applicant_review !== "pending" ||
+          f.staff_review !== "pending" ||
+          f.chosen_value !== f.extracted_value,
+      )
+    )
+      throw Error(
+        "Reading contains human-reviewed or corrected facts; preserve them and edit the main form manually.",
       );
     const pages = (
       await d.query(
@@ -48,6 +59,57 @@ try {
         "Saved OCR text still contains no supported details. Re-read the source instead.",
       );
     if (process.argv.includes("--apply")) {
+      for (const old of existing) {
+        const links = (
+          await d.query(
+            "SELECT * FROM fact_applications WHERE fact_id=$1 ORDER BY created_at DESC",
+            [old.id],
+          )
+        ).rows;
+        for (const link of links) {
+          const row = (
+            await d.query(
+              "SELECT * FROM intake WHERE tenant_id=$1 AND person_id=$2 AND section_key=$3 FOR UPDATE",
+              [job.tenant_id, job.person_id, link.section_key],
+            )
+          ).rows[0];
+          if (!row || row.state === "ready") continue;
+          const data = JSON.parse(row.data),
+            record = link.record_id
+              ? data.items?.find((item) => item._id === link.record_id)
+              : data;
+          if (
+            !record ||
+            record[link.field_key] !== link.applied_value ||
+            link.applied_value !== old.chosen_value
+          )
+            continue;
+          delete record[link.field_key];
+          await d.query(
+            "UPDATE intake SET data=$1,revision=revision+1,state='draft',updated_at=to_char(clock_timestamp() AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI:SS') WHERE tenant_id=$2 AND person_id=$3 AND section_key=$4",
+            [
+              JSON.stringify(data),
+              job.tenant_id,
+              job.person_id,
+              link.section_key,
+            ],
+          );
+        }
+        await d.query(
+          "UPDATE document_facts SET source_stale=true,revision=revision+1 WHERE id=$1",
+          [old.id],
+        );
+        await d.query(
+          "INSERT INTO document_fact_events(id,tenant_id,fact_id,event,value,note) VALUES($1,$2,$3,'extraction_superseded',$4,$5)",
+          [
+            randomUUID(),
+            job.tenant_id,
+            old.id,
+            old.chosen_value,
+            "Replaced an unreviewed extraction with corrected parsing of the same source. Manual profile edits preserved.",
+          ],
+        );
+      }
       for (const f of facts) {
         const fid = randomUUID();
         await d.query(
@@ -97,6 +159,7 @@ try {
     return {
       jobId: job.id,
       applied: process.argv.includes("--apply"),
+      supersededFacts: existing.length,
       factCount: facts.length,
       fields: facts.map((f) => `${f.sectionKey}.${f.fieldKey}`),
     };
