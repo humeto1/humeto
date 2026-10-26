@@ -213,14 +213,76 @@ test("passport details automatically persist in the main form and manual correct
       .getByRole("button", { name: "Upload document", exact: true })
       .click();
     await page.locator('select[name="personId"]').selectOption("amira");
-    await page.locator('input[name="file"]').setInputFiles([
-      { name: "bulk-identity.pdf", mimeType: "application/pdf", buffer: pdf },
+    const drop = async (files) =>
+      page.evaluate((items) => {
+        const transfer = new DataTransfer();
+        for (const item of items)
+          transfer.items.add(
+            new File(
+              [Uint8Array.from(atob(item.base64), (c) => c.charCodeAt(0))],
+              item.name,
+              { type: item.type, lastModified: 1 },
+            ),
+          );
+        document
+          .querySelector(".document-drop-zone")
+          .dispatchEvent(
+            new DragEvent("drop", {
+              bubbles: true,
+              cancelable: true,
+              dataTransfer: transfer,
+            }),
+          );
+      }, files);
+    await drop([
       {
-        name: "bulk-education.pdf",
-        mimeType: "application/pdf",
-        buffer: educationPdf,
+        name: "unsupported.txt",
+        type: "text/plain",
+        base64: Buffer.from("test").toString("base64"),
       },
     ]);
+    await expect(
+      page
+        .getByRole("alert")
+        .filter({ hasText: "Each document must be a PDF" }),
+    ).toBeVisible();
+    await drop([
+      {
+        name: "bulk-identity.pdf",
+        type: "application/pdf",
+        base64: pdf.toString("base64"),
+      },
+      {
+        name: "bulk-education.pdf",
+        type: "application/pdf",
+        base64: educationPdf.toString("base64"),
+      },
+    ]);
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "2 documents ready to upload" }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Remove bulk-education.pdf", exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "1 document ready to upload" }),
+    ).toBeVisible();
+    await drop([
+      {
+        name: "bulk-education.pdf",
+        type: "application/pdf",
+        base64: educationPdf.toString("base64"),
+      },
+    ]);
+    await expect(
+      page
+        .getByRole("status")
+        .filter({ hasText: "2 documents ready to upload" }),
+    ).toBeVisible();
     await page
       .getByRole("button", { name: "Upload private documents", exact: true })
       .click();

@@ -5984,3 +5984,35 @@ textarea {
 .home-ai-card small { display:block; margin-top:6px; color:#526347; }
 .home-ai-card > svg { flex-shrink:0; }
 .home-ai-card:focus-visible { outline:2px solid #244d3b; outline-offset:3px; }
+
+.document-drop-zone {
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.document-drop-zone.dragging {
+  background: #e8f0dc;
+  border-color: #4e6d40;
+  outline: 2px solid #4e6d40;
+  outline-offset: 2px;
+}
+.document-drop-zone.disabled {
+  opacity: 0.65;
+}
+.document-drop-zone small {
+  color: #536449;
+}
+.document-drop-files {
+  margin: 10px 0 16px;
+}
+.document-drop-files > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+.document-drop-files > div > span {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}

@@ -1,4 +1,5 @@
 "use client";
+import DocumentDropInput from "./document-drop-input";
 import { createClient } from "@supabase/supabase-js";
 import {
   TaskCurrencyProvider,
@@ -3547,18 +3548,7 @@ export default function Workspace({
                         ))}
                       </select>
                     </label>
-                    <label className="upload-field">
-                      <Upload size={25} />
-                      <strong>Choose original documents</strong>
-                      <input
-                        name="file"
-                        type="file"
-                        multiple
-                        disabled={busy}
-                        accept="application/pdf,image/png,image/jpeg"
-                        required
-                      />
-                    </label>
+                    <DocumentDropInput multiple disabled={busy} />
                     <label
                       style={{ display: "flex", gap: 8, alignItems: "center" }}
                     >
@@ -3704,12 +3694,7 @@ export default function Workspace({
                       <p>
                         The existing original stays in private version history.
                       </p>
-                      <input
-                        type="file"
-                        name="file"
-                        accept="application/pdf,image/png,image/jpeg"
-                        required
-                      />
+                      <DocumentDropInput disabled={busy} />
                       <label
                         style={{
                           display: "flex",
