@@ -95,3 +95,8 @@ Chat includes Humeto AI, Project chats and global opt-in Break chat. Project tea
 
 ### Android 0.2.16 (build 18)
 Shared quiet notification policy: at most three automatic nudges/day and one audible nudge; gentle vibration for the other priority columns; Later stays in-app. Explicit reminders and Snooze remain separate. Quiet hours default to 22:00–08:00; optional focus alerts and project mute controls are available. Android uses dedicated channels with explicit null sound for gentle/silent delivery. See NOTIFICATIONS.md for delivery ownership and offline-sync limits. Native acceptance passed 29 checks.
+
+### Android 0.2.17 (build 19)
+Ongoing projects can be created without a deadline. Home shows a shared productivity dashboard with personal focused hours, hourly/daily work histograms, completion history, recurring-task indicators and workspace task totals. Date presets include Yesterday (default), Today, 7/30 days and a custom range. Financial highlights show estimated profit separately per currency. Daily tracking and the plan calendar now live in Tasks. Projects and goals expose Days, duration & milestones; task detail shows automatic focus duration and milestone links. See TASK_MANAGEMENT_ROADMAP.md for scope, data definitions and the Clockify feature study.
+
+Android acceptance passed 30 checks, including the Home dashboard, native milestone creation and deadline-free project creation.

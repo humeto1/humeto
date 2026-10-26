@@ -100,7 +100,7 @@ test("routine types preserve missed daily occurrences, regenerate independently 
     count,
   );
   let report = await (
-    await c.get("/api/workspace/planning?week=" + today + "&timezone=UTC")
+    await c.get("/api/workspace/planning?week=" + first + "&timezone=UTC")
   ).json();
   assert.ok(
     report.occurrences.some(
@@ -276,14 +276,17 @@ test("planning and alert preferences reject foreign tenants, students, stale edi
     404,
   );
 });
-test("web calendar edits deadlines and daily task tracking lives on Overview", async () => {
+test("task planning calendar edits deadlines and Home shows productivity", async () => {
   const c = await ctx("ayesha"),
     browser = await chromium.launch(),
     context = await browser.newContext();
   await context.addCookies((await c.storageState()).cookies);
   const page = await context.newPage();
   try {
-    await page.goto(base + "/workspace");
+    await page.goto(base + "/workspace/tasks");
+    await page
+      .getByText("Daily tasks & plan calendar", { exact: true })
+      .click();
     await page.getByRole("button", { name: "Calendar", exact: true }).click();
     await page
       .locator('.planning-controls input[type="month"]')
@@ -291,10 +294,18 @@ test("web calendar edits deadlines and daily task tracking lives on Overview", a
     await page
       .getByRole("button", { name: "Calendar 2027-12-31", exact: true })
       .click();
-    await page.locator(".planning-row").filter({ has: page.getByText("QA measurable goal", { exact: true }) }).getByRole("button", { name: "Edit plan", exact: true }).click();
+    await page
+      .locator(".planning-row")
+      .filter({ has: page.getByText("QA measurable goal", { exact: true }) })
+      .getByRole("button", { name: "Edit plan", exact: true })
+      .click();
     const editor = page.getByRole("form", { name: "Edit calendar plan" });
     await editor.getByLabel("Deadline", { exact: true }).fill("2028-01-15");
-    const saved = page.waitForResponse(r => r.url().includes("/api/workspace/goals/") && r.request().method() === "PATCH");
+    const saved = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/workspace/goals/") &&
+        r.request().method() === "PATCH",
+    );
     await editor
       .getByRole("button", { name: "Save calendar plan", exact: true })
       .click();
@@ -323,7 +334,10 @@ test("web calendar edits deadlines and daily task tracking lives on Overview", a
         .count(),
       0,
     );
-    await page.goto(base + "/workspace");
+    await page.goto(base + "/workspace/tasks");
+    await page
+      .getByText("Daily tasks & plan calendar", { exact: true })
+      .click();
     await page.getByRole("region", { name: "Daily task tracking" }).waitFor();
     await page.getByRole("button", { name: "Add task from Today" }).click();
     await page

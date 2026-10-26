@@ -314,6 +314,9 @@ try {
   await check(
     "Native task options archive, bin and restore the same task",
     async () => {
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Task options: Android native acceptance task"]')`,
+      );
       await cdp.evaluate(
         `document.querySelector('[aria-label="Task options: Android native acceptance task"]').click()`,
       );
@@ -483,6 +486,30 @@ try {
     },
   );
   await check(
+    "Home dashboard shows local work hours and completion filters without duplicate task views",
+    async () => {
+      await cdp.click("Today");
+      await cdp.wait(`!!document.querySelector('.productivity-bars')`);
+      assert.equal(
+        await cdp.evaluate(
+          `document.querySelectorAll('.productivity-bar-column').length`,
+        ),
+        24,
+      );
+      assert.equal(
+        await cdp.evaluate(
+          `document.querySelectorAll('.home-task-views').length`,
+        ),
+        0,
+      );
+      assert.ok(
+        await cdp.evaluate(
+          `document.body.innerText.includes('Total focused hours') && document.body.innerText.includes('Tasks completed')`,
+        ),
+      );
+    },
+  );
+  await check(
     "Create projects/goals and link native tasks to their shared records",
     async () => {
       await cdp.click("Plans");
@@ -497,7 +524,12 @@ try {
       await cdp.select('select[aria-label="Add plan"]', "projects");
       await cdp.fill("input[name=title]", "Android QA project");
       await cdp.select("select[name=goalId]", createdGoal.id);
-      await cdp.fill("input[name=targetDate]", "2027-02-28");
+      assert.equal(
+        await cdp.evaluate(
+          "document.querySelector('input[name=targetDate]').required",
+        ),
+        false,
+      );
       await cdp.click("Create");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
       const state = (await nativeApi("/api/mobile")).data;
@@ -506,6 +538,20 @@ try {
         ),
         goal = state.goals.find((g) => g.title === "Android QA goal");
       assert.ok(project && goal);
+      assert.equal(project.target_date, "");
+      await cdp.evaluate(
+        `Array.from(document.querySelectorAll('.mobile-plan-card')).find(e=>e.textContent.includes('Android QA project')).querySelector('summary').click()`,
+      );
+      await cdp.wait(
+        `Array.from(document.querySelectorAll('button')).some(e=>e.textContent==='Add milestone')`,
+      );
+      await cdp.click("Add milestone");
+      await cdp.fill('input[name="title"]', "Android delivery checkpoint");
+      await cdp.click("Save milestone");
+      await cdp.wait(
+        `document.body.innerText.includes('Android delivery checkpoint') && !document.querySelector('input[name="title"]')`,
+      );
+
       await cdp.click("Tasks");
       await cdp.evaluate(
         `Array.from(document.querySelectorAll('.task')).find(e=>e.textContent.includes(${JSON.stringify(title + " updated")})).click()`,
@@ -687,7 +733,12 @@ try {
       );
       assert.equal(bounds.nav, "none");
       adbRun(["shell", "input", "keyevent", "KEYCODE_BACK"]);
-      await cdp.wait(`window.visualViewport.height > ${before} - 50`);
+      try {
+        await cdp.wait(`window.visualViewport.height > ${before} - 50`, 3000);
+      } catch {
+        adbRun(["shell", "input", "keyevent", "KEYCODE_BACK"]);
+        await cdp.wait(`window.visualViewport.height > ${before} - 50`);
+      }
       assert.equal(
         await cdp.evaluate(
           `document.querySelector('textarea[aria-label="Message Humeto"]').value`,
@@ -1265,7 +1316,10 @@ try {
         ),
         false,
       );
-      await cdp.click("Today");
+      await cdp.click("Tasks");
+      await cdp.evaluate(
+        `(()=>{const s=Array.from(document.querySelectorAll("summary")).find(e=>e.textContent==="Daily tasks & plan calendar");if(!s.parentElement.open)s.click();})()`,
+      );
       await cdp.wait(
         `!!document.querySelector('[aria-label="Daily task tracking"]')`,
       );
@@ -1318,7 +1372,10 @@ try {
             r.routine_kind === "subscription",
         ),
       );
-      await cdp.click("Today");
+      await cdp.click("Tasks");
+      await cdp.evaluate(
+        `(()=>{const s=Array.from(document.querySelectorAll("summary")).find(e=>e.textContent==="Daily tasks & plan calendar");if(!s.parentElement.open)s.click();})()`,
+      );
       await cdp.click("Calendar");
       assert.equal(
         await cdp.evaluate("document.documentElement.scrollWidth>innerWidth"),

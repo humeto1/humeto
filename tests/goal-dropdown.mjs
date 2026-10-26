@@ -29,7 +29,8 @@ test("Goal dropdown creates linked tasks and preserves existing extra goal links
       title: "Dropdown project " + randomUUID(),
     });
     const p = await c.newPage();
-    await p.goto("/workspace");
+    await p.goto("/workspace/tasks");
+    await p.getByText("Daily tasks & plan calendar", { exact: true }).click();
     await p.getByRole("button", { name: "Add task from Today" }).click();
     const title = "Dropdown task " + randomUUID();
     const dialog = p.getByRole("dialog");

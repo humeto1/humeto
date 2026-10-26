@@ -60,6 +60,7 @@ export function DailyTasks({
     ...occurrences.map((o: any) => ({
       id: o.task_id,
       key: o.series_id + o.day,
+      repeating: true,
       title: o.title,
       revision: o.task_revision,
       state: o.state,
@@ -78,6 +79,7 @@ export function DailyTasks({
       .map((t) => ({
         id: t.id,
         key: t.id,
+        repeating: !!t.routine_id,
         title: t.display_title || t.title,
         revision: t.revision,
         state:
@@ -193,6 +195,7 @@ export function DailyTasks({
               disabled={!row.id}
               onClick={() => void refresh().then(() => onOpen(row.id))}
             >
+              {row.repeating && <span aria-label="Repeating task">🔁 </span>}
               {row.title}
               <small>
                 {row.state === "done"

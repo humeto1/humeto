@@ -32,7 +32,8 @@ test("task financial options use grouped amounts, world currencies and a synced 
     const before = (await d.query("SELECT count(*) AS n FROM payments")).rows[0]
       .n;
     const p = await c.newPage();
-    await p.goto("/workspace");
+    await p.goto("/workspace/tasks");
+    await p.getByText("Daily tasks & plan calendar", { exact: true }).click();
     await p.getByRole("button", { name: "Add task from Today" }).click();
     const dialog = p.getByRole("dialog");
     const title = "Payment options " + randomUUID();

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { chromium } from "playwright";
 import { randomUUID } from "node:crypto";
 const base = process.env.HUMETO_TEST_URL;
-test("daily is a normal task property; Today tracks completion without resetting the next day", async () => {
+test("daily is a normal task property; Tasks tracks completion without resetting the next day", async () => {
   const browser = await chromium.launch();
   try {
     const c = await browser.newContext({
@@ -31,7 +31,8 @@ test("daily is a normal task property; Today tracks completion without resetting
         .count(),
       0,
     );
-    await p.goto("/workspace");
+    await p.goto("/workspace/tasks");
+    await p.getByText("Daily tasks & plan calendar", { exact: true }).click();
     const daily = p.getByRole("region", { name: "Daily task tracking" });
     await daily.waitFor();
     await daily.getByRole("button", { name: "Add task from Today" }).click();
@@ -71,16 +72,29 @@ test("daily is a normal task property; Today tracks completion without resetting
     assert.ok(await daily.evaluate((e) => e.scrollWidth <= e.clientWidth + 1));
     await p.getByRole("button", { name: "Calendar", exact: true }).click();
     await p.getByLabel("Calendar status").selectOption("Done");
-    await p.getByRole("button", { name: "Calendar " + report.today, exact: true }).click();
-    await p.locator(".planning-row").filter({ hasText: title }).getByText("Task · Uncategorized · Done", { exact: true }).waitFor();
+    await p
+      .getByRole("button", { name: "Calendar " + report.today, exact: true })
+      .click();
+    await p
+      .locator(".planning-row")
+      .filter({ hasText: title })
+      .getByText("Task · Uncategorized · Done", { exact: true })
+      .waitFor();
     await p.getByLabel("Calendar status").selectOption("Upcoming");
     const tomorrow = new Date(report.today + "T12:00:00Z");
     tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
     const nextDay = tomorrow.toISOString().slice(0, 10);
-    await p.locator('.planning-controls input[type="month"]').fill(nextDay.slice(0, 7));
-    await p.getByRole("button", { name: "Calendar " + nextDay, exact: true }).click();
+    await p
+      .locator('.planning-controls input[type="month"]')
+      .fill(nextDay.slice(0, 7));
+    await p
+      .getByRole("button", { name: "Calendar " + nextDay, exact: true })
+      .click();
     await p.locator(".planning-row").filter({ hasText: title }).waitFor();
-    await p.screenshot({path: ".data/mobile-qa/home-calendar.png", fullPage: true});
+    await p.screenshot({
+      path: ".data/mobile-qa/home-calendar.png",
+      fullPage: true,
+    });
     const bad = await c.request.post("/api/workspace/planning", {
       data: {
         action: "routine",

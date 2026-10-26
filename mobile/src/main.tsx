@@ -1,3 +1,5 @@
+import { PlanningDrawer } from "../../shared/task-planning";
+import { TaskDuration } from "../../shared/plan-insights";
 import {
   ChatNavigation,
   ProjectChatList,
@@ -683,7 +685,10 @@ function App() {
           {t.stage === "Done" ? <Check size={15} /> : <span />}
         </span>
         <span className="task-copy">
-          <strong>{t.display_title || t.title}</strong>
+          <strong>
+            {t.routine_id && <span aria-label="Repeating task">🔁 </span>}
+            {t.display_title || t.title}
+          </strong>
           {t.display_title && <small>Original: {t.title}</small>}
           <small>
             {t.project_title || "No project"} · {formatDate(t.due_date)}
@@ -940,6 +945,19 @@ function App() {
                 refresh={refresh}
                 request={api}
               >
+                <PlanningDrawer
+                  tasks={data.tasks}
+                  projects={data.projects}
+                  goals={data.goals}
+                  writable={writable}
+                  refresh={refresh}
+                  request={api}
+                  onAdd={() => setSheet("create")}
+                  onOpen={(id) => {
+                    setSelected(id);
+                    setSheet("task");
+                  }}
+                />
                 <div className="search">
                   <Search size={18} />
                   <input
@@ -1715,7 +1733,7 @@ function App() {
                               {p.category || "Uncategorized"} ·{" "}
                               {p.target_date
                                 ? "Deadline " + p.target_date
-                                : "Needs a deadline"}
+                                : "Ongoing · no deadline"}
                             </small>
                             {p.goal_id && (
                               <small>
@@ -1895,7 +1913,12 @@ function App() {
                   >
                     <Play size={18} />
                     <span className="task-copy">
-                      <strong>{t.display_title || t.title}</strong>
+                      <strong>
+                        {t.routine_id && (
+                          <span aria-label="Repeating task">🔁 </span>
+                        )}
+                        {t.display_title || t.title}
+                      </strong>
                       {t.display_title && <small>Original: {t.title}</small>}
                       <small>
                         {t.category || "Uncategorized"} ·{" "}
@@ -2178,6 +2201,7 @@ function App() {
                     title="Team & plans"
                     hint="Assignments, project & goals"
                   >
+                    <TaskDuration taskId={task.id} request={api} />
                     <TaskRelations
                       task={task}
                       projects={data.projects}
@@ -2347,7 +2371,8 @@ function App() {
                 Type
                 <select
                   name="kind"
-                  defaultValue={planView === "goals" ? "goals" : "projects"}
+                  value={planView === "goals" ? "goals" : "projects"}
+                  onChange={(e) => setPlanView(e.target.value)}
                 >
                   <option value="projects">Project</option>
                   <option value="goals">Goal</option>
@@ -2362,8 +2387,12 @@ function App() {
                 <textarea name="description" maxLength={2000} />
               </label>
               <label>
-                Deadline
-                <input name="targetDate" type="date" required />
+                {planView === "goals" ? "Deadline" : "Deadline (optional)"}
+                <input
+                  name="targetDate"
+                  type="date"
+                  required={planView === "goals"}
+                />
               </label>
               <label>
                 Category

@@ -223,7 +223,7 @@ export default function PlanningHub({
     <>
       <details>
         <summary>
-          Plans needing a deadline (
+          Plans without a deadline (
           {
             [...goals, ...projects].filter(
               (p) => !p.target_date && p.status !== "Archived",
@@ -801,12 +801,12 @@ export default function PlanningHub({
             </label>
           )}
           <label>
-            Deadline
+            {edit.kind === "goals" ? "Deadline" : "Deadline (optional)"}
             <input
               name="targetDate"
               type="date"
-              required
-              defaultValue={edit.item.target_date || selected}
+              required={edit.kind === "goals"}
+              defaultValue={edit.item.target_date || ""}
             />
           </label>
           <button disabled={!writable || busy}>Save calendar plan</button>

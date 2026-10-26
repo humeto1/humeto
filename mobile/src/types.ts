@@ -1,4 +1,5 @@
 export type Task = {
+  routine_id?: string;
   display_title?: string;
   value_type?: string;
   value_minor?: number | null;

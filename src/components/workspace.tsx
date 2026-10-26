@@ -8,6 +8,8 @@ import {
 import { TaskOptions, TaskStorage } from "../../shared/task-storage";
 import { GoalField } from "../../shared/goal-field";
 import { taskGoals } from "../../shared/task-relations";
+import { TaskDuration } from "../../shared/plan-insights";
+import { PlanningDrawer } from "../../shared/task-planning";
 import { HomeTasks } from "../../shared/home-tasks";
 import { TaskDetailGroup } from "../../shared/task-detail-group";
 import { TaskActivity } from "../../shared/task-activity";
@@ -957,7 +959,10 @@ export default function Workspace({
           onClick={() => showModal("task-details:" + t.id)}
           aria-label={`Open task: ${t.title}`}
         >
-          <strong>{t.display_title || t.title}</strong>
+          <strong>
+            {t.routine_id && <span aria-label="Repeating task">🔁 </span>}
+            {t.display_title || t.title}
+          </strong>
           {t.display_title && <small>Original: {t.title}</small>}
           <TaskValueBadge task={t} />
           <span className="compact-task-context">
@@ -1013,7 +1018,10 @@ export default function Workspace({
             refresh={refresh}
           />
         </div>
-        <h3>{t.display_title || t.title}</h3>
+        <h3>
+          {t.routine_id && <span aria-label="Repeating task">🔁 </span>}
+          {t.display_title || t.title}
+        </h3>
         <p>{t.person_name || "Team task"}</p>
         {staff && (
           <div className="task-assignment-actions">
@@ -1714,7 +1722,12 @@ export default function Workspace({
                             >
                               <span className="task-checkbox" />
                               <span>
-                                <strong>{t.display_title || t.title}</strong>
+                                <strong>
+                                  {t.routine_id && (
+                                    <span aria-label="Repeating task">🔁 </span>
+                                  )}
+                                  {t.display_title || t.title}
+                                </strong>
                                 <small>
                                   {t.person_name} · {dateLabel(t.due_date)}
                                 </small>
@@ -2232,13 +2245,25 @@ export default function Workspace({
                   refresh={refresh}
                 >
                   {staff && (
-                    <TaskFocus
-                      memberKey={`${actor.tenantId}:${actor.id}`}
-                      tasks={data.tasks}
-                      writable={writable}
-                      onChange={refresh}
-                      onFocusChange={setFocusOnly}
-                    />
+                    <>
+                      <PlanningDrawer
+                        tasks={data.tasks}
+                        projects={data.projects || []}
+                        goals={data.goals || []}
+                        writable={writable}
+                        refresh={refresh}
+                        request={webApi}
+                        onAdd={() => showModal("task")}
+                        onOpen={(id) => showModal("task-details:" + id)}
+                      />
+                      <TaskFocus
+                        memberKey={`${actor.tenantId}:${actor.id}`}
+                        tasks={data.tasks}
+                        writable={writable}
+                        onChange={refresh}
+                        onFocusChange={setFocusOnly}
+                      />
+                    </>
                   )}
                   <div ref={touchTasks.boardRef} hidden={focusOnly}>
                     <span className="touch-drag-status" role="status">
@@ -2590,6 +2615,9 @@ export default function Workspace({
                         {filteredTasks.map((t) => (
                           <div className="task-list-row" key={t.id}>
                             <span>
+                              {t.routine_id && (
+                                <span aria-label="Repeating task">🔁 </span>
+                              )}
                               {t.display_title || t.title}
                               {t.display_title && (
                                 <small>Original: {t.title}</small>
@@ -3096,6 +3124,7 @@ export default function Workspace({
                             writable={writable}
                           />
                         )}
+                        <TaskDuration taskId={task.id} request={webApi} />
                         <TaskLinks
                           task={task}
                           projects={data.projects || []}

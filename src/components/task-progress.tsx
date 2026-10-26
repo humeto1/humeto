@@ -666,9 +666,9 @@ export default function TaskProgress({
             )}
             <div className="crm-fields">
               <label>
-                Deadline
+                {edit.kind === "goals" ? "Deadline" : "Deadline (optional)"}
                 <input
-                  required
+                  required={edit.kind === "goals"}
                   name="targetDate"
                   type="date"
                   defaultValue={edit.item?.target_date}

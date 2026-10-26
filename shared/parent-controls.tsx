@@ -1,3 +1,4 @@
+import { PlanInsights } from "./plan-insights";
 import { useState } from "react";
 import { PlanTeam } from "./plan-team";
 import { PlanFinancial } from "./plan-financial";
@@ -29,6 +30,7 @@ export function ParentControls({
         overflowWrap: "anywhere",
       }}
     >
+      <PlanInsights type={type} id={id} request={request} writable={writable} />
       <PlanTeam type={type} id={id} request={request} writable={writable} />
       <PlanFinancial
         type={type}
