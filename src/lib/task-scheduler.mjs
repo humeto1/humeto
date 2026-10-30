@@ -12,7 +12,7 @@ import {
 async function writable(d, tenant, user, now) {
   const s = await d
     .prepare(
-      "SELECT s.status,s.expires_at,s.features_json FROM memberships m JOIN subscriptions s ON s.tenant_id=m.tenant_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant')",
+      "SELECT s.status,s.expires_at,s.features_json FROM memberships m JOIN subscriptions s ON s.tenant_id=m.tenant_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant','platform_admin')",
     )
     .get(tenant, user);
   return subscriptionAccess(s, now.getTime()) && featureAllowed(s, "tasks");
@@ -141,7 +141,7 @@ export async function runTaskScheduler({
             .run(taskId, t.id, s.tenant_id);
           await d
             .prepare(
-              "INSERT INTO work_assignments(tenant_id,entity_type,entity_id,user_id,assigned_by) SELECT a.tenant_id,'task',?,a.user_id,? FROM work_assignments a JOIN memberships m ON m.tenant_id=a.tenant_id AND m.user_id=a.user_id WHERE a.tenant_id=? AND a.entity_type='task' AND a.entity_id=? AND m.role IN ('owner','consultant')",
+              "INSERT INTO work_assignments(tenant_id,entity_type,entity_id,user_id,assigned_by) SELECT a.tenant_id,'task',?,a.user_id,? FROM work_assignments a JOIN memberships m ON m.tenant_id=a.tenant_id AND m.user_id=a.user_id WHERE a.tenant_id=? AND a.entity_type='task' AND a.entity_id=? AND m.role IN ('owner','consultant','platform_admin')",
             )
             .run(taskId, s.user_id, s.tenant_id, t.id);
           await d

@@ -63,7 +63,7 @@ export async function assignmentRead(a: Actor, type: string, entityId: string) {
       .get(a.tenantId, type, entityId);
   const members = await db()
     .prepare(
-      "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant') ORDER BY u.name",
+      "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant','platform_admin') ORDER BY u.name",
     )
     .all(a.tenantId);
   const inherited =
@@ -129,7 +129,7 @@ export async function assignmentWrite(a: Actor, body: unknown) {
       if (
         !(await db()
           .prepare(
-            "SELECT user_id FROM memberships WHERE tenant_id=? AND user_id=? AND role IN ('owner','consultant')",
+            "SELECT user_id FROM memberships WHERE tenant_id=? AND user_id=? AND role IN ('owner','consultant','platform_admin')",
           )
           .get(a.tenantId, uid))
       )
@@ -168,7 +168,7 @@ export async function assignmentWrite(a: Actor, body: unknown) {
 export async function inheritedTaskTeam(tenant: string, taskId: string) {
   return db()
     .prepare(
-      `SELECT DISTINCT a.user_id,u.name,a.entity_type,a.entity_id FROM work_assignments a JOIN users u ON u.id=a.user_id JOIN memberships m ON m.tenant_id=a.tenant_id AND m.user_id=a.user_id WHERE a.tenant_id=? AND m.role IN ('owner','consultant') AND (
+      `SELECT DISTINCT a.user_id,u.name,a.entity_type,a.entity_id FROM work_assignments a JOIN users u ON u.id=a.user_id JOIN memberships m ON m.tenant_id=a.tenant_id AND m.user_id=a.user_id WHERE a.tenant_id=? AND m.role IN ('owner','consultant','platform_admin') AND (
    (a.entity_type='project' AND a.entity_id IN (SELECT project_id FROM tasks WHERE tenant_id=? AND id=?)) OR
    (a.entity_type='goal' AND a.entity_id IN (SELECT goal_id FROM task_goals WHERE tenant_id=? AND task_id=? UNION SELECT p.goal_id FROM projects p JOIN tasks t ON t.project_id=p.id AND t.tenant_id=p.tenant_id WHERE t.tenant_id=? AND t.id=?)) OR
    (a.entity_type='routine' AND a.entity_id IN (SELECT o.series_id FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id WHERE r.tenant_id=? AND o.task_id=? UNION SELECT id FROM task_recurrences WHERE tenant_id=? AND template_task_id=?))

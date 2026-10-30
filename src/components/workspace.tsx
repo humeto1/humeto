@@ -1,4 +1,8 @@
 "use client";
+import PlatformOverview, {
+  platformSections,
+  PlatformModeration,
+} from "./platform-overview";
 import DocumentDropInput from "./document-drop-input";
 import { createClient } from "@supabase/supabase-js";
 import {
@@ -132,7 +136,7 @@ import {
 } from "@/lib/pipeline";
 import ImportHistory from "./import-history";
 import TaskAssistant from "./task-assistant";
-import { ChatHub, BreakChat } from "../../shared/social-chat";
+import { ChatHub } from "../../shared/social-chat";
 import ReminderBell from "./reminder-bell";
 import ImportPanel from "./import-panel";
 import ApplicationChecklist from "./application-checklist";
@@ -442,10 +446,60 @@ export default function Workspace({
     const timer = setInterval(() => setEntitlementNow(Date.now()), 30000);
     return () => clearInterval(timer);
   }, []);
+  const [platformSection, setPlatformSection] = useState("overview");
+  const [platformLoaded, setPlatformLoaded] = useState(false);
+  const [platformFilter, setPlatformFilter] = useState("all");
+  useEffect(() => {
+    const section = new URLSearchParams(window.location.search).get("section");
+    if (platformSections.some(([key]) => key === section))
+      setPlatformSection(section!);
+  }, []);
+  const isSuperAdmin = !!actor.platformAdmin || actor.role === "platform_admin";
+  const contextLock = useRef(false);
+  async function openContext(
+    context: "platform" | "workspace",
+    target: string,
+  ) {
+    if (contextLock.current) return;
+    if (editor.current && !(await editor.current.flush())) return;
+    contextLock.current = true;
+    setBusy(true);
+    try {
+      const r = await fetch("/api/admin-context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context }),
+      });
+      if (!r.ok) throw Error((await r.json()).error);
+      window.location.assign(target);
+    } catch (e) {
+      setError((e as Error).message);
+      contextLock.current = false;
+      setBusy(false);
+    }
+  }
+  function openPlatformSection(section: string) {
+    setPlatformSection(section);
+    void openContext("platform", "/workspace/platform?section=" + section);
+  }
   const isPlatform = actor.role === "platform_admin",
     isStudent = actor.role === "student",
     staff = ["owner", "consultant"].includes(actor.role),
     writable = subscriptionAccess(data.subscription, entitlementNow);
+  const platformTenants = tenants.filter(
+    (t) =>
+      (t.name + " " + t.plan + " " + industryLabel(t.industry || t.type))
+        .toLowerCase()
+        .includes(search.trim().toLowerCase()) &&
+      (platformFilter === "all" ||
+        (platformFilter === "attention"
+          ? !!t.upgrade_requested_at || !subscriptionAccess(t)
+          : platformFilter === "expired"
+            ? !subscriptionAccess(t) &&
+              !!t.expires_at &&
+              Date.parse(t.expires_at) < Date.now()
+            : t.status === platformFilter)),
+  );
   const notify = useCallback((message: string) => {
     setToast(message);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -539,6 +593,7 @@ export default function Workspace({
     try {
       const r = await api("platform");
       setTenants(r.tenants);
+      setPlatformLoaded(true);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -1184,7 +1239,11 @@ export default function Workspace({
   }
   return (
     <TaskCurrencyProvider syncToken={data.tasks}>
-      <div className="workspace-app">
+      <div
+        className={
+          isSuperAdmin ? "workspace-app superadmin-shell" : "workspace-app"
+        }
+      >
         <aside className={`app-sidebar ${mobileNav ? "open" : ""}`}>
           <a href="/" className="app-logo">
             <span>h</span>humeto.
@@ -1192,10 +1251,17 @@ export default function Workspace({
           <button
             className="workspace-switch"
             onClick={() =>
-              notify("Workspace switching is managed through your sign-in.")
+              isSuperAdmin
+                ? void openContext(
+                    isPlatform ? "workspace" : "platform",
+                    isPlatform ? "/workspace" : "/workspace/platform",
+                  )
+                : notify("You are in " + actor.tenantName + ".")
             }
           >
-            <span className="workspace-symbol">{actor.tenantName[0]}</span>
+            <span className="workspace-symbol">
+              {isPlatform ? "H" : actor.tenantName[0]}
+            </span>
             <span>
               <strong>
                 {isPlatform ? "Humeto platform" : actor.tenantName}
@@ -1203,71 +1269,100 @@ export default function Workspace({
               <small>
                 {isPlatform
                   ? "Super admin"
-                  : actor.workspaceType === "individual"
-                    ? "Individual workspace"
-                    : "Institute workspace"}
+                  : isSuperAdmin
+                    ? "My workspace · " +
+                      industryLabel(actor.industry || actor.workspaceType)
+                    : actor.workspaceType === "individual"
+                      ? "Individual workspace"
+                      : "Institute workspace"}
               </small>
             </span>
             <ChevronRight size={13} />
           </button>
-          <div className="sidebar-section-label">YOUR WORKSPACE</div>
-          <nav aria-label="Workspace navigation">
-            {isPlatform ? (
-              <button
-                className={view === "platform" ? "active" : ""}
-                onClick={() => void navigate("/workspace")}
+          {isSuperAdmin && (
+            <>
+              <div className="sidebar-section-label">PLATFORM ADMIN</div>
+              <nav
+                className="platform-nav"
+                aria-label="Platform administration"
               >
-                <Building2 size={18} />
-                Workspaces & plans
-              </button>
-            ) : (
-              navItems
-                .filter(
-                  ([key]) =>
-                    featureAllowed(data.subscription, featureForView(key)) &&
-                    (key !== "finance" || actor.role === "owner") &&
-                    !(
-                      isStudent &&
-                      [
-                        "activity",
-                        "insights",
-                        "updates",
-                        "tasks",
-                        "assistant",
-                        "leads",
-                        "progress",
-                      ].includes(key)
-                    ),
-                )
-                .map(([key, label, Icon]) => (
+                {platformSections.map(([key, label]) => (
                   <button
                     key={key}
+                    disabled={busy}
                     className={
-                      view === key || (view === "profile" && key === "students")
-                        ? "active"
-                        : ""
+                      isPlatform && platformSection === key ? "active" : ""
                     }
-                    onClick={() =>
-                      void navigate(
-                        key === "overview" ? "/workspace" : "/workspace/" + key,
-                      )
-                    }
+                    onClick={() => openPlatformSection(key)}
                   >
-                    <Icon size={18} />
-                    {isStudent && key === "students" ? "My information" : label}
-                    {key === "requests" &&
-                      data.requests.filter((r) => r.status !== "Resolved")
-                        .length > 0 && (
-                        <span className="nav-count">
-                          {
-                            data.requests.filter((r) => r.status !== "Resolved")
-                              .length
-                          }
-                        </span>
-                      )}
+                    <ShieldCheck size={17} />
+                    {label}
                   </button>
-                ))
-            )}
+                ))}
+              </nav>
+            </>
+          )}
+          <div className="sidebar-section-label">
+            {isSuperAdmin ? "MY WORKSPACE" : "YOUR WORKSPACE"}
+          </div>
+          <nav aria-label="Workspace navigation">
+            {navItems
+              .filter(
+                ([key]) =>
+                  featureAllowed(data.subscription, featureForView(key)) &&
+                  (key !== "finance" ||
+                    actor.role === "owner" ||
+                    isSuperAdmin) &&
+                  !(
+                    isStudent &&
+                    [
+                      "activity",
+                      "insights",
+                      "updates",
+                      "tasks",
+                      "assistant",
+                      "leads",
+                      "progress",
+                    ].includes(key)
+                  ),
+              )
+              .map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  className={
+                    view === key || (view === "profile" && key === "students")
+                      ? "active"
+                      : ""
+                  }
+                  onClick={() =>
+                    isSuperAdmin
+                      ? void openContext(
+                          "workspace",
+                          key === "overview"
+                            ? "/workspace"
+                            : "/workspace/" + key,
+                        )
+                      : void navigate(
+                          key === "overview"
+                            ? "/workspace"
+                            : "/workspace/" + key,
+                        )
+                  }
+                >
+                  <Icon size={18} />
+                  {isStudent && key === "students" ? "My information" : label}
+                  {key === "requests" &&
+                    data.requests.filter((r) => r.status !== "Resolved")
+                      .length > 0 && (
+                      <span className="nav-count">
+                        {
+                          data.requests.filter((r) => r.status !== "Resolved")
+                            .length
+                        }
+                      </span>
+                    )}
+                </button>
+              ))}
           </nav>
           <div className="sidebar-bottom">
             <span className="sidebar-spark">✳</span>
@@ -1278,12 +1373,17 @@ export default function Workspace({
                 : "You’re making big things happen. One small step at a time."}
             </p>
             <span className="local-pill">
-              <span /> Local development
+              <span />{" "}
+              {isSuperAdmin ? "Superadmin account" : "Private workspace"}
             </span>
           </div>
           <button
             className="settings-link"
-            onClick={() => void navigate("/workspace/settings")}
+            onClick={() =>
+              isSuperAdmin
+                ? void openContext("workspace", "/workspace/settings")
+                : void navigate("/workspace/settings")
+            }
           >
             <Settings size={16} /> Workspace settings
           </button>
@@ -1291,7 +1391,12 @@ export default function Workspace({
             <span className="person-avatar peach">{initials(actor.name)}</span>
             <span>
               <strong>{actor.name}</strong>
-              <small>{actor.role.replace("_", " ")}</small>
+              <small>
+                {isSuperAdmin
+                  ? "Super admin · " +
+                    (isPlatform ? "Platform" : "Workspace owner")
+                  : actor.role.replace("_", " ")}
+              </small>
             </span>
             <button
               onClick={() => void logout()}
@@ -1351,49 +1456,82 @@ export default function Workspace({
                           : view === "profile"
                             ? p?.name
                             : view === "platform"
-                              ? "Workspaces & subscriptions"
+                              ? "Platform administration"
                               : view[0].toUpperCase() + view.slice(1)}
               </strong>
             </div>
             <div className="topbar-right">
-              <label className="global-search">
-                <Search size={15} />
-                <input
-                  id="global-search"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder={
-                    view === "profile"
-                      ? "Find a question in this journey…"
-                      : "Search this view…"
-                  }
-                />
-                <kbd>⌘ K</kbd>
-              </label>
+              {(!isPlatform || platformSection === "workspaces") && (
+                <label className="global-search">
+                  <Search size={15} />
+                  <input
+                    id="global-search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder={
+                      view === "profile"
+                        ? "Find a question in this journey…"
+                        : "Search this view…"
+                    }
+                  />
+                  <kbd>⌘ K</kbd>
+                </label>
+              )}
               {!isPlatform && (
                 <Announcements
                   key={`announcements:${actor.tenantId}:${actor.id}:${actor.role}`}
                   actor={actor}
                 />
               )}
-              {staff ? (
-                <ReminderBell />
-              ) : (
-                <button
-                  className="notification-button"
-                  onClick={() => void navigate("/workspace/requests")}
-                  aria-label="View information requests"
-                >
-                  <Bell size={18} />
-                  {data.requests.some((r) => r.status !== "Resolved") && (
-                    <span />
-                  )}
-                </button>
-              )}
+              {!isPlatform &&
+                (staff ? (
+                  <ReminderBell />
+                ) : (
+                  <button
+                    className="notification-button"
+                    onClick={() => void navigate("/workspace/requests")}
+                    aria-label="View information requests"
+                  >
+                    <Bell size={18} />
+                    {data.requests.some((r) => r.status !== "Resolved") && (
+                      <span />
+                    )}
+                  </button>
+                ))}
               <span className="topbar-avatar">{initials(actor.name)}</span>
             </div>
           </header>
           <main className="app-content">
+            {isSuperAdmin && (
+              <div className="platform-mode-bar">
+                <span>
+                  <strong>
+                    {isPlatform
+                      ? "Platform admin"
+                      : "My workspace · " + actor.tenantName}
+                  </strong>
+                  <small>
+                    {isPlatform
+                      ? "Global access, subscriptions and safety controls"
+                      : "Your CRM workspace · superadmin controls remain above"}
+                  </small>
+                </span>
+                <button
+                  className="btn secondary small"
+                  disabled={busy}
+                  onClick={() =>
+                    void openContext(
+                      isPlatform ? "workspace" : "platform",
+                      isPlatform ? "/workspace" : "/workspace/platform",
+                    )
+                  }
+                >
+                  {isPlatform ? "Open my workspace" : "Back to platform admin"}
+                  <ArrowUpRight size={15} />
+                </button>
+              </div>
+            )}
+
             {!isPlatform && (
               <div
                 className="ai-feature-rail"
@@ -2929,98 +3067,160 @@ export default function Workspace({
             )}
             {isPlatform && (view === "platform" || view === "overview") && (
               <>
-                <VoucherCenter platform onChange={refresh} />
-                <BreakChat />
-              </>
-            )}
-            {(view === "platform" || (isPlatform && view === "overview")) && (
-              <>
-                {title(
-                  "Room for another ambitious team.",
-                  "Manage workspaces, access vouchers and subscriptions. Applicant files remain outside this console.",
-                  button(
-                    "Add workspace",
-                    () => showModal("institute"),
-                    Building2,
-                  ),
-                )}
-                <div className="stats-grid">
-                  {[
-                    ["Workspaces", tenants.length],
-                    [
-                      "Active",
-                      tenants.filter((t) => t.status === "active").length,
-                    ],
-                    [
-                      "Trial",
-                      tenants.filter((t) => t.status === "trial").length,
-                    ],
-                    [
-                      "Total cases",
-                      tenants.reduce((s, t) => s + t.case_count, 0),
-                    ],
-                  ].map(([label, n]) => (
-                    <article className="stat-box" key={String(label)}>
-                      <span>{label}</span>
-                      <strong>{n}</strong>
-                      <small>Persisted local records</small>
-                    </article>
+                <nav
+                  className="platform-section-tabs"
+                  aria-label="Admin sections"
+                >
+                  {platformSections.map(([key, label]) => (
+                    <button
+                      key={key}
+                      aria-current={
+                        platformSection === key ? "page" : undefined
+                      }
+                      onClick={() => openPlatformSection(key)}
+                    >
+                      {label}
+                    </button>
                   ))}
-                </div>
-                <div className="data-table-container">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>WORKSPACE</th>
-                        <th>PLAN</th>
-                        <th>STATUS</th>
-                        <th>CASES</th>
-                        <th>SEATS</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tenants
-                        .filter((t) =>
-                          (t.name + t.plan)
-                            .toLowerCase()
-                            .includes(search.toLowerCase()),
-                        )
-                        .map((t) => (
-                          <tr key={t.id}>
-                            <td>
-                              <strong>{t.name}</strong>
-                              <small>
-                                {industryLabel(t.industry || t.type)}
-                              </small>
-                            </td>
-                            <td>{t.plan}</td>
-                            <td>
-                              <Badge>{t.status}</Badge>
-                              {t.upgrade_requested_at && (
-                                <small>Activation requested</small>
-                              )}
-                            </td>
-                            <td>
-                              {t.case_count} / {t.case_limit}
-                            </td>
-                            <td>{t.seats}</td>
-                            <td>
-                              <button
-                                className="btn secondary small"
-                                onClick={() => {
-                                  setSelectedTenant(t);
-                                  showModal("subscription");
-                                }}
-                              >
-                                Manage plan
-                              </button>
-                            </td>
+                </nav>
+                {platformSection === "overview" && !platformLoaded && (
+                  <p role="status">Loading platform overview…</p>
+                )}
+                {platformSection === "overview" && platformLoaded && (
+                  <PlatformOverview
+                    tenants={tenants}
+                    onSection={openPlatformSection}
+                    onWorkspace={() =>
+                      void openContext("workspace", "/workspace")
+                    }
+                    onCreate={() => showModal("institute")}
+                    onManage={(t) => {
+                      setSelectedTenant(t);
+                      showModal("subscription");
+                    }}
+                  />
+                )}
+                {platformSection === "vouchers" && (
+                  <div className="platform-vouchers">
+                    <h1>Access vouchers</h1>
+                    <p className="platform-section-description">
+                      Issue access for a workspace or account type, review
+                      redemption limits and manage existing codes.
+                    </p>
+                    <VoucherCenter platform onChange={refresh} />
+                  </div>
+                )}
+                {platformSection === "moderation" && (
+                  <>
+                    <h1>Safety & moderation</h1>
+                    <p className="platform-section-description">
+                      Review anonymous Break chat reports, language screening
+                      and member sanctions.
+                    </p>
+                    <PlatformModeration />
+                  </>
+                )}
+                {platformSection === "workspaces" && (
+                  <section className="platform-workspace-list">
+                    <div className="platform-workspace-intro">
+                      <div>
+                        <h1>Workspaces & plans</h1>
+                        <p className="platform-subtitle">
+                          Manage customer subscriptions, seat limits and
+                          activation requests.
+                        </p>
+                      </div>
+                      {button(
+                        "Add workspace",
+                        () => showModal("institute"),
+                        Building2,
+                      )}
+                    </div>
+                    <div className="platform-table-tools">
+                      <label>
+                        Workspace status
+                        <select
+                          value={platformFilter}
+                          onChange={(e) => setPlatformFilter(e.target.value)}
+                        >
+                          <option value="all">All workspaces</option>
+                          <option value="attention">Needs attention</option>
+                          <option value="active">Active</option>
+                          <option value="trial">Trial</option>
+                          <option value="pending">Pending</option>
+                          <option value="expired">Expired</option>
+                          <option value="suspended">Suspended</option>
+                          <option value="grace">Grace period</option>
+                        </select>
+                      </label>
+                      <span className="muted">
+                        Search by workspace, plan or industry in the top bar.
+                      </span>
+                    </div>
+                    <div
+                      className="data-table-container"
+                      tabIndex={0}
+                      role="region"
+                      aria-label="Workspace subscriptions"
+                    >
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>WORKSPACE</th>
+                            <th>PLAN</th>
+                            <th>STATUS</th>
+                            <th>CASES</th>
+                            <th>SEATS</th>
+                            <th>ACTIONS</th>
                           </tr>
-                        ))}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody>
+                          {platformTenants.map((t) => (
+                            <tr key={t.id}>
+                              <td>
+                                <strong>{t.name}</strong>
+                                <small>
+                                  {industryLabel(t.industry || t.type)}
+                                </small>
+                              </td>
+                              <td>{t.plan}</td>
+                              <td>
+                                <Badge>{t.status}</Badge>
+                                {t.upgrade_requested_at && (
+                                  <small>Activation requested</small>
+                                )}
+                              </td>
+                              <td>
+                                {t.case_count} / {t.case_limit}
+                              </td>
+                              <td>{t.seats}</td>
+                              <td>
+                                <button
+                                  className="btn secondary small"
+                                  onClick={() => {
+                                    setSelectedTenant(t);
+                                    showModal("subscription");
+                                  }}
+                                >
+                                  Manage plan
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {!platformTenants.length && (
+                            <tr>
+                              <td colSpan={6}>
+                                {platformLoaded
+                                  ? "No workspaces match these filters."
+                                  : "Loading workspaces…"}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                )}
               </>
             )}
           </main>

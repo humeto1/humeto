@@ -44,7 +44,7 @@ export async function GET() {
         .all(a.tenantId),
       db()
         .prepare(
-          "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant') ORDER BY u.name",
+          "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant','platform_admin') ORDER BY u.name",
         )
         .all(a.tenantId),
       subscription(a),

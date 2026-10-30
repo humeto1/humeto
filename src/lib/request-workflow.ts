@@ -473,7 +473,7 @@ export async function requestMutation(
         throw new RequestWorkflowError("Choose a future follow-up date.");
       const owner = await db()
         .prepare(
-          "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant')",
+          "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant','platform_admin')",
         )
         .get(a.tenantId, r.created_by);
       if (!owner)

@@ -1,0 +1,321 @@
+.platform-overview {
+  display: grid;
+  gap: 24px;
+}
+.platform-hero {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 30px;
+  background: #eaf0df;
+  border: 1px solid #dce5ce;
+  border-radius: 22px;
+  padding: 36px;
+}
+.platform-hero h1 {
+  font-size: clamp(30px, 3.5vw, 46px);
+  letter-spacing: -1.5px;
+  line-height: 1.15;
+  margin: 14px 0;
+}
+.platform-hero p {
+  max-width: 620px;
+  line-height: 1.7;
+  color: #53664c;
+}
+.platform-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.platform-hero-note {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  justify-content: center;
+  padding: 24px;
+  background: #fff9;
+  border: 1px solid #d8e0cd;
+  border-radius: 16px;
+  line-height: 1.65;
+}
+.platform-hero-note span {
+  font-size: 13px;
+  color: #53664c;
+}
+.platform-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.platform-metrics article {
+  background: #fff;
+  border: 1px solid #e0e5d8;
+  padding: 22px;
+  border-radius: 16px;
+}
+.platform-metrics strong {
+  display: block;
+  font-size: 32px;
+  margin-top: 14px;
+}
+.platform-metrics span {
+  font-size: 13px;
+  color: #53664c;
+}
+.platform-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.platform-shortcuts button {
+  display: grid;
+  gap: 12px;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #dce4d3;
+  border-radius: 16px;
+  padding: 22px;
+  color: #214e40;
+}
+.platform-shortcuts span {
+  font-size: 13px;
+  line-height: 1.6;
+  color: #53664c;
+}
+.platform-shortcuts strong {
+  font-size: 17px;
+}
+.platform-attention > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 16px 0;
+  border-top: 1px solid #e1e7da;
+}
+.platform-attention small {
+  display: block;
+  margin-top: 5px;
+  color: #53664c;
+}
+.platform-own-workspace {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border: 1px solid #dce4d3;
+  border-radius: 18px;
+  padding: 26px;
+  background: #fafbf7;
+}
+.platform-own-workspace p {
+  line-height: 1.65;
+  color: #53664c;
+}
+.platform-own-workspace h2 {
+  font-size: 20px;
+}
+.platform-own-workspace > div {
+  flex: 1;
+}
+.platform-mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 22px;
+  padding: 14px 18px;
+  border: 1px solid #dce4d3;
+  border-radius: 14px;
+  background: #f0f4e8;
+}
+.platform-mode-bar strong {
+  display: block;
+}
+.platform-mode-bar small {
+  color: #53664c;
+}
+.platform-section-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+.platform-section-tabs button {
+  padding: 10px 16px;
+  border: 1px solid #dce4d3;
+  border-radius: 24px;
+  background: #fff;
+  color: #214e40;
+}
+.platform-section-tabs button[aria-current="page"] {
+  background: #214e40;
+  border-color: #214e40;
+  color: #fff;
+}
+.platform-nav {
+  border-bottom: 1px solid #e0e5d8;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+.platform-nav button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: #53664c;
+  font-size: 13px;
+}
+.platform-nav button.active {
+  background: #e7eed9;
+  color: #214e40;
+  font-weight: 600;
+}
+.platform-workspace-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.platform-workspace-intro h1 {
+  font-size: 30px;
+  margin-bottom: 8px;
+}
+.platform-subtitle {
+  color: #53664c;
+  line-height: 1.65;
+}
+.workspace-app .platform-vouchers .voucher-center {
+  margin-top: 0;
+}
+.platform-section-description {
+  max-width: 760px;
+  line-height: 1.7;
+  color: #53664c;
+  margin-bottom: 24px;
+}
+@media (max-width: 900px) {
+  .platform-hero {
+    grid-template-columns: 1fr;
+  }
+  .platform-hero-note {
+    display: none;
+  }
+  .platform-shortcuts {
+    grid-template-columns: 1fr;
+  }
+  .platform-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .platform-own-workspace {
+    flex-wrap: wrap;
+  }
+  .platform-mode-bar {
+    flex-wrap: wrap;
+  }
+}
+@media (max-width: 520px) {
+  .platform-hero {
+    padding: 22px;
+  }
+  .platform-workspace-intro {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .platform-metrics article {
+    padding: 16px;
+  }
+  .platform-mode-bar .btn {
+    width: 100%;
+  }
+  .platform-own-workspace {
+    padding: 20px;
+  }
+  .platform-shortcuts button {
+    padding: 18px;
+  }
+  .platform-section-tabs button {
+    font-size: 12px;
+  }
+}
+.platform-table-tools {
+  display: flex;
+  align-items: end;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.platform-table-tools label {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+}
+.platform-table-tools select {
+  min-width: 200px;
+  padding: 12px;
+  border: 1px solid #dce4d3;
+  border-radius: 10px;
+  background: #fff;
+  color: #214e40;
+}
+.platform-report {
+  padding: 20px 0;
+  border-top: 1px solid #dce4d3;
+  overflow-wrap: anywhere;
+}
+.platform-report p {
+  line-height: 1.7;
+}
+.platform-report small {
+  color: #53664c;
+}
+.platform-workspace-list .data-table th {
+  font-size: 11px;
+  color: #465b3e;
+  letter-spacing: 0.6px;
+}
+.platform-workspace-list .data-table td {
+  font-size: 13px;
+  color: #3f5739;
+}
+.platform-workspace-list .data-table small {
+  font-size: 12px;
+  color: #53664c;
+}
+.superadmin-shell .sidebar-section-label {
+  font-size: 10px;
+  letter-spacing: 1.2px;
+}
+.superadmin-shell .app-sidebar .platform-nav > button {
+  font-size: 12px;
+  min-height: 44px;
+}
+.superadmin-shell .app-sidebar .local-pill {
+  color: #53664c;
+}
+.platform-workspace-list [role="region"]:focus-visible {
+  outline: 2px solid #214e40;
+  outline-offset: 3px;
+}
+.platform-overview > .panel > .muted {
+  padding: 20px;
+  margin: 0;
+}
+.platform-moderation {
+  padding: 24px;
+}
+.superadmin-shell .sidebar-bottom {
+  padding: 12px;
+  margin-top: 16px;
+}
+.superadmin-shell .sidebar-bottom .sidebar-spark,
+.superadmin-shell .sidebar-bottom > strong,
+.superadmin-shell .sidebar-bottom > p {
+  display: none;
+}

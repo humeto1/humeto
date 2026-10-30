@@ -17,7 +17,7 @@ export async function actor(): Promise<Actor | null> {
   if (!token) return null;
   const row = await db()
     .prepare(
-      'SELECT u.id,u.name,u.email,m.tenant_id AS "tenantId",t.name AS "tenantName",t.type AS "workspaceType",m.role,m.person_id AS "personId" FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id AND m.tenant_id=s.tenant_id JOIN tenants t ON t.id=m.tenant_id WHERE s.token_hash=? AND s.expires_at>? AND (u.verification_required=0 OR u.email_verified_at IS NOT NULL)',
+      `SELECT u.id,u.name,u.email,m.tenant_id AS "tenantId",t.name AS "tenantName",t.type AS "workspaceType",t.industry,CASE WHEN m.role='platform_admin' AND s.context='workspace' THEN 'owner' ELSE m.role END AS role,(m.role='platform_admin') AS "platformAdmin",s.context,m.person_id AS "personId" FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id AND m.tenant_id=s.tenant_id JOIN tenants t ON t.id=m.tenant_id WHERE s.token_hash=? AND s.expires_at>? AND (u.verification_required=0 OR u.email_verified_at IS NOT NULL)`,
     )
     .get(digest(token), Date.now());
   return row ? ({ ...row } as Actor) : null;
@@ -104,4 +104,18 @@ export function ensureOrigin(req: Request) {
   const origin = req.headers.get("origin");
   const host = req.headers.get("host");
   if (!origin || new URL(origin).host !== host) throw new Error("ORIGIN");
+}
+
+export async function setSessionContext(
+  a: Actor,
+  context: "platform" | "workspace",
+) {
+  const token = (await cookies()).get(cookieName)?.value;
+  if (!token || !a.platformAdmin) throw Error("Not permitted.");
+  const result = await db()
+    .prepare(
+      "UPDATE sessions SET context=? WHERE token_hash=? AND user_id=? AND tenant_id=? AND expires_at>?",
+    )
+    .run(context, digest(token), a.id, a.tenantId, Date.now());
+  if (!result.changes) throw Error("Session expired.");
 }

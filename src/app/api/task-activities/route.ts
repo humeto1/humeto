@@ -25,7 +25,9 @@ async function route(req: Request) {
       .max(100)
       .parse(new URL(req.url).searchParams.get("taskId"));
     const task = await db()
-      .prepare("SELECT id,title,stage FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active'")
+      .prepare(
+        "SELECT id,title,stage FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active'",
+      )
       .get(taskId, a.tenantId);
     if (!task)
       return Response.json({ error: "Task not found." }, { status: 404 });
@@ -37,7 +39,7 @@ async function route(req: Request) {
         .all(taskId, a.tenantId);
       const members = await db()
         .prepare(
-          "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant') ORDER BY u.name",
+          "SELECT u.id,u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant','platform_admin') ORDER BY u.name",
         )
         .all(a.tenantId);
       const events = await db()
@@ -96,7 +98,7 @@ async function route(req: Request) {
         if (v.kind === "team") {
           const member = await db()
             .prepare(
-              "SELECT u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant')",
+              "SELECT u.name FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.user_id=? AND m.role IN ('owner','consultant','platform_admin')",
             )
             .get(a.tenantId, v.performerId);
           if (!member)

@@ -257,9 +257,9 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return NextResponse.json({
         members: await db()
           .prepare(
-            "SELECT u.id,u.name,u.email,m.role,m.person_id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role!=? ORDER BY u.name",
+            "SELECT u.id,u.name,u.email,CASE WHEN m.role='platform_admin' THEN 'owner' ELSE m.role END AS role,m.person_id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND (m.role!=? OR m.user_id=?) ORDER BY u.name",
           )
-          .all(a.tenantId, "platform_admin"),
+          .all(a.tenantId, "platform_admin", a.platformAdmin ? a.id : ""),
       });
     }
     if (resource === "documents" && rid && action === "versions") {
@@ -372,7 +372,10 @@ async function handle(req: Request, parts: string[], a: Actor) {
     const act = String(body.action || "");
     if (act === "prepare") {
       const v = z
-        .object({ personId: z.string().min(1), sectionKey: z.string().max(80).default("") })
+        .object({
+          personId: z.string().min(1),
+          sectionKey: z.string().max(80).default(""),
+        })
         .parse(body);
       if (!(await canSeePerson(a, v.personId)))
         return fail("Applicant not found.", 404);
@@ -415,10 +418,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       try {
         bytes = await getObject("uploads/" + v.stored);
       } catch {
-        return fail(
-          "The upload did not complete. Choose the file again.",
-          409,
-        );
+        return fail("The upload did not complete. Choose the file again.", 409);
       }
       if (bytes.length === 0 || bytes.length > 15 * 1024 * 1024) {
         await deleteObject("uploads/" + v.stored).catch(() => {});
@@ -427,7 +427,9 @@ async function handle(req: Request, parts: string[], a: Actor) {
       let mime = "";
       if (bytes.subarray(0, 5).toString() === "%PDF-") mime = "application/pdf";
       else if (
-        bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+        bytes
+          .subarray(0, 8)
+          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
       )
         mime = "image/png";
       else if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255)
@@ -1330,7 +1332,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       input.assignee &&
       !(await db()
         .prepare(
-          "SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND u.name=? AND m.role IN ('owner','consultant')",
+          "SELECT u.id FROM users u JOIN memberships m ON m.user_id=u.id WHERE m.tenant_id=? AND u.name=? AND m.role IN ('owner','consultant','platform_admin')",
         )
         .get(a.tenantId, input.assignee))
     )

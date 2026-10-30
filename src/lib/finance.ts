@@ -53,7 +53,7 @@ export async function financeRead(a: Actor, month = "") {
     .all(a.tenantId);
   const employees = await d
     .prepare(
-      `SELECT u.id,u.name,COALESCE(c.monthly_salary,0) AS monthly_salary,COALESCE(c.monthly_overhead,0) AS monthly_overhead,COALESCE(c.revision,0) AS revision FROM memberships m JOIN users u ON u.id=m.user_id LEFT JOIN employee_cost_profiles c ON c.user_id=u.id AND c.tenant_id=m.tenant_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant') ORDER BY u.name`,
+      `SELECT u.id,u.name,COALESCE(c.monthly_salary,0) AS monthly_salary,COALESCE(c.monthly_overhead,0) AS monthly_overhead,COALESCE(c.revision,0) AS revision FROM memberships m JOIN users u ON u.id=m.user_id LEFT JOIN employee_cost_profiles c ON c.user_id=u.id AND c.tenant_id=m.tenant_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant','platform_admin') ORDER BY u.name`,
     )
     .all(a.tenantId);
   const allocations = await d
@@ -360,7 +360,7 @@ export async function financeWrite(a: Actor, body: unknown) {
         v.employeeId &&
         !(await db()
           .prepare(
-            "SELECT user_id FROM memberships WHERE tenant_id=? AND user_id=? AND role IN ('owner','consultant')",
+            "SELECT user_id FROM memberships WHERE tenant_id=? AND user_id=? AND role IN ('owner','consultant','platform_admin')",
           )
           .get(a.tenantId, v.employeeId))
       )
@@ -466,7 +466,7 @@ export async function financeWrite(a: Actor, body: unknown) {
       if (
         !(await db()
           .prepare(
-            "SELECT user_id FROM memberships WHERE tenant_id=? AND user_id=? AND role IN ('owner','consultant')",
+            "SELECT user_id FROM memberships WHERE tenant_id=? AND user_id=? AND role IN ('owner','consultant','platform_admin')",
           )
           .get(a.tenantId, v.userId))
       )
@@ -507,7 +507,7 @@ export async function financeWrite(a: Actor, body: unknown) {
       if (
         !(await db()
           .prepare(
-            "SELECT user_id FROM memberships WHERE tenant_id=? AND user_id=? AND role IN ('owner','consultant')",
+            "SELECT user_id FROM memberships WHERE tenant_id=? AND user_id=? AND role IN ('owner','consultant','platform_admin')",
           )
           .get(a.tenantId, v.userId))
       )

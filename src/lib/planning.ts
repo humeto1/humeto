@@ -225,7 +225,7 @@ export async function planningWrite(a: Actor, body: unknown) {
       v.assignee &&
       !(await db()
         .prepare(
-          "SELECT u.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant') AND u.name=?",
+          "SELECT u.id FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.tenant_id=? AND m.role IN ('owner','consultant','platform_admin') AND u.name=?",
         )
         .get(a.tenantId, v.assignee))
     )

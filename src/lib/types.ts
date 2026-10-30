@@ -1,5 +1,8 @@
 export type Role = "platform_admin" | "owner" | "consultant" | "student";
 export type Actor = {
+  industry?: string;
+  platformAdmin?: boolean;
+  context?: "platform" | "workspace";
   id: string;
   name: string;
   email: string;
