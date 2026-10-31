@@ -1,3 +1,5 @@
+import { computeGoalTiming } from "../../shared/goal-clock";
+import { GoalDeadlineFields } from "../../shared/goal-timing";
 import { PlanningDrawer } from "../../shared/task-planning";
 import { TaskDuration } from "../../shared/plan-insights";
 import {
@@ -72,12 +74,21 @@ import { Capacitor, CapacitorHttp } from "@capacitor/core";
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { App as NativeApp } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
-import { api, ApiError, SERVER, timezone } from "./api";
+import {
+  api,
+  ApiError,
+  SERVER,
+  timezone,
+  saveToken,
+  getSavedToken,
+  clearSavedToken,
+} from "./api";
 import type { Bootstrap, Task, Workstream } from "./types";
 import {
   enableNotifications,
   syncNotifications,
   clearNotifications,
+  syncFocusTimerNotification,
 } from "./notifications";
 import "./style.css";
 const defaultCategories = [
@@ -112,7 +123,12 @@ async function downloadProjectFile(path: string, name: string) {
   const response = await CapacitorHttp.request({
     url: SERVER + path,
     method: "GET",
-    headers: { Origin: SERVER },
+    headers: {
+      Origin: SERVER,
+      ...((await getSavedToken())
+        ? { "x-humeto-session": (await getSavedToken())! }
+        : {}),
+    },
     responseType: "blob",
   });
   if (response.status !== 200 || typeof response.data !== "string")
@@ -203,7 +219,15 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
-    [type, setType] = useState("individual");
+    [type, setType] = useState("individual"),
+    [rememberMe, setRememberMe] = useState(true);
+  const [savedEmail] = useState(() => {
+    try {
+      return localStorage.getItem("humeto-saved-email") || "";
+    } catch {
+      return "";
+    }
+  });
   const authLock = useRef(false);
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -215,17 +239,36 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
     setMessage("");
     try {
       const body = Object.fromEntries(f);
-      await api(
+      const res = await api(
         "/api/auth/" +
           (mode === "signup"
             ? "register"
             : mode === "reset"
               ? "forgot-password"
               : "login"),
-        body,
+        mode === "login"
+          ? {
+              ...body,
+              remember: rememberMe,
+              nativeSession: Capacitor.isNativePlatform(),
+            }
+          : body,
       );
-      if (mode === "login") await ready();
-      else {
+      if (mode === "login") {
+        const emailStr = String(body.email || "");
+        if (rememberMe) {
+          try {
+            if (emailStr) localStorage.setItem("humeto-saved-email", emailStr);
+          } catch {}
+        } else {
+          await clearSavedToken();
+          try {
+            localStorage.removeItem("humeto-saved-email");
+          } catch {}
+        }
+        if (res?.token) await saveToken(res.token, rememberMe);
+        await ready();
+      } else {
         setMessage(
           mode === "signup"
             ? "Check your email to verify your account, then sign in here."
@@ -307,7 +350,13 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
           )}
           <label>
             Email
-            <input name="email" type="email" autoComplete="email" required />
+            <input
+              name="email"
+              type="email"
+              autoComplete="email"
+              defaultValue={savedEmail}
+              required
+            />
           </label>
           {mode !== "reset" && (
             <label>
@@ -322,6 +371,17 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
                 }
                 required
               />
+            </label>
+          )}
+          {mode === "login" && (
+            <label className="save-login-checkbox">
+              <input
+                name="remember"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>Keep me signed in for 30 days</span>
             </label>
           )}
           {error && (
@@ -415,6 +475,10 @@ function App() {
   const refreshSequence = useRef(0);
   const dataRef = useRef(data);
   dataRef.current = data;
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
+  const scheduleRef = useRef(schedule);
+  scheduleRef.current = schedule;
   async function refresh() {
     const sequence = ++refreshSequence.current;
     const [d, f, s, h] = await Promise.all([
@@ -427,10 +491,18 @@ function App() {
     ]);
     if (sequence !== refreshSequence.current) return;
     setData(d);
+    f.receivedAt = Date.now();
     setFocus(f);
     setSchedule(s);
     setHistory(h);
-    await syncNotifications(s.reminders, f.active, s.preferences, s.series);
+    await syncNotifications(
+      s.reminders,
+      f.active,
+      s.preferences,
+      s.series,
+      f.serverNow,
+      f.receivedAt,
+    );
   }
   useEffect(() => {
     const refreshAlerts = () => void load();
@@ -444,8 +516,13 @@ function App() {
     try {
       await refresh();
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) setData(null);
-      else setError((e as Error).message);
+      if (e instanceof ApiError && e.status === 401) {
+        dataRef.current = null;
+        focusRef.current = null;
+        setData(null);
+        setFocus(null);
+        void syncFocusTimerNotification(null);
+      } else setError((e as Error).message);
     } finally {
       loadingRequest.current = false;
       setLoading(false);
@@ -464,12 +541,38 @@ function App() {
     window.addEventListener("online", network);
     window.addEventListener("offline", network);
     const listener = NativeApp.addListener("appStateChange", (s) => {
-      if (s.isActive && dataRef.current) void load();
+      if (s.isActive && dataRef.current) {
+        void load();
+      } else if (!s.isActive && dataRef.current && focusRef.current?.active) {
+        void syncFocusTimerNotification(
+          focusRef.current.active,
+          focusRef.current.serverNow,
+          scheduleRef.current?.preferences?.enabled !== false,
+          focusRef.current.receivedAt,
+        );
+      }
     });
     return () => {
       clearInterval(t);
       window.removeEventListener("online", network);
       window.removeEventListener("offline", network);
+      void listener.then((l) => l.remove());
+    };
+  }, []);
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== "android") return;
+    const openFocus = () => {
+      setTab("focus");
+      setSheet(null);
+      setSelected(null);
+    };
+    const listener = NativeApp.addListener("appUrlOpen", ({ url }) => {
+      if (url === "humeto://focus") openFocus();
+    });
+    void NativeApp.getLaunchUrl().then((launch) => {
+      if (launch?.url === "humeto://focus") openFocus();
+    });
+    return () => {
       void listener.then((l) => l.remove());
     };
   }, []);
@@ -516,7 +619,13 @@ function App() {
       if (refreshAfter) await refresh();
       setNotice(msg);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) setData(null);
+      if (e instanceof ApiError && e.status === 401) {
+        dataRef.current = null;
+        focusRef.current = null;
+        setData(null);
+        setFocus(null);
+        void syncFocusTimerNotification(null);
+      }
       setError((e as Error).message);
     } finally {
       busyLock.current = false;
@@ -732,6 +841,16 @@ function App() {
           minutes,
           ...extras,
         });
+        const updated = await api("/api/workspace/focus");
+        updated.receivedAt = Date.now();
+        focusRef.current = updated;
+        setFocus(updated);
+        await syncFocusTimerNotification(
+          updated.active,
+          updated.serverNow,
+          scheduleRef.current?.preferences?.enabled !== false,
+          updated.receivedAt,
+        );
         setFocusSelection("");
       },
       action === "complete"
@@ -1760,11 +1879,15 @@ function App() {
                           </span>
                           <ChevronRight size={17} />
                         </button>
+                        {kind === "goals" && (
+                          <p>{computeGoalTiming(p).summary}</p>
+                        )}
                         <ParentControls
                           type={kind === "projects" ? "project" : "goal"}
                           id={p.id}
                           writable={writable}
                           request={api}
+                          onUpdate={refresh}
                           shareLink={async (url, title) => {
                             await Share.share({
                               title,
@@ -2386,14 +2509,18 @@ function App() {
                 What would success look like?
                 <textarea name="description" maxLength={2000} />
               </label>
-              <label>
-                {planView === "goals" ? "Deadline" : "Deadline (optional)"}
-                <input
-                  name="targetDate"
-                  type="date"
-                  required={planView === "goals"}
-                />
-              </label>
+              {planView === "goals" ? (
+                <GoalDeadlineFields key={""} value={""} />
+              ) : (
+                <label>
+                  {planView === "goals" ? "Deadline" : "Deadline (optional)"}
+                  <input
+                    name="targetDate"
+                    type="date"
+                    required={planView === "goals"}
+                  />
+                </label>
+              )}
               <label>
                 Category
                 <input
@@ -2595,10 +2722,14 @@ function App() {
               onClick={() =>
                 void run(
                   async () => {
-                    await clearNotifications();
                     await api("/api/auth/logout", {});
                     refreshSequence.current++;
+                    dataRef.current = null;
+                    focusRef.current = null;
                     setData(null);
+                    setFocus(null);
+                    await clearSavedToken();
+                    await clearNotifications();
                     setSheet(null);
                   },
                   "Signed out.",
@@ -2609,7 +2740,7 @@ function App() {
               <LogOut size={16} /> Sign out
             </button>
             <small className="muted">
-              Humeto mobile · 0.2.11 testing build
+              Humeto mobile · 0.2.18 testing build
               <br />
               Cloud sync requires an internet connection. No private documents
               or passwords are stored in the app bundle.

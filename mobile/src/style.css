@@ -1034,6 +1034,24 @@ legend {
 .auth-card .primary {
   margin-top: 20px;
 }
+.save-login-checkbox {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px !important;
+  color: var(--ink-secondary, #3d5045);
+  margin: 8px 0 10px 0 !important;
+  user-select: none;
+}
+.save-login-checkbox input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px !important;
+  margin: 0 !important;
+  accent-color: var(--primary, #234c3b);
+  cursor: pointer;
+}
 .loading {
   height: 100dvh;
   display: flex;

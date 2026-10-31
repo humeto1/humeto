@@ -1,3 +1,5 @@
+import { getSavedToken, clearSavedToken } from "./session";
+export { getSavedToken, saveToken, clearSavedToken } from "./session";
 import { Capacitor, CapacitorHttp } from "@capacitor/core";
 const qaServer =
   import.meta.env.MODE === "qa"
@@ -24,6 +26,10 @@ export async function api<T = any>(
 ): Promise<T> {
   if (!path.startsWith("/api/")) throw Error("Invalid API path");
   const verb = method || (body ? "POST" : "GET");
+  const token = Capacitor.isNativePlatform() ? await getSavedToken() : null;
+  const authHeaders: Record<string, string> = token
+    ? { "x-humeto-session": token }
+    : {};
   let status: number, data: any;
   if (Capacitor.isNativePlatform()) {
     const r = await CapacitorHttp.request({
@@ -32,6 +38,7 @@ export async function api<T = any>(
       headers: {
         Origin: SERVER,
         Accept: "application/json",
+        ...authHeaders,
         ...(body ? { "Content-Type": "application/json" } : {}),
       },
       ...(body ? { data: body } : {}),
@@ -45,12 +52,18 @@ export async function api<T = any>(
     const r = await fetch(path, {
       method: verb,
       credentials: "include",
-      headers: body ? { "Content-Type": "application/json" } : {},
+      headers: {
+        ...authHeaders,
+        ...(body ? { "Content-Type": "application/json" } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
     });
     status = r.status;
     data = await r.json();
+  }
+  if (status === 401) {
+    await clearSavedToken();
   }
   if (status < 200 || status >= 300)
     throw new ApiError(

@@ -11,12 +11,14 @@ export function ParentControls({
   request = webApi,
   shareLink,
   downloadFile,
+  onUpdate,
 }: {
   type: "project" | "goal";
   id: string;
   writable: boolean;
   request?: Transport;
   shareLink?: (url: string, title: string) => Promise<void>;
+  onUpdate?: () => Promise<void>;
   downloadFile?: (path: string, name: string) => Promise<void>;
 }) {
   const [collaborating, setCollaborating] = useState(false);
@@ -30,7 +32,13 @@ export function ParentControls({
         overflowWrap: "anywhere",
       }}
     >
-      <PlanInsights type={type} id={id} request={request} writable={writable} />
+      <PlanInsights
+        type={type}
+        id={id}
+        request={request}
+        writable={writable}
+        onUpdate={onUpdate}
+      />
       <PlanTeam type={type} id={id} request={request} writable={writable} />
       <PlanFinancial
         type={type}

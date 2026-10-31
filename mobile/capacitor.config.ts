@@ -2,6 +2,7 @@ import type { CapacitorConfig } from "@capacitor/cli";
 const config: CapacitorConfig = {
   appId: "com.humeto.tasks",
   appName: "Humeto",
+  loggingBehavior: "none",
   webDir: "dist",
   server: { androidScheme: "https" },
   ios: { contentInset: "automatic", backgroundColor: "#f7f8f2" },

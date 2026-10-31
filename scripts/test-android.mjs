@@ -244,7 +244,7 @@ try {
   await cdp.wait(`Boolean(document.querySelector('input[name=email]'))`);
   const nativeApi = async (path, body, method) =>
     cdp.evaluate(
-      `(async()=>{const r=await window.Capacitor.Plugins.CapacitorHttp.request({url:${JSON.stringify(qaOrigin)}+${JSON.stringify(path)},method:${JSON.stringify(method || (body ? "POST" : "GET"))},headers:{Origin:${JSON.stringify(qaOrigin)},'Content-Type':'application/json'},${body ? "data:" + JSON.stringify(body) + "," : ""}responseType:'json'});return {status:r.status,data:r.data};})()`,
+      `(async()=>{const r=await window.Capacitor.Plugins.CapacitorHttp.request({url:${JSON.stringify(qaOrigin)}+${JSON.stringify(path)},method:${JSON.stringify(method || (body ? "POST" : "GET"))},headers:{Origin:${JSON.stringify(qaOrigin)},'Content-Type':'application/json',...((await window.Capacitor.Plugins.HumetoDevice.readSession()).token?{'x-humeto-session':(await window.Capacitor.Plugins.HumetoDevice.readSession()).token}:{})},${body ? "data:" + JSON.stringify(body) + "," : ""}responseType:'json'});return {status:r.status,data:r.data};})()`,
     );
   await check(
     "Native bridge uses isolated backend; no anonymous task access",
@@ -271,6 +271,62 @@ try {
         await cdp.evaluate(`document.cookie.includes('humeto_session')`),
         false,
       );
+    },
+  );
+  await check(
+    "Saved login is encrypted and survives app process restart without cookies",
+    async () => {
+      assert.equal(
+        await cdp.evaluate("localStorage.getItem('humeto-auth-token')"),
+        null,
+      );
+      const encrypted = adbRun([
+        "shell",
+        "run-as",
+        "com.humeto.tasks.qa",
+        "cat",
+        "shared_prefs/humeto-private-session.xml",
+      ]);
+      assert.ok(encrypted.includes('name="value"'));
+      assert.equal(
+        await cdp.evaluate(
+          `window.Capacitor.Plugins.HumetoDevice.readSession().then(r=>r.token.length)`,
+        ),
+        43,
+      );
+      await cdp.evaluate(
+        `window.Capacitor.Plugins.CapacitorCookies.clearCookies({url:${JSON.stringify(qaOrigin)}})`,
+      );
+      cdp.close();
+      cdp = null;
+      adbRun(["shell", "am", "force-stop", "com.humeto.tasks.qa"]);
+      adbRun([
+        "shell",
+        "am",
+        "start",
+        "-n",
+        "com.humeto.tasks.qa/com.humeto.tasks.MainActivity",
+      ]);
+      for (let i = 0; i < 100; i++) {
+        try {
+          const freshPid = adbRun([
+            "shell",
+            "pidof",
+            "com.humeto.tasks.qa",
+          ]).split(" ")[0];
+          adbRun([
+            "forward",
+            `tcp:${forward}`,
+            `localabstract:webview_devtools_remote_${freshPid}`,
+          ]);
+          cdp = await connectWebView(forward);
+          break;
+        } catch {}
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      assert.ok(cdp, "App restarted");
+      await cdp.wait(`document.body.innerText.includes('What matters today?')`);
+      assert.equal((await nativeApi("/api/mobile")).status, 200);
     },
   );
   const title = "Android native acceptance task";
@@ -515,6 +571,13 @@ try {
       await cdp.click("Plans");
       await cdp.select('select[aria-label="Add plan"]', "goals");
       await cdp.fill("input[name=title]", "Android QA goal");
+      await cdp.click("90 days");
+      assert.match(
+        await cdp.evaluate(
+          "document.querySelector('input[name=targetDate]').value",
+        ),
+        /^\d{4}-\d{2}-\d{2}$/,
+      );
       await cdp.fill("input[name=targetDate]", "2027-03-31");
       await cdp.click("Create");
       await cdp.wait(`!document.querySelector('[role=dialog]')`);
@@ -539,6 +602,9 @@ try {
         goal = state.goals.find((g) => g.title === "Android QA goal");
       assert.ok(project && goal);
       assert.equal(project.target_date, "");
+      await cdp.wait(
+        `Array.from(document.querySelectorAll('.mobile-plan-card')).some(e=>e.textContent.includes('Android QA project'))`,
+      );
       await cdp.evaluate(
         `Array.from(document.querySelectorAll('.mobile-plan-card')).find(e=>e.textContent.includes('Android QA project')).querySelector('summary').click()`,
       );
@@ -872,7 +938,7 @@ try {
           "clean",
         );
       const result = await cdp.evaluate(
-        `window.Capacitor.Plugins.CapacitorHttp.request({url:${JSON.stringify(qaOrigin)}+'/api/project-sharing?projectId=demo-project-intake&attachment=${fid}',method:'GET',headers:{Origin:${JSON.stringify(qaOrigin)}},responseType:'blob'}).then(async r=>{if(r.status!==200)throw Error('Download denied '+r.status);await window.Capacitor.Plugins.Filesystem.writeFile({path:'native-download-qa.pdf',directory:'CACHE',data:r.data});const read=await window.Capacitor.Plugins.Filesystem.readFile({path:'native-download-qa.pdf',directory:'CACHE'});await window.Capacitor.Plugins.Filesystem.deleteFile({path:'native-download-qa.pdf',directory:'CACHE'});return read.data;})`,
+        `(async()=>window.Capacitor.Plugins.CapacitorHttp.request({url:${JSON.stringify(qaOrigin)}+'/api/project-sharing?projectId=demo-project-intake&attachment=${fid}',method:'GET',headers:{Origin:${JSON.stringify(qaOrigin)},'x-humeto-session':(await window.Capacitor.Plugins.HumetoDevice.readSession()).token},responseType:'blob'}).then(async r=>{if(r.status!==200)throw Error('Download denied '+r.status);await window.Capacitor.Plugins.Filesystem.writeFile({path:'native-download-qa.pdf',directory:'CACHE',data:r.data});const read=await window.Capacitor.Plugins.Filesystem.readFile({path:'native-download-qa.pdf',directory:'CACHE'});await window.Capacitor.Plugins.Filesystem.deleteFile({path:'native-download-qa.pdf',directory:'CACHE'});return read.data;}))()`,
       );
       assert.equal(result, bytes.toString("base64"));
       await d.prepare("DELETE FROM project_attachments WHERE id=?").run(fid);
@@ -895,6 +961,51 @@ try {
       await cdp.wait(
         `document.querySelector('.focus-session .pill')?.textContent.includes('Focusing')`,
       );
+      await cdp.wait(
+        `window.Capacitor.Plugins.LocalNotifications.getDeliveredNotifications().then(r=>r.notifications.some(n=>n.id===2000000002))`,
+      );
+      adbRun(["shell", "input", "keyevent", "KEYCODE_HOME"]);
+      adbRun(["shell", "cmd", "statusbar", "expand-notifications"]);
+      await new Promise((r) => setTimeout(r, 1000));
+      writeFileSync(
+        join(out, "focus-notification-background.png"),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
+      );
+      adbRun(["shell", "cmd", "statusbar", "collapse"]);
+      let notificationDump = adbRun([
+        "shell",
+        "dumpsys",
+        "notification",
+        "--noredact",
+      ]);
+      assert.ok(notificationDump.includes("Focusing ·"));
+      assert.match(
+        notificationDump,
+        /android\.chronometerCountDown=(?:Boolean \()?true/,
+      );
+      adbRun([
+        "shell",
+        "am",
+        "start",
+        "-n",
+        "com.humeto.tasks.qa/com.humeto.tasks.MainActivity",
+        "-a",
+        "android.intent.action.VIEW",
+        "-d",
+        "humeto://focus",
+      ]);
+      await cdp.wait(`!!document.querySelector('.focus-session')`);
+      // PluginCall.getLong incorrectly rejected small JSON integer seconds in the draft.
+      await cdp.evaluate(
+        `window.Capacitor.Plugins.HumetoDevice.updateFocusNotification({title:'Integer countdown QA',state:'paused',targetMinutes:25,remainingSeconds:65,checkInAt:0})`,
+      );
+      notificationDump = adbRun([
+        "shell",
+        "dumpsys",
+        "notification",
+        "--noredact",
+      ]);
+      assert.ok(notificationDump.includes("01:05 remaining"));
       await cdp.evaluate(
         `document.querySelector('.focus-transition > summary').click()`,
       );
@@ -960,6 +1071,9 @@ try {
       await cdp.click("Confirm");
       await cdp.wait(
         `document.querySelector('.focus-session h2')?.textContent==='Choose a task'`,
+      );
+      await cdp.wait(
+        `window.Capacitor.Plugins.LocalNotifications.getDeliveredNotifications().then(r=>!r.notifications.some(n=>n.id===2000000002))`,
       );
       assert.equal(
         (await nativeApi("/api/mobile")).data.tasks.find((t) => t.id === taskId)
@@ -1472,6 +1586,12 @@ try {
       await cdp.click("Sign out");
       await cdp.wait(`Boolean(document.querySelector('input[name=email]'))`);
       assert.equal((await nativeApi("/api/mobile")).status, 401);
+      assert.equal(
+        await cdp.evaluate(
+          "window.Capacitor.Plugins.HumetoDevice.readSession().then(r=>!!r.token)",
+        ),
+        false,
+      );
       assert.equal(
         await cdp.evaluate(
           `window.Capacitor.Plugins.LocalNotifications.getPending().then(r=>r.notifications.length)`,

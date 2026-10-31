@@ -67,6 +67,8 @@ export async function POST(
         .object({
           email: z.email().max(254),
           password: z.string().min(1).max(256),
+          remember: z.boolean().optional().default(false),
+          nativeSession: z.boolean().optional().default(false),
         })
         .parse(body);
       const key = input.email.toLowerCase();
@@ -144,12 +146,25 @@ export async function POST(
       }
       await db().prepare("DELETE FROM login_attempts WHERE key=?").run(key);
       const m = (await db()
-        .prepare("SELECT tenant_id FROM memberships WHERE user_id=? LIMIT 1")
+        .prepare(
+          "SELECT tenant_id,role FROM memberships WHERE user_id=? LIMIT 1",
+        )
         .get(user.id)) as {
         tenant_id: string;
+        role: string;
       };
-      await newSession(user.id, m.tenant_id);
-      return NextResponse.json({ ok: true });
+      const token = await newSession(
+        user.id,
+        m.tenant_id,
+        input.remember ? 30 * 86400000 : 12 * 3600000,
+        input.nativeSession && m.role === "platform_admin"
+          ? "workspace"
+          : "platform",
+      );
+      return NextResponse.json(
+        { ok: true, ...(input.nativeSession ? { token } : {}) },
+        { headers: { "Cache-Control": "no-store" } },
+      );
     }
     if (action === "register") {
       if (process.env.HUMETO_SIGNUP_ENABLED === "false")

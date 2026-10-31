@@ -1,4 +1,12 @@
-# Latest Android build: 0.2.4 (version code 6)
+# Latest Android build: 0.2.18 (version code 20)
+
+Released 2026-11-01: active focus countdown in Android notifications while using other apps; tap returns to Focus. Keep me signed in saves a 30-day session securely with Android Keystore (passwords are never stored). Goal timeframes offer day presets/custom dates, extension and independent new cycles on web and Android. Ongoing projects retain optional deadlines. Native acceptance: 31 checks passed, including a real process restart with cookies cleared, native countdown/paused display, completion cleanup and server-session logout.
+
+See [implementation and behavior](FOCUS_LOGIN_GOAL_TIMEFRAMES.md). Install the new website APK, then sign in once with Keep me signed in selected. Installed apps require an update; website deployment alone does not update native code.
+
+The release notes below are historical unless explicitly marked current.
+
+# Historical Android build: 0.2.4 (version code 6)
 
 Hold the task grip to drag between board stages or priority quadrants; edge scrolling and cancellation are supported. Plans opens Projects, Goals and Routines as peer sections with one Add menu; Assistant is renamed Chat. Focus has one task selector, Start/Pause/Stop, hold-or-confirm completion, compact break/reset panels and recent history. Tasks use an eye icon for the overview and a due-date calendar. The same backend/authentication/database remain in use. See [task interaction notes](TASK_PLANNING.md). Android emulator: 26 checks passed; both builds and focused web/mobile UI checks pass. Earlier release counts below are historical.
 
@@ -10,7 +18,7 @@ The mobile client is a separate React 19 / TypeScript interface bundled with Vit
 
 Today dashboard; compact priority quadrants, board and list; task creation/editing/completion, dates, assignees, team links, projects/goals, focus timer and check-ins, recurrence controls, reminders and assistant reviews. The live assistant model remains pinned server-side to GPT-5.4 mini. Device reminders use opt-in native local notifications. Data refreshes on app resume and every 30 seconds while visible; edits refresh immediately. No offline writes or remote push transport is claimed.
 
-`GET /api/mobile` authenticates the same session cookie and returns only the authorized task workspace payload. Mobile uses Capacitor native HTTP and platform cookie jars, without relaxing web CORS/CSRF checks or exposing session tokens through app storage. TLS-only production networking is fixed to www.humeto.com. Android backups are disabled. Reused task PATCH supports validated title, date and assignee edits with optimistic revisions, tenant validation and completion triggers.
+`GET /api/mobile` authenticates the authorized session and returns only the permitted task workspace payload. Android now uses an encrypted native session token alongside the existing cookie path, without relaxing same-origin checks or workspace permissions. Browser sessions remain HttpOnly cookies. TLS-only production networking is fixed to www.humeto.com. Android backups are disabled. Reused task PATCH supports validated title, date and assignee edits with optimistic revisions, tenant validation and completion triggers.
 
 ## Validation
 
@@ -28,7 +36,7 @@ Today dashboard; compact priority quadrants, board and list; task creation/editi
 
 ## Remaining before store release
 
-Physical-device acceptance testing; production release signing/version policy; offline sync design; APNs/FCM remote push and device registration; mobile notebook capture; server-worker hosting for future recurrence generation. Local reminders may remain stale until next sync if tasks change elsewhere while the app stays closed. Native sessions currently match web: 12 hours. Android notifications may be delayed by OS scheduling. iOS testing requires full Xcode and Apple signing when resumed.
+Physical-device acceptance testing; production release signing/version policy; offline sync design; APNs/FCM remote push and device registration; mobile notebook capture; server-worker hosting for future recurrence generation. Local reminders may remain stale until next sync if tasks change elsewhere while the app stays closed. Current native and web login offer 30-day remembered sessions, or 12 hours when unselected. Android notifications may be delayed by OS scheduling. iOS testing requires full Xcode and Apple signing when resumed.
 
 ## Focus selection and task categories · 2026-10-23
 

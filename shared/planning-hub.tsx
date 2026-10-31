@@ -1,4 +1,5 @@
 "use client";
+import { GoalDeadlineFields } from "./goal-timing";
 import { TaskDetailGroup } from "./task-detail-group";
 import { PlanFinancial } from "./plan-financial";
 import { PlanTeam } from "./plan-team";
@@ -800,15 +801,22 @@ export default function PlanningHub({
               </select>
             </label>
           )}
-          <label>
-            {edit.kind === "goals" ? "Deadline" : "Deadline (optional)"}
-            <input
-              name="targetDate"
-              type="date"
-              required={edit.kind === "goals"}
-              defaultValue={edit.item.target_date || ""}
+          {edit.kind === "goals" ? (
+            <GoalDeadlineFields
+              key={edit.item.target_date || ""}
+              value={edit.item.target_date || ""}
             />
-          </label>
+          ) : (
+            <label>
+              {edit.kind === "goals" ? "Deadline" : "Deadline (optional)"}
+              <input
+                name="targetDate"
+                type="date"
+                required={edit.kind === "goals"}
+                defaultValue={edit.item.target_date || ""}
+              />
+            </label>
+          )}
           <button disabled={!writable || busy}>Save calendar plan</button>
           <button type="button" onClick={() => setEdit(null)}>
             Cancel

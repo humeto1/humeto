@@ -1,3 +1,14 @@
+import {
+  focusNotification,
+  type FocusSessionData,
+  type FocusSnapshot,
+} from "./focus-notification";
+let focusSnapshot: FocusSnapshot | null = null;
+try {
+  focusSnapshot = JSON.parse(
+    localStorage.getItem("humeto-focus-snapshot") || "null",
+  );
+} catch {}
 import { api } from "./api";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
@@ -15,6 +26,15 @@ const Device = registerPlugin<{
     vibration: boolean;
   }) => Promise<void>;
   settings: () => Promise<void>;
+  updateFocusNotification: (options: {
+    title: string;
+    state: string;
+    targetMinutes: number;
+    remainingSeconds: number;
+    checkInAt: number;
+    breakUntil?: number;
+  }) => Promise<void>;
+  clearFocusNotification: () => Promise<void>;
 }>("HumetoDevice");
 type Prefs = {
   enabled?: boolean;
@@ -104,20 +124,60 @@ export const deviceAlerts: DeviceAlerts = {
     });
   },
 };
+let focusSync: Promise<void> = Promise.resolve();
+export function syncFocusTimerNotification(
+  active?: FocusSessionData,
+  serverNow?: string,
+  prefsEnabled = true,
+  receivedAt = Date.now(),
+) {
+  focusSync = focusSync
+    .catch(() => {})
+    .then(() => updateFocusTimer(active, serverNow, prefsEnabled, receivedAt));
+  return focusSync;
+}
+async function updateFocusTimer(
+  active?: FocusSessionData,
+  serverNow?: string,
+  prefsEnabled = true,
+  receivedAt = Date.now(),
+) {
+  if (Capacitor.getPlatform() !== "android") return;
+  const value = prefsEnabled
+    ? focusNotification(
+        active || null,
+        serverNow,
+        receivedAt,
+        Date.now(),
+        focusSnapshot,
+      )
+    : null;
+  if (!value) {
+    focusSnapshot = null;
+    localStorage.removeItem("humeto-focus-snapshot");
+    await Device.clearFocusNotification().catch(() => {});
+    return;
+  }
+  focusSnapshot = value.snapshot;
+  localStorage.setItem("humeto-focus-snapshot", JSON.stringify(focusSnapshot));
+  await Device.updateFocusNotification(value.options).catch(() => {});
+}
+
 export async function syncNotifications(
   reminders: { id: string; title: string; remind_at: string }[],
-  focus?: {
-    id: string;
-    title: string;
-    check_in_at: string;
-    break_until?: string;
-    ended_at?: string;
-    state: string;
-  } | null,
+  focus?: FocusSessionData,
   prefs: Prefs = { enabled: true, tone: "chime", vibration: true },
   series: any[] = [],
+  serverNow?: string,
+  receivedAt = Date.now(),
 ) {
   if (!Capacitor.isNativePlatform()) return;
+  await syncFocusTimerNotification(
+    focus,
+    serverNow,
+    prefs?.enabled !== false,
+    receivedAt,
+  );
   let device = localStorage.getItem("humeto-native-notification-device");
   if (!device) {
     device = crypto.randomUUID();
@@ -169,7 +229,10 @@ export async function syncNotifications(
 }
 
 export async function clearNotifications() {
+  focusSnapshot = null;
+  localStorage.removeItem("humeto-focus-snapshot");
   if (!Capacitor.isNativePlatform()) return;
+  await syncFocusTimerNotification(null);
   const device = localStorage.getItem("humeto-native-notification-device");
   if (device)
     try {

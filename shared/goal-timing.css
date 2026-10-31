@@ -1,0 +1,66 @@
+.goal-timer-widget {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  margin: 10px 0;
+  border: 1px solid #cdd8c5;
+  border-radius: 14px;
+  background: #f5f8f0;
+  color: #234c3b;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.goal-timer-widget small {
+  color: #425741;
+}
+.goal-timer-widget progress {
+  width: 100%;
+  accent-color: #234c3b;
+}
+.goal-timer-actions,
+.goal-presets-chips {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.goal-action-btn,
+.goal-preset-chip {
+  min-height: 44px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 14px;
+  border: 1px solid #8c9f82;
+  border-radius: 10px;
+  background: #fff;
+  color: #234c3b;
+  cursor: pointer;
+}
+.goal-action-btn:hover:not(:disabled),
+.goal-preset-chip:hover {
+  background: #e6efd9;
+}
+.goal-action-btn:focus-visible,
+.goal-preset-chip:focus-visible {
+  outline: 2px solid #234c3b;
+  outline-offset: 3px;
+}
+.goal-action-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.goal-presets-row {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0;
+  min-width: 0;
+}
+.goal-presets-row input {
+  max-width: 100%;
+  min-width: 0;
+}
+.goal-timer-widget form {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}

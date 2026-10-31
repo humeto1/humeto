@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { webApi, type Transport } from "./transport";
+import { GoalTimerCardWidget } from "./goal-timing";
 import "./productivity.css";
 const timestamp = (s: string) =>
   s
@@ -61,7 +62,9 @@ export function PlanInsights({
   id,
   writable,
   request = webApi,
+  onUpdate,
 }: {
+  onUpdate?: () => Promise<void>;
   type: "project" | "goal";
   id: string;
   writable: boolean;
@@ -101,6 +104,17 @@ export function PlanInsights({
         {error && <p role="alert">{error}</p>}
         {data && (
           <>
+            {type === "goal" && (
+              <GoalTimerCardWidget
+                goal={data.parent}
+                writable={writable}
+                request={request}
+                onUpdate={async () => {
+                  await load();
+                  await onUpdate?.();
+                }}
+              />
+            )}
             <strong>
               {data.parent.status === "Completed" && !data.parent.completed_at
                 ? "Completion date not recorded"

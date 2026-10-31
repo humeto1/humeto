@@ -139,6 +139,7 @@ export default function Login({
                   name: f.get("name"),
                   email: f.get("email"),
                   password: f.get("password"),
+                  remember: f.get("remember") === "on",
                   accountType,
                   companyName: f.get("companyName") || "",
                   industry: f.get("industry") || "education",
@@ -226,6 +227,24 @@ export default function Login({
                   }
                 />
               </label>
+              {mode === "login" && (
+                <label
+                  style={{
+                    display: "flex",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  <input
+                    style={{ width: 18 }}
+                    type="checkbox"
+                    name="remember"
+                    defaultChecked
+                  />
+                  Keep me signed in for 30 days
+                </label>
+              )}
               <button className="btn primary full" disabled={!!busy}>
                 {busy === mode ? (
                   <LoaderCircle className="spin" size={16} />

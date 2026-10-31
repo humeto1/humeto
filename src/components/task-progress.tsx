@@ -1,4 +1,6 @@
 "use client";
+import { computeGoalTiming } from "../../shared/goal-clock";
+import { GoalDeadlineFields } from "../../shared/goal-timing";
 import { taskGoals } from "../../shared/task-relations";
 import { ParentControls } from "../../shared/parent-controls";
 import PlanningHub, { categories } from "../../shared/planning-hub";
@@ -308,10 +310,12 @@ export default function TaskProgress({
                     </span>
                     <span>{related.length - done} pending</span>
                   </footer>
+                  {tab === "goals" && <p>{computeGoalTiming(item).summary}</p>}
                   <ParentControls
                     type={tab === "projects" ? "project" : "goal"}
                     id={item.id}
                     writable={writable}
+                    onUpdate={refresh}
                   />
                   <details>
                     <summary>View contributing tasks</summary>
@@ -665,15 +669,21 @@ export default function TaskProgress({
               </label>
             )}
             <div className="crm-fields">
-              <label>
-                {edit.kind === "goals" ? "Deadline" : "Deadline (optional)"}
-                <input
-                  required={edit.kind === "goals"}
-                  name="targetDate"
-                  type="date"
-                  defaultValue={edit.item?.target_date}
+              {edit.kind === "goals" ? (
+                <GoalDeadlineFields
+                  key={edit.item?.target_date || ""}
+                  value={edit.item?.target_date || ""}
                 />
-              </label>
+              ) : (
+                <label>
+                  Deadline (optional)
+                  <input
+                    name="targetDate"
+                    type="date"
+                    defaultValue={edit.item?.target_date}
+                  />
+                </label>
+              )}
               <label>
                 Status
                 <select

@@ -13,7 +13,9 @@ import type { Actor } from "./types";
 const cookieName = "humeto_session";
 const digest = (s: string) => createHash("sha256").update(s).digest("hex");
 export async function actor(): Promise<Actor | null> {
-  const token = (await cookies()).get(cookieName)?.value;
+  const h = await headers().catch(() => null);
+  const token =
+    h?.get("x-humeto-session") || (await cookies()).get(cookieName)?.value;
   if (!token) return null;
   const row = await db()
     .prepare(
@@ -27,25 +29,32 @@ export async function requireActor() {
   if (!a) redirect("/login");
   return a;
 }
-export async function newSession(userId: string, tenantId: string) {
+export async function newSession(
+  userId: string,
+  tenantId: string,
+  durationMs: number = 1000 * 60 * 60 * 12,
+  context: "platform" | "workspace" = "platform",
+) {
   const token = randomBytes(32).toString("base64url");
   await db().prepare("DELETE FROM sessions WHERE expires_at<?").run(Date.now());
   await db()
     .prepare(
-      "INSERT INTO sessions(token_hash,user_id,tenant_id,expires_at) VALUES(?,?,?,?)",
+      "INSERT INTO sessions(token_hash,user_id,tenant_id,expires_at,context) VALUES(?,?,?,?,?)",
     )
-    .run(digest(token), userId, tenantId, Date.now() + 1000 * 60 * 60 * 12);
+    .run(digest(token), userId, tenantId, Date.now() + durationMs, context);
   (await cookies()).set(cookieName, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.HUMETO_HTTPS === "true" || process.env.VERCEL === "1",
     path: "/",
-    maxAge: 60 * 60 * 12,
+    maxAge: Math.floor(durationMs / 1000),
   });
+  return token;
 }
 export async function endSession() {
   const jar = await cookies(),
-    token = jar.get(cookieName)?.value;
+    h = await headers().catch(() => null),
+    token = h?.get("x-humeto-session") || jar.get(cookieName)?.value;
   if (token)
     await db()
       .prepare("DELETE FROM sessions WHERE token_hash=?")
@@ -110,7 +119,9 @@ export async function setSessionContext(
   a: Actor,
   context: "platform" | "workspace",
 ) {
-  const token = (await cookies()).get(cookieName)?.value;
+  const jar = await cookies(),
+    h = await headers().catch(() => null),
+    token = h?.get("x-humeto-session") || jar.get(cookieName)?.value;
   if (!token || !a.platformAdmin) throw Error("Not permitted.");
   const result = await db()
     .prepare(
