@@ -20,6 +20,10 @@ export default function LegalDocument({
       <p>Humeto · For adults aged 18 and over</p>
       <h1>{title}</h1>
       <p>
+        Humeto is provided by Nabeel Khalid, using the developer display name
+        DOTIVATE.
+      </p>
+      <p>
         Updated 1 November 2026 · Contact{" "}
         <a href="mailto:help@humeto.com">help@humeto.com</a>
       </p>

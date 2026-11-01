@@ -1,5 +1,7 @@
 # Humeto Data safety worksheet — draft, not submitted
 
+Developer supplied by owner: Nabeel Khalid, Play display name DOTIVATE, personal account. Registered country and Console verification remain unconfirmed.
+
 Checked 1 November 2026. Audience: adults 18+. **Collection is YES.** “We do not
 sell personal data” is the owner's policy commitment; it does not imply no
 collection, no recipients, no cloud processing, or no third-party disclosure.

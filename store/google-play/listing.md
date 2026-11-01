@@ -1,5 +1,9 @@
 # Draft Google Play listing — requires owner/Console review
 
+Legal developer: **Nabeel Khalid**. Developer display name: **DOTIVATE**.
+Account type: **personal** (owner-provided; Console verification pending).
+Registered country and account creation date: **not yet confirmed**.
+
 App name (30-character limit): **Humeto: AI Tasks & Focus**
 
 Short description (80-character limit):
@@ -36,7 +40,7 @@ Support: help@humeto.com
 
 ## Required before submission
 
-- [ ] Confirm legal developer identity/country/account type and listing category.
+- [ ] Verify Nabeel Khalid / DOTIVATE personal-account details in Console; confirm registered country, account creation date and listing category.
 - [ ] Resolve every blocker in docs/GOOGLE_PLAY_READINESS.md, especially UGC/AI reporting, deletion fulfilment and billing.
 - [ ] Reconcile this text with final feature availability and commercial terms.
 - [ ] Supply a compliant 512×512 icon, 1024×500 feature graphic and actual current app screenshots; verify Console format/count/device rules.
