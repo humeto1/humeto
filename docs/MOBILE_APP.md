@@ -1,6 +1,6 @@
 # Latest testing build: 0.2.19 (version code 21)
 
-Play-readiness preparation, 1 November 2026: public privacy/terms/deletion-request pages; settings links; adults-18+ signup/policy affirmation; narrower FileProvider and temporary share-cache cleanup; separate upload-signing/release-AAB build workflow. 200 release checks and 31 Android checks passed. An unsigned AAB was built for review only. **This testing APK is not a Play-ready release.** See [the launch checklist](GOOGLE_PLAY_READINESS.md), [Data safety worksheet](GOOGLE_PLAY_DATA_SAFETY.md) and [separate child-safety roadmap](CHILD_SAFETY_ROADMAP.md). Account-deletion fulfilment, moderation/reporting, billing, owner identity/signing and Console gates remain open.
+Play-readiness preparation, 1 November 2026: public privacy/terms/deletion-request pages; settings links; adults-18+ signup/policy affirmation; narrower FileProvider and temporary share-cache cleanup; separate upload-signing/release-AAB build workflow. 200 release checks and 31 Android checks passed. An unsigned AAB was built for review only. **This testing APK is not a Play-ready release.** Local launch checklists, Data safety notes and the child-safety roadmap are kept in the Git-ignored `planning/google-play/` folder. Account-deletion fulfilment, moderation/reporting, billing, owner identity/signing and Console gates remain open.
 
 # Previous Android build: 0.2.18 (version code 20)
 
