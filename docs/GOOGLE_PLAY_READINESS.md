@@ -3,7 +3,7 @@
 Audit date: 1 November 2026. Release audience selected by owner: **adults 18+**.
 Support/privacy contact supplied by owner: **help@humeto.com**.
 Legal developer: **Nabeel Khalid**. Play developer display name: **DOTIVATE**.
-Account type: **personal**, as stated by the owner; Console verification and registered country remain unconfirmed.
+Account type: **personal**. Registered Play account country: **Pakistan**, as stated by the owner. Console verification and account creation date remain unconfirmed.
 **Decision: NOT ready to upload for production approval.** This is an evidence-based
 release gate, not a certification, legal opinion or guarantee of Google approval.
 
@@ -16,7 +16,7 @@ security; it is not a substitute for deletion or privacy controls.
 
 | Gate | Current evidence | Remaining action |
 |---|---|---|
-| Developer identity | Owner supplied legal developer Nabeel Khalid, display name DOTIVATE, personal account and support email | Confirm registered country, Console identity verification, account creation date and applicable regions |
+| Developer identity | Owner supplied legal developer Nabeel Khalid, display name DOTIVATE, personal account, Pakistan and support email | Confirm Console identity verification, account creation date and intended distribution regions |
 | Audience | Owner selected 18+; new public signup requires explicit adult affirmation and policy acceptance | Recheck every invitation/guest/legacy flow and local age-assurance rules; an unchecked age checkbox is not identity verification. Do not advertise for children |
 | Privacy | `/privacy` discloses real account/task/chat/AI/file processing, processors, permissions and retention behaviour | Owner: verify processor contracts/regions/log settings and concrete backup/legal-retention periods; policy and Data safety must agree |
 | Deletion initiation | `/delete-account` gives a public email request method; linked inside web/native account settings | **Blocker:** verify mailbox receipt, identity-review ownership and a complete erasure drill across DB, files, provider copies and backups. A link does not erase anything |
@@ -35,7 +35,8 @@ security; it is not a substitute for deletion or privacy controls.
 
 - [ ] Confirm package **com.humeto.tasks** is available and correct for the first listing.
 - [x] Record owner-provided developer name Nabeel Khalid, display name DOTIVATE, personal account and help@humeto.com.
-- [ ] Confirm registered country and verify these details against Console records; do not infer country from timezone.
+- [x] Record Pakistan as the Play account country, explicitly supplied by the owner.
+- [ ] Verify the owner-provided identity/country details against Console records and confirm account creation date. Pakistan registration does not by itself specify release countries or governing law.
 - [ ] Verify Play Console identity and organisation information (including D-U-N-S where required for that account).
 - [ ] Record who controls Play Console, upload key backups, incident response and moderation.
 - [ ] Choose release countries and assess their privacy, age-assurance, consumer and subscription obligations.
