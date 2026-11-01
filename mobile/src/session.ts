@@ -1,3 +1,4 @@
+import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 const Device = registerPlugin<{
   readSession: () => Promise<{ token?: string }>;
@@ -27,6 +28,24 @@ export async function saveToken(token: string, remember = true) {
 }
 export async function clearSavedToken() {
   if (android()) await Device.clearSession();
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const exports = await Filesystem.readdir({
+        path: "humeto-share",
+        directory: Directory.Cache,
+      });
+      await Promise.all(
+        exports.files.map((file) =>
+          Filesystem.deleteFile({
+            path: "humeto-share/" + file.name,
+            directory: Directory.Cache,
+          }).catch(() => {}),
+        ),
+      );
+    } catch {
+      /* No shared exports on this device. */
+    }
+  }
   current = null;
   loaded = true;
   localStorage.removeItem("humeto-auth-token");

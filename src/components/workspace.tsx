@@ -2884,6 +2884,16 @@ export default function Workspace({
                   "Your plan, team and account details. Payment checkout is coming soon.",
                 )}
                 <div className="settings-grid">
+                  <section className="panel settings-panel">
+                    <h2>Privacy & support</h2>
+                    <p>Humeto accounts are for adults aged 18 and over.</p>
+                    <p>
+                      <a href="/privacy">Privacy policy</a> ·{" "}
+                      <a href="/terms">Terms of use</a> ·{" "}
+                      <a href="/delete-account">Delete account</a>
+                    </p>
+                    <a href="mailto:help@humeto.com">help@humeto.com</a>
+                  </section>
                   {staff && <CurrencyPreferences />}
                   <EmailPreferences />
                   {actor.role === "owner" && (

@@ -182,6 +182,14 @@ export async function POST(
         );
       const input = z
         .object({
+          adult: z.literal(true, {
+            error:
+              "Humeto is for adults aged 18+. Confirm your age in the latest app or on our website.",
+          }),
+          acceptPolicies: z.literal(true, {
+            error:
+              "Accept the Terms of use and Privacy policy to create an account.",
+          }),
           name: z.string().trim().min(2).max(100),
           email: z.email().max(254),
           password: z.string().min(12).max(128),
@@ -298,7 +306,9 @@ export async function POST(
         "created",
         "workspace",
         tid,
-        "Created a " + input.accountType + " workspace with a 15-day trial",
+        "Created a " +
+          input.accountType +
+          " workspace with a 15-day trial; affirmed age 18+ and accepted Terms/Privacy version 2026-11-01",
       );
       let delivered = true;
       try {

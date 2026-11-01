@@ -28,3 +28,9 @@ mobile/android/app/release/
 
 # Finder metadata
 **/.DS_Store
+
+# Play upload signing material (keep private keys/passwords outside Git)
+**/*.jks
+**/*.keystore
+**/keystore.properties
+**/key.properties

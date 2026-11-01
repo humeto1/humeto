@@ -253,7 +253,18 @@ try {
         await cdp.evaluate("window.Capacitor.isNativePlatform()"),
         true,
       );
-      assert.equal((await nativeApi("/api/mobile")).status, 401);
+      // A freshly booted emulator can expose its WebView before host-loopback networking is ready.
+      let anonymous;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        try {
+          anonymous = await nativeApi("/api/mobile");
+          break;
+        } catch (e) {
+          if (attempt === 19) throw e;
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
+      assert.equal(anonymous.status, 401);
       await cdp.wait(`Boolean(document.querySelector('input[name=email]'))`);
     },
   );
@@ -1582,10 +1593,19 @@ try {
   await check(
     "Logout revokes native cookie session and clears notifications",
     async () => {
+      await cdp.evaluate(
+        "window.Capacitor.Plugins.Filesystem.writeFile({path:'humeto-share/cleanup-qa.txt',directory:'CACHE',data:'QA only',encoding:'utf8',recursive:true})",
+      );
       await cdp.click("Account settings");
       await cdp.click("Sign out");
       await cdp.wait(`Boolean(document.querySelector('input[name=email]'))`);
       assert.equal((await nativeApi("/api/mobile")).status, 401);
+      assert.equal(
+        await cdp.evaluate(
+          "window.Capacitor.Plugins.Filesystem.readdir({path:'humeto-share',directory:'CACHE'}).then(r=>r.files.length).catch(()=>0)",
+        ),
+        0,
+      );
       assert.equal(
         await cdp.evaluate(
           "window.Capacitor.Plugins.HumetoDevice.readSession().then(r=>!!r.token)",
@@ -1608,6 +1628,9 @@ try {
       await cdp.fill("input[name=name]", "Android New User");
       await cdp.fill("input[name=email]", "android-new-user@example.test");
       await cdp.fill("input[name=password]", "Android signup QA password!");
+      await cdp.evaluate(
+        "document.querySelector('input[name=adult]').click();document.querySelector('input[name=acceptPolicies]').click()",
+      );
       await cdp.click("Start free trial");
       await cdp.wait(
         `document.body.innerText.includes('Check your email to verify your account')`,

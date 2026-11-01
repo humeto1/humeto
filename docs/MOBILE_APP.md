@@ -1,4 +1,8 @@
-# Latest Android build: 0.2.18 (version code 20)
+# Latest testing build: 0.2.19 (version code 21)
+
+Play-readiness preparation, 1 November 2026: public privacy/terms/deletion-request pages; settings links; adults-18+ signup/policy affirmation; narrower FileProvider and temporary share-cache cleanup; separate upload-signing/release-AAB build workflow. 200 release checks and 31 Android checks passed. An unsigned AAB was built for review only. **This testing APK is not a Play-ready release.** See [the launch checklist](GOOGLE_PLAY_READINESS.md), [Data safety worksheet](GOOGLE_PLAY_DATA_SAFETY.md) and [separate child-safety roadmap](CHILD_SAFETY_ROADMAP.md). Account-deletion fulfilment, moderation/reporting, billing, owner identity/signing and Console gates remain open.
+
+# Previous Android build: 0.2.18 (version code 20)
 
 Released 2026-11-01: active focus countdown in Android notifications while using other apps; tap returns to Focus. Keep me signed in saves a 30-day session securely with Android Keystore (passwords are never stored). Goal timeframes offer day presets/custom dates, extension and independent new cycles on web and Android. Ongoing projects retain optional deadlines. Native acceptance: 31 checks passed, including a real process restart with cookies cleared, native countdown/paused display, completion cleanup and server-session logout.
 

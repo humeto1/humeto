@@ -1,0 +1,55 @@
+.page {
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  color: #213d31;
+  line-height: 1.7;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+.page h1 {
+  font-size: clamp(2rem, 6vw, 3rem);
+  line-height: 1.2;
+  margin: 24px 0;
+}
+.page h2 {
+  font-size: 1.35rem;
+  margin: 32px 0 12px;
+}
+.page p,
+.page li {
+  font-size: 1rem;
+  color: #324b3c;
+}
+.page a {
+  color: #1e563d;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.page nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  border-block: 1px solid #cdd9c7;
+  padding: 16px 0;
+}
+.page nav a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.page .brand {
+  font-weight: 700;
+  font-size: 2rem;
+}
+.page .action {
+  display: inline-block;
+  background: #234c3b;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 12px;
+}
+.page a:focus-visible {
+  outline: 3px solid #234c3b;
+  outline-offset: 4px;
+}

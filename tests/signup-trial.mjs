@@ -61,6 +61,8 @@ test(
       assert.equal((await c.get("/signup")).status(), 200);
       const r = await c.post("/api/auth/register", {
         data: {
+          adult: true,
+          acceptPolicies: true,
           name: "Trial Tester",
           email,
           password,
@@ -191,7 +193,13 @@ test(
       assert.equal(
         (
           await c.post("/api/auth/register", {
-            data: { name: "Repeat", email, password },
+            data: {
+              adult: true,
+              acceptPolicies: true,
+              name: "Repeat",
+              email,
+              password,
+            },
           })
         ).status(),
         409,
@@ -205,6 +213,8 @@ test(
   async () => {
     const c = await context();
     const data = {
+      adult: true,
+      acceptPolicies: true,
       name: "Invalid trial",
       email: `invalid-${randomUUID()}@example.com`,
       password: randomUUID(),

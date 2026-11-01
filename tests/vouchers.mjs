@@ -34,6 +34,8 @@ async function account(
     password = randomUUID() + "secret";
   const r = await c.post("/api/auth/register", {
     data: {
+      adult: true,
+      acceptPolicies: true,
       name: "Voucher Tester",
       email,
       password,

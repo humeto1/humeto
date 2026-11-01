@@ -1,5 +1,13 @@
 apply plugin: 'com.android.application'
 
+// Never fall back to the public Android debug key for a Play upload.
+def uploadStore = System.getenv('HUMETO_UPLOAD_KEYSTORE')
+def uploadStorePassword = System.getenv('HUMETO_UPLOAD_STORE_PASSWORD')
+def uploadAlias = System.getenv('HUMETO_UPLOAD_KEY_ALIAS')
+def uploadKeyPassword = System.getenv('HUMETO_UPLOAD_KEY_PASSWORD')
+def uploadSigningConfigured = [uploadStore, uploadStorePassword, uploadAlias, uploadKeyPassword].every { it }
+
+
 android {
     namespace = "com.humeto.tasks"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -8,8 +16,8 @@ android {
         manifestPlaceholders = [humetoCleartext: project.hasProperty('humetoQa') ? 'true' : 'false', humetoLabel: project.hasProperty('humetoQa') ? 'Humeto QA' : 'Humeto']
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 20
-        versionName "0.2.18"
+        versionCode 21
+        versionName "0.2.19"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -17,8 +25,20 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        upload {
+            if (uploadSigningConfigured) {
+                storeFile file(uploadStore)
+                storePassword uploadStorePassword
+                keyAlias uploadAlias
+                keyPassword uploadKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            debuggable false
+            if (uploadSigningConfigured) signingConfig signingConfigs.upload
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

@@ -135,12 +135,13 @@ async function downloadProjectFile(path: string, name: string) {
     throw Error("This file is not available for download.");
   const stored = await Filesystem.writeFile({
     path:
-      "humeto-share-" +
+      "humeto-share/" +
       crypto.randomUUID() +
       "-" +
       name.replace(/[^a-zA-Z0-9._-]/g, "_"),
     data: response.data,
     directory: Directory.Cache,
+    recursive: true,
   });
   await Share.share({
     title: name,
@@ -252,7 +253,13 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
               remember: rememberMe,
               nativeSession: Capacitor.isNativePlatform(),
             }
-          : body,
+          : mode === "signup"
+            ? {
+                ...body,
+                adult: f.get("adult") === "on",
+                acceptPolicies: f.get("acceptPolicies") === "on",
+              }
+            : body,
       );
       if (mode === "login") {
         const emailStr = String(body.email || "");
@@ -372,6 +379,40 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
                 required
               />
             </label>
+          )}
+          {mode === "signup" && (
+            <>
+              <label className="save-login-checkbox">
+                <input type="checkbox" name="adult" required />
+                <span>I am at least 18 years old.</span>
+              </label>
+              <label className="save-login-checkbox">
+                <input type="checkbox" name="acceptPolicies" required />
+                <span>
+                  I accept the{" "}
+                  <a
+                    href={SERVER + "/terms"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void openWeb("/terms");
+                    }}
+                  >
+                    Terms of use
+                  </a>{" "}
+                  and{" "}
+                  <a
+                    href={SERVER + "/privacy"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      void openWeb("/privacy");
+                    }}
+                  >
+                    Privacy policy
+                  </a>
+                  .
+                </span>
+              </label>
+            </>
           )}
           {mode === "login" && (
             <label className="save-login-checkbox">
@@ -2661,6 +2702,29 @@ function App() {
         {sheet === "settings" && (
           <Sheet title="Your space" close={() => setSheet(null)}>
             <CurrencyPreferences />
+            <div className="panel">
+              <h3>Privacy & support</h3>
+              <p>Humeto accounts are for adults aged 18 and over.</p>
+              <button
+                className="secondary full"
+                onClick={() => void openWeb("/privacy")}
+              >
+                Privacy policy
+              </button>
+              <button
+                className="secondary full"
+                onClick={() => void openWeb("/terms")}
+              >
+                Terms of use
+              </button>
+              <button
+                className="secondary full"
+                onClick={() => void openWeb("/delete-account")}
+              >
+                Delete account
+              </button>
+              <p>Support: help@humeto.com</p>
+            </div>
             <div className="account">
               <div className="avatar">{data.actor.name[0]}</div>
               <h2>{data.actor.name}</h2>
@@ -2740,7 +2804,7 @@ function App() {
               <LogOut size={16} /> Sign out
             </button>
             <small className="muted">
-              Humeto mobile · 0.2.18 testing build
+              Humeto mobile · 0.2.19 testing build
               <br />
               Cloud sync requires an internet connection. No private documents
               or passwords are stored in the app bundle.

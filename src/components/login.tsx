@@ -139,6 +139,8 @@ export default function Login({
                   name: f.get("name"),
                   email: f.get("email"),
                   password: f.get("password"),
+                  adult: f.get("adult") === "on",
+                  acceptPolicies: f.get("acceptPolicies") === "on",
                   remember: f.get("remember") === "on",
                   accountType,
                   companyName: f.get("companyName") || "",
@@ -227,6 +229,36 @@ export default function Login({
                   }
                 />
               </label>
+              {mode === "register" && (
+                <>
+                  <label className="policy-choice">
+                    <input type="checkbox" name="adult" required />I am at least
+                    18 years old.
+                  </label>
+                  <label className="policy-choice">
+                    <input type="checkbox" name="acceptPolicies" required />{" "}
+                    <span>
+                      I accept the{" "}
+                      <a
+                        href="/terms"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Terms of use
+                      </a>{" "}
+                      and{" "}
+                      <a
+                        href="/privacy"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Privacy policy
+                      </a>
+                      .
+                    </span>
+                  </label>
+                </>
+              )}
               {mode === "login" && (
                 <label
                   style={{

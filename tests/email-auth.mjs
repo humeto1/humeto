@@ -60,7 +60,13 @@ test(
     assert.equal(
       (
         await c.post("/api/auth/register", {
-          data: { name: "Recover Test", email, password },
+          data: {
+            adult: true,
+            acceptPolicies: true,
+            name: "Recover Test",
+            email,
+            password,
+          },
         })
       ).status(),
       200,

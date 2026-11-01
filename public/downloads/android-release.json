@@ -1,10 +1,10 @@
 {
-  "version": "0.2.18",
-  "versionCode": 20,
+  "version": "0.2.19",
+  "versionCode": 21,
   "packageId": "com.humeto.tasks",
   "filename": "humeto-android.apk",
   "url": "/downloads/humeto-android.apk",
-  "size": 4680279,
-  "sha256": "279ad455d4c7a41d15825e8cab0b55f194db4ad3d7251d978e23fee412df5103",
+  "size": 4680715,
+  "sha256": "87bfb62473718e5e488f9dccbba700440cc0a649ecb1b841fc318bfa6a0644f0",
   "channel": "testing"
 }
