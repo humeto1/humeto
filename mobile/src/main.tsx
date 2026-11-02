@@ -1,3 +1,5 @@
+import { taskSearchScore } from "../../shared/task-search";
+import { TaskSearchFeedback } from "../../shared/task-search-feedback";
 import { VoiceInstructions } from "../../shared/voice-instructions";
 import { computeGoalTiming } from "../../shared/goal-clock";
 import { GoalDeadlineFields } from "../../shared/goal-timing";
@@ -486,6 +488,7 @@ function App() {
     [sheet, setSheet] = useState<string | null>(null),
     [selected, setSelected] = useState<string | null>(null),
     [query, setQuery] = useState(""),
+    [newTaskTitle, setNewTaskTitle] = useState(""),
     [view, setView] = useState("priority"),
     [filter, setFilter] = useState("pending"),
     [impactFilter, setImpactFilter] = useState("all"),
@@ -732,11 +735,8 @@ function App() {
     pending = data.tasks.filter((t) => t.stage !== "Done"),
     completed = data.tasks.filter((t) => t.stage === "Done");
   const focusTask = data.tasks.find((t) => t.id === active?.task_id);
-  const focusMatches = pending.filter((t) =>
-    [t.title, t.display_title, t.project_title, t.category]
-      .join(" ")
-      .toLowerCase()
-      .includes(focusSearch.trim().toLowerCase()),
+  const focusMatches = pending.filter(
+    (t) => taskSearchScore(t, focusSearch) > 0,
   );
   const focusChoice =
     focusMatches.find((t) => t.id === focusSelection) ||
@@ -770,48 +770,51 @@ function App() {
     setQuery("");
     setFilter("all");
   }
-  const filtered = data.tasks.filter(
-    (t) =>
-      (impactFilter === "all" || (t.value_type || "none") === impactFilter) &&
-      (projectFilter === "all" ||
-        (projectFilter === "none"
-          ? !t.project_id
-          : t.project_id === projectFilter)) &&
-      (goalFilter === "all" ||
-        (goalFilter === "none"
-          ? !taskGoals(t, data.projects, data.goals).length
-          : taskGoals(t, data.projects, data.goals).some(
-              (g) => g.id === goalFilter,
-            ))) &&
-      (natureFilter === "all" || (t.work_kind || "one_off") === natureFilter) &&
-      (categoryFilter === "all" ||
-        (categoryFilter === "uncategorized"
-          ? !t.category
-          : t.category === categoryFilter)) &&
-      (ownerFilter === "all" ||
-        (ownerFilter === "mine"
-          ? t.assignee === data.actor.name
-          : !t.assignee)) &&
-      (dueFilter === "all" ||
-        (dueFilter === "none"
-          ? !t.due_date
-          : dueFilter === "today"
-            ? t.due_date === todayDate
-            : !!t.due_date && t.due_date < todayDate && t.stage !== "Done")) &&
-      (filter === "all" ||
-        (filter === "done" ? t.stage === "Done" : t.stage !== "Done")) &&
-      [
-        t.title,
-        t.display_title,
-        t.category,
-        t.project_title,
-        t.assignee,
-        ...taskGoals(t, data.projects, data.goals).map((g) => g.title),
-      ]
-        .join(" ")
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
+  const filtered = data.tasks
+    .filter(
+      (t) =>
+        (impactFilter === "all" || (t.value_type || "none") === impactFilter) &&
+        (projectFilter === "all" ||
+          (projectFilter === "none"
+            ? !t.project_id
+            : t.project_id === projectFilter)) &&
+        (goalFilter === "all" ||
+          (goalFilter === "none"
+            ? !taskGoals(t, data.projects, data.goals).length
+            : taskGoals(t, data.projects, data.goals).some(
+                (g) => g.id === goalFilter,
+              ))) &&
+        (natureFilter === "all" ||
+          (t.work_kind || "one_off") === natureFilter) &&
+        (categoryFilter === "all" ||
+          (categoryFilter === "uncategorized"
+            ? !t.category
+            : t.category === categoryFilter)) &&
+        (ownerFilter === "all" ||
+          (ownerFilter === "mine"
+            ? t.assignee === data.actor.name
+            : !t.assignee)) &&
+        (dueFilter === "all" ||
+          (dueFilter === "none"
+            ? !t.due_date
+            : dueFilter === "today"
+              ? t.due_date === todayDate
+              : !!t.due_date &&
+                t.due_date < todayDate &&
+                t.stage !== "Done")) &&
+        (filter === "all" ||
+          (filter === "done" ? t.stage === "Done" : t.stage !== "Done")) &&
+        taskSearchScore(
+          t,
+          query,
+          taskGoals(t, data.projects, data.goals)
+            .map((g) => g.title)
+            .join(" "),
+        ) > 0,
+    )
+    .sort((a, b) =>
+      query.trim() ? taskSearchScore(b, query) - taskSearchScore(a, query) : 0,
+    );
   const card = (t: Task) => (
     <div
       className={
@@ -1033,7 +1036,10 @@ function App() {
                 writable={writable}
                 request={api}
                 refresh={refresh}
-                onAdd={() => setSheet("create")}
+                onAdd={() => {
+                  setNewTaskTitle("");
+                  setSheet("create");
+                }}
                 onOpen={(id) => {
                   setSelected(id);
                   setSheet("task");
@@ -1093,7 +1099,10 @@ function App() {
                 </div>
                 <button
                   className="round primary"
-                  onClick={() => setSheet("create")}
+                  onClick={() => {
+                    setNewTaskTitle("");
+                    setSheet("create");
+                  }}
                   disabled={!writable}
                   aria-label="Add task"
                 >
@@ -1113,7 +1122,10 @@ function App() {
                   writable={writable}
                   refresh={refresh}
                   request={api}
-                  onAdd={() => setSheet("create")}
+                  onAdd={() => {
+                    setNewTaskTitle("");
+                    setSheet("create");
+                  }}
                   onOpen={(id) => {
                     setSelected(id);
                     setSheet("task");
@@ -1128,6 +1140,22 @@ function App() {
                     aria-label="Search tasks"
                   />
                 </div>
+                <TaskSearchFeedback
+                  query={query}
+                  tasks={data.tasks}
+                  visibleCount={filtered.length}
+                  writable={writable}
+                  refresh={refresh}
+                  request={api}
+                  onOpen={(id) => {
+                    setSelected(id);
+                    setSheet("task");
+                  }}
+                  onAdd={(title) => {
+                    setNewTaskTitle(title);
+                    setSheet("create");
+                  }}
+                />
                 <div className="toolbar">
                   <div className="segments">
                     <button
@@ -1408,10 +1436,23 @@ function App() {
                       setFocusSelection("");
                     }}
                   />
-                  {!focusMatches.length && (
-                    <small role="status">No matching tasks.</small>
-                  )}
                 </label>
+                <TaskSearchFeedback
+                  query={focusSearch}
+                  tasks={data.tasks}
+                  visibleCount={focusMatches.length}
+                  writable={writable}
+                  refresh={refresh}
+                  request={api}
+                  onOpen={(id) => {
+                    setSelected(id);
+                    setSheet("task");
+                  }}
+                  onAdd={(title) => {
+                    setNewTaskTitle(title);
+                    setSheet("create");
+                  }}
+                />
                 <label className="focus-task-select">
                   Select task
                   <select
@@ -1578,7 +1619,10 @@ function App() {
                       <button
                         className="focus-ui-button"
                         disabled={!writable}
-                        onClick={() => setSheet("create")}
+                        onClick={() => {
+                          setNewTaskTitle("");
+                          setSheet("create");
+                        }}
                       >
                         <Plus size={15} />
                         New task
@@ -2040,10 +2084,7 @@ function App() {
               tasks={pending.filter(
                 (t) =>
                   t.id !== active?.task_id &&
-                  [t.title, t.display_title, t.project_title, t.category]
-                    .join(" ")
-                    .toLowerCase()
-                    .includes(focusQuery.toLowerCase()),
+                  taskSearchScore(t, focusQuery) > 0,
               )}
               onChoose={(id) => {
                 const task = pending.find((t) => t.id === id);
@@ -2055,10 +2096,7 @@ function App() {
                 .filter(
                   (t) =>
                     t.id !== active?.task_id &&
-                    [t.title, t.display_title, t.project_title, t.category]
-                      .join(" ")
-                      .toLowerCase()
-                      .includes(focusQuery.toLowerCase()),
+                    taskSearchScore(t, focusQuery) > 0,
                 )
                 .map((t) => (
                   <button
@@ -2106,15 +2144,24 @@ function App() {
             </div>
             {!pending.some(
               (t) =>
-                t.id !== active?.task_id &&
-                [t.title, t.display_title, t.project_title, t.category]
-                  .join(" ")
-                  .toLowerCase()
-                  .includes(focusQuery.toLowerCase()),
+                t.id !== active?.task_id && taskSearchScore(t, focusQuery) > 0,
             ) && (
-              <p>
-                No matching unfinished tasks. Add a task or try another search.
-              </p>
+              <TaskSearchFeedback
+                query={focusQuery}
+                tasks={data.tasks}
+                visibleCount={0}
+                writable={writable}
+                refresh={refresh}
+                request={api}
+                onOpen={(id) => {
+                  setSelected(id);
+                  setSheet("task");
+                }}
+                onAdd={(title) => {
+                  setNewTaskTitle(title);
+                  setSheet("create");
+                }}
+              />
             )}
           </Sheet>
         )}
@@ -2172,6 +2219,8 @@ function App() {
                   What needs to happen?
                   <input
                     name="title"
+                    value={newTaskTitle}
+                    onChange={(e) => setNewTaskTitle(e.target.value)}
                     required
                     minLength={2}
                     maxLength={200}
@@ -2179,6 +2228,18 @@ function App() {
                     placeholder="A clear, small next step"
                   />
                 </label>
+                <TaskSearchFeedback
+                  query={newTaskTitle}
+                  tasks={data.tasks}
+                  visibleCount={0}
+                  writable={writable}
+                  refresh={refresh}
+                  request={api}
+                  onOpen={(id) => {
+                    setSelected(id);
+                    setSheet("task");
+                  }}
+                />
                 <label>
                   Repeat
                   <select name="repeat" aria-label="Repeat" defaultValue="none">
@@ -2816,7 +2877,7 @@ function App() {
               <LogOut size={16} /> Sign out
             </button>
             <small className="muted">
-              Humeto mobile · 0.2.20 testing build
+              Humeto mobile · 0.2.21 testing build
               <br />
               Cloud sync requires an internet connection. No private documents
               or passwords are stored in the app bundle.

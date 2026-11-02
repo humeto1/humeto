@@ -1,4 +1,6 @@
 "use client";
+import { taskSearchScore } from "../../shared/task-search";
+import { TaskSearchFeedback } from "../../shared/task-search-feedback";
 import PlatformOverview, {
   platformSections,
   PlatformModeration,
@@ -375,6 +377,7 @@ export default function Workspace({
   const router = useRouter(),
     [data, setData] = useState(initial),
     [search, setSearch] = useState(""),
+    [newTaskTitle, setNewTaskTitle] = useState(""),
     [modal, setModal] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [uploadProgress, setUploadProgress] = useState(""),
@@ -658,6 +661,7 @@ export default function Workspace({
     }
   }
   function showModal(type: string) {
+    if (type === "task") setNewTaskTitle("");
     setError("");
     setModal(type);
   }
@@ -726,58 +730,50 @@ export default function Workspace({
     setTaskOwnerFilter("all");
     setSearch("");
   }
-  const filteredTasks = data.tasks.filter(
-    (t) =>
-      (taskImpact === "all" || (t.value_type || "none") === taskImpact) &&
-      (taskProject === "all" ||
-        (taskProject === "none"
-          ? !t.project_id
-          : t.project_id === taskProject)) &&
-      (taskGoal === "all" ||
-        (taskGoal === "none"
-          ? !taskGoals(t, data.projects, data.goals).length
-          : taskGoals(t, data.projects, data.goals).some(
-              (g) => g.id === taskGoal,
-            ))) &&
-      (taskCategory === "all" ||
-        (taskCategory === "none"
-          ? !t.category
-          : t.category === taskCategory)) &&
-      (taskNature === "all" || (t.work_kind || "one_off") === taskNature) &&
-      (taskDateFilter === "all" ||
-        (taskDateFilter === "today"
-          ? t.due_date === todayTaskDate
-          : taskDateFilter === "none"
-            ? !t.due_date
-            : !!t.due_date &&
-              t.due_date < todayTaskDate &&
-              t.stage !== "Done")) &&
-      (taskOwnerFilter === "all" ||
-        (taskOwnerFilter === "mine"
-          ? t.assignee === actor.name
-          : !t.assignee)) &&
-      (
-        (t.display_title || "") +
-        " " +
-        t.title +
-        " " +
-        t.project_title +
-        " " +
-        taskGoals(t, data.projects, data.goals)
-          .map((g) => g.title)
-          .join(" ") +
-        " " +
-        t.person_name +
-        " " +
-        t.assignee +
-        " " +
-        t.category +
-        " " +
-        quadrant(t)
-      )
-        .toLowerCase()
-        .includes(search.toLowerCase()),
-  );
+  const filteredTasks = data.tasks
+    .filter(
+      (t) =>
+        (taskImpact === "all" || (t.value_type || "none") === taskImpact) &&
+        (taskProject === "all" ||
+          (taskProject === "none"
+            ? !t.project_id
+            : t.project_id === taskProject)) &&
+        (taskGoal === "all" ||
+          (taskGoal === "none"
+            ? !taskGoals(t, data.projects, data.goals).length
+            : taskGoals(t, data.projects, data.goals).some(
+                (g) => g.id === taskGoal,
+              ))) &&
+        (taskCategory === "all" ||
+          (taskCategory === "none"
+            ? !t.category
+            : t.category === taskCategory)) &&
+        (taskNature === "all" || (t.work_kind || "one_off") === taskNature) &&
+        (taskDateFilter === "all" ||
+          (taskDateFilter === "today"
+            ? t.due_date === todayTaskDate
+            : taskDateFilter === "none"
+              ? !t.due_date
+              : !!t.due_date &&
+                t.due_date < todayTaskDate &&
+                t.stage !== "Done")) &&
+        (taskOwnerFilter === "all" ||
+          (taskOwnerFilter === "mine"
+            ? t.assignee === actor.name
+            : !t.assignee)) &&
+        taskSearchScore(
+          t,
+          search,
+          taskGoals(t, data.projects, data.goals)
+            .map((g) => g.title)
+            .join(" "),
+        ) > 0,
+    )
+    .sort((a, b) =>
+      search.trim()
+        ? taskSearchScore(b, search) - taskSearchScore(a, search)
+        : 0,
+    );
   const filteredApps = data.applications.filter((a) =>
     (
       a.person_name +
@@ -2382,6 +2378,18 @@ export default function Workspace({
                   writable={staff && writable}
                   refresh={refresh}
                 >
+                  <TaskSearchFeedback
+                    query={search}
+                    tasks={data.tasks}
+                    visibleCount={filteredTasks.length}
+                    writable={staff && writable}
+                    refresh={refresh}
+                    onOpen={(id) => showModal("task-details:" + id)}
+                    onAdd={(title) => {
+                      showModal("task");
+                      setNewTaskTitle(title);
+                    }}
+                  />
                   {staff && (
                     <>
                       <PlanningDrawer
@@ -2395,6 +2403,11 @@ export default function Workspace({
                         onOpen={(id) => showModal("task-details:" + id)}
                       />
                       <TaskFocus
+                        onAddTask={(title) => {
+                          showModal("task");
+                          setNewTaskTitle(title);
+                        }}
+                        onOpenTask={(id) => showModal("task-details:" + id)}
                         memberKey={`${actor.tenantId}:${actor.id}`}
                         tasks={data.tasks}
                         writable={writable}
@@ -4001,8 +4014,23 @@ export default function Workspace({
                   >
                     <label>
                       Task title
-                      <input name="title" required minLength={2} />
+                      <input
+                        name="title"
+                        required
+                        minLength={2}
+                        maxLength={160}
+                        value={newTaskTitle}
+                        onChange={(e) => setNewTaskTitle(e.target.value)}
+                      />
                     </label>
+                    <TaskSearchFeedback
+                      query={newTaskTitle}
+                      tasks={data.tasks}
+                      visibleCount={0}
+                      writable={staff && writable}
+                      refresh={refresh}
+                      onOpen={(id) => showModal("task-details:" + id)}
+                    />
                     <label>
                       Repeat
                       <select

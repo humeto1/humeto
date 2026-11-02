@@ -1259,3 +1259,8 @@ legend {
 :root[data-chat-keyboard="true"] .chat-screen .assistant-note {
   display: none;
 }
+
+/* Keep the AI composer visible while the phone keyboard reduces the viewport. */
+:root[data-chat-keyboard="true"] .chat-screen .voice-instructions {
+  max-height: 64px !important;
+}

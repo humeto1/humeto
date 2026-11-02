@@ -71,7 +71,17 @@ test(
       await page.goto(origin);
       await page.getByRole("heading", { name: /A little focus/ }).waitFor();
       await page.getByRole("button", { name: "Tasks", exact: true }).click();
-      await page.getByRole("button", { name: "Add task", exact: true }).click();
+      await page
+        .getByRole("textbox", { name: "Search tasks", exact: true })
+        .fill(title);
+      await page
+        .getByRole("region", { name: "Task search suggestions" })
+        .getByRole("button", { name: /as a new task/ })
+        .click();
+      assert.equal(
+        await page.getByLabel("What needs to happen?").inputValue(),
+        title,
+      );
       await page.getByLabel("What needs to happen?").fill(title);
       await page
         .getByRole("button", { name: "Create task", exact: true })
@@ -107,10 +117,20 @@ test(
       );
       await page.reload();
       await page.getByRole("button", { name: "Focus", exact: true }).click();
-      await page.getByLabel("Search focus tasks", { exact: true }).fill("no-matching-task-query");
-      assert.equal(await page.getByRole("button", { name: "Start", exact: true }).isDisabled(), true);
+      await page
+        .getByLabel("Search focus tasks", { exact: true })
+        .fill("no-matching-task-query");
+      assert.equal(
+        await page
+          .getByRole("button", { name: "Start", exact: true })
+          .isDisabled(),
+        true,
+      );
       await page.getByLabel("Search focus tasks", { exact: true }).fill(title);
-      assert.equal(await page.getByLabel("Focus task selector").locator("option").count(), 1);
+      assert.equal(
+        await page.getByLabel("Focus task selector").locator("option").count(),
+        1,
+      );
       await page.getByLabel("Focus task selector").selectOption(id);
       await page.getByRole("button", { name: "Start", exact: true }).click();
       await page.getByRole("button", { name: "Pause", exact: true }).waitFor();
@@ -203,11 +223,17 @@ test(
       );
       mkdirSync(".data/mobile-qa", { recursive: true });
       await page.screenshot({ path: ".data/mobile-qa/goals.png" });
-      await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: "Today", exact: true }).click();
+      await page
+        .getByRole("navigation", { name: "Main navigation" })
+        .getByRole("button", { name: "Today", exact: true })
+        .click();
       await page.screenshot({ path: ".data/mobile-qa/today.png" });
       const audits = [];
       for (const tab of ["Today", "Tasks", "Focus", "Plans", "Chat"]) {
-        await page.getByRole("navigation", { name: "Main navigation" }).getByRole("button", { name: tab, exact: true }).click();
+        await page
+          .getByRole("navigation", { name: "Main navigation" })
+          .getByRole("button", { name: tab, exact: true })
+          .click();
         const result = await new AxeBuilder({ page })
           .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
           .analyze();

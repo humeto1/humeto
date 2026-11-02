@@ -102,6 +102,7 @@ export function VoiceInstructions({
   }
   return (
     <div
+      className="voice-instructions"
       style={{
         width: "100%",
         flexShrink: 0,

@@ -1,4 +1,6 @@
 "use client";
+import { TaskSearchFeedback } from "../../shared/task-search-feedback";
+import { taskSearchScore } from "../../shared/task-search";
 import { playTone } from "../../shared/alert-controls";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
@@ -82,12 +84,16 @@ export default function TaskFocus({
   onChange,
   onFocusChange,
   memberKey,
+  onAddTask,
+  onOpenTask,
 }: {
   tasks: Task[];
   writable: boolean;
   onChange: () => void;
   onFocusChange: (focused: boolean) => void;
   memberKey: string;
+  onAddTask: (title: string) => void;
+  onOpenTask: (id: string) => void;
 }) {
   const [data, setData] = useState<Snapshot | null>(null),
     [received, setReceived] = useState(0),
@@ -180,12 +186,7 @@ export default function TaskFocus({
   }, [memberKey]);
   const candidates = [...tasks]
     .filter((t) => t.stage !== "Done" && t.id !== active?.task_id)
-    .filter((t) =>
-      [t.title, t.display_title, t.project_title, t.category]
-        .join(" ")
-        .toLowerCase()
-        .includes(focusSearch.trim().toLowerCase()),
-    )
+    .filter((t) => taskSearchScore(t, focusSearch) > 0)
     .sort(
       (a, b) =>
         Number(b.important) - Number(a.important) ||
@@ -316,21 +317,33 @@ export default function TaskFocus({
     !!preview &&
     (preview.sessionId !== active?.id || preview.revision !== active?.revision);
   const searchField = (
-    <label className="focus-task-search">
-      Search tasks
-      <input
-        type="search"
-        aria-label="Search focus tasks"
-        placeholder="Find a task or project"
-        value={focusSearch}
-        onChange={(e) => {
-          setFocusSearch(e.target.value);
-          setSelected("");
-          setSwitching(false);
+    <>
+      <label className="focus-task-search">
+        Search tasks
+        <input
+          type="search"
+          aria-label="Search focus tasks"
+          placeholder="Find a task or project"
+          value={focusSearch}
+          onChange={(e) => {
+            setFocusSearch(e.target.value);
+            setSelected("");
+            setSwitching(false);
+          }}
+        />
+      </label>
+      <TaskSearchFeedback
+        query={focusSearch}
+        tasks={tasks}
+        visibleCount={candidates.length}
+        writable={writable}
+        refresh={async () => {
+          await onChange();
         }}
+        onAdd={onAddTask}
+        onOpen={onOpenTask}
       />
-      {!candidates.length && <small role="status">No matching tasks.</small>}
-    </label>
+    </>
   );
   const taskPicker = (switchTask = false) => (
     <div className={styles.pick}>
