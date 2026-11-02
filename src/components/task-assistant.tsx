@@ -1,4 +1,5 @@
 "use client";
+import { VoiceInstructions } from "../../shared/voice-instructions";
 import { useChatViewport } from "../../shared/chat-viewport";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -530,6 +531,14 @@ export default function TaskAssistant({
                 </button>
               </div>
             )}
+            <VoiceInstructions
+              disabled={busy || loading}
+              onInsert={(text) =>
+                setDraft((previous) =>
+                  [previous, text].filter(Boolean).join(" ").slice(0, 2000),
+                )
+              }
+            />
             <form onSubmit={send} className={styles.composer}>
               <label htmlFor="assistant-message" className={styles.srOnly}>
                 Message Humeto assistant

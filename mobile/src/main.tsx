@@ -1,3 +1,4 @@
+import { VoiceInstructions } from "../../shared/voice-instructions";
 import { computeGoalTiming } from "../../shared/goal-clock";
 import { GoalDeadlineFields } from "../../shared/goal-timing";
 import { PlanningDrawer } from "../../shared/task-planning";
@@ -1767,6 +1768,17 @@ function App() {
                       </article>
                     ))}
                   </div>
+                  <VoiceInstructions
+                    disabled={!writable}
+                    onInsert={(text) =>
+                      setDraft((previous) =>
+                        [previous, text]
+                          .filter(Boolean)
+                          .join(" ")
+                          .slice(0, 2000),
+                      )
+                    }
+                  />
                   <form
                     className="composer"
                     onSubmit={(e) => {
@@ -2804,7 +2816,7 @@ function App() {
               <LogOut size={16} /> Sign out
             </button>
             <small className="muted">
-              Humeto mobile · 0.2.19 testing build
+              Humeto mobile · 0.2.20 testing build
               <br />
               Cloud sync requires an internet connection. No private documents
               or passwords are stored in the app bundle.

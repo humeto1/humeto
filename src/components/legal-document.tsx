@@ -86,9 +86,13 @@ export default function LegalDocument({
           </p>
           <p>
             The website loads fonts from Google Fonts; loading them sends
-            technical requests to Google. The Android app requests microphone
-            access only for voice recording and notification permission for
-            device notifications. You can deny or revoke OS permissions; the
+            technical requests to Google. Optional browser dictation uses your
+            browser’s speech recognition service, which may process audio online
+            under its own policies. Humeto does not record or store dictation
+            audio; the transcript is sent to Humeto AI only when you send your
+            instruction. The Android app requests microphone access only for
+            voice recording and notification permission for device
+            notifications. You can deny or revoke OS permissions; the
             corresponding feature may stop working. Humeto does not request
             contacts, SMS, call logs or device GPS permissions in its current
             Android build.
