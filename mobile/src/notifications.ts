@@ -219,6 +219,7 @@ export async function syncNotifications(
       .filter((e: any) => Date.parse(e.at) > Date.now())
       .map((e: any) => ({
         id: nativeId(e.key),
+        extra: { taskIds: e.taskIds || [], kind: e.kind, key: e.key },
         title: e.kind === "focus" ? "Humeto · Focus" : e.title,
         body: e.body || e.title,
         channelId: channels[e.tier as keyof typeof channels],
@@ -249,4 +250,27 @@ export async function clearNotifications() {
       notifications: p.notifications.map((n) => ({ id: n.id })),
     });
   localStorage.removeItem("humeto-device-alerts-seen");
+}
+
+/** Cancel this device's stale alerts without needing the online delivery ledger. */
+export async function cancelOfflineAlerts(
+  tasks: { id: string; stage: string }[],
+) {
+  if (!Capacitor.isNativePlatform()) return;
+  const available = new Set(
+    tasks.filter((task) => task.stage !== "Done").map((task) => task.id),
+  );
+  const pending = await LocalNotifications.getPending();
+  const stale = pending.notifications.filter(
+    (notification) =>
+      notification.id !== 2000000001 &&
+      (notification.extra?.kind === "focus" ||
+        (notification.extra?.taskIds || []).some(
+          (id: string) => !available.has(id),
+        )),
+  );
+  if (stale.length)
+    await LocalNotifications.cancel({
+      notifications: stale.map((item) => ({ id: item.id })),
+    });
 }

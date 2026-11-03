@@ -97,6 +97,17 @@ export default function LegalDocument({
             contacts, SMS, call logs or device GPS permissions in its current
             Android build.
           </p>
+          <p>
+            The mobile app keeps downloaded tasks, plans and focus data, plus
+            pending changes, on your device for offline use. Android stores this
+            workspace data encrypted with a device-keystore key. Browser-based
+            mobile sessions use local browser storage. Changes sync to your
+            signed-in workspace when connected. Shared-device users should sign
+            out after syncing; signing out removes that account’s active offline
+            copy. A security-related sign-in failure locks access while keeping
+            pending changes for recovery after signing in again. AI, chat and
+            new file downloads require a connection.
+          </p>
           <h2>Who can see your content</h2>
           <p>
             Your workspace and project permissions determine which authorised

@@ -224,4 +224,39 @@ public class HumetoDevicePlugin extends Plugin {
   if (!sessionStorage().edit().clear().commit()) { call.reject("Could not clear login"); return; }
   call.resolve();
  }
+ private android.util.AtomicFile offlineFile() {
+  return new android.util.AtomicFile(new java.io.File(getContext().getFilesDir(), "humeto-offline-v1"));
+ }
+ @PluginMethod public void readOffline(PluginCall call) {
+  try {
+   JSObject result = new JSObject();
+   if (offlineFile().getBaseFile().exists()) {
+    byte[] stored = offlineFile().readFully();
+    org.json.JSONObject envelope = new org.json.JSONObject(new String(stored, java.nio.charset.StandardCharsets.UTF_8));
+    javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+    cipher.init(javax.crypto.Cipher.DECRYPT_MODE, sessionKey(), new javax.crypto.spec.GCMParameterSpec(128, android.util.Base64.decode(envelope.getString("iv"), android.util.Base64.NO_WRAP)));
+    byte[] plain = cipher.doFinal(android.util.Base64.decode(envelope.getString("data"), android.util.Base64.NO_WRAP));
+    result.put("value", new String(plain, java.nio.charset.StandardCharsets.UTF_8));
+   }
+   call.resolve(result);
+  } catch (Exception e) { call.reject("Could not read offline data. It has not been deleted."); }
+ }
+ @PluginMethod public void saveOffline(PluginCall call) {
+  java.io.FileOutputStream output = null;
+  android.util.AtomicFile file = offlineFile();
+  try {
+   String value = call.getString("value", "");
+   if (value.length() > 12000000) { call.reject("Offline storage is full. Connect to sync your changes."); return; }
+   javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+   cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, sessionKey());
+   org.json.JSONObject envelope = new org.json.JSONObject();
+   envelope.put("iv", android.util.Base64.encodeToString(cipher.getIV(), android.util.Base64.NO_WRAP));
+   envelope.put("data", android.util.Base64.encodeToString(cipher.doFinal(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)), android.util.Base64.NO_WRAP));
+   output = file.startWrite();
+   output.write(envelope.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+   file.finishWrite(output);
+   call.resolve();
+  } catch (Exception e) { if (output != null) file.failWrite(output); call.reject("Could not save offline changes. Free some storage and try again."); }
+ }
+
 }

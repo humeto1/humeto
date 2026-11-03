@@ -22,6 +22,19 @@ export async function actor(): Promise<Actor | null> {
       `SELECT u.id,u.name,u.email,m.tenant_id AS "tenantId",t.name AS "tenantName",t.type AS "workspaceType",t.industry,CASE WHEN m.role='platform_admin' AND s.context='workspace' THEN 'owner' ELSE m.role END AS role,(m.role='platform_admin') AS "platformAdmin",s.context,m.person_id AS "personId" FROM sessions s JOIN users u ON u.id=s.user_id JOIN memberships m ON m.user_id=u.id AND m.tenant_id=s.tenant_id JOIN tenants t ON t.id=m.tenant_id WHERE s.token_hash=? AND s.expires_at>? AND (u.verification_required=0 OR u.email_verified_at IS NOT NULL)`,
     )
     .get(digest(token), Date.now());
+  if (row && h?.get("x-humeto-session")) {
+    // Renew only near expiry to avoid a write on every native request. Revocation still deletes the row.
+    await db()
+      .prepare(
+        "UPDATE sessions SET expires_at=? WHERE token_hash=? AND expires_at>? AND expires_at<?",
+      )
+      .run(
+        Date.now() + 365 * 86400000,
+        digest(token),
+        Date.now(),
+        Date.now() + 30 * 86400000,
+      );
+  }
   return row ? ({ ...row } as Actor) : null;
 }
 export async function requireActor() {

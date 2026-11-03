@@ -12,7 +12,7 @@ export async function focusRead(a: Actor) {
   const rows = await db()
     .prepare(
       `SELECT f.*,t.title,(SELECT CASE WHEN o.canonical_title=t.title THEN o.display_title ELSE '' END FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS display_title,t.stage AS task_stage,t.revision AS task_revision,t.project_id,COALESCE(p.title,'') AS project_title,
- f.elapsed_seconds+CASE WHEN f.running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (clock_timestamp()-f.running_since)))::bigint) END AS total_seconds
+ f.elapsed_seconds+CASE WHEN f.running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (humeto_action_time()-f.running_since)))::bigint) END AS total_seconds
  FROM focus_sessions f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id
  LEFT JOIN projects p ON p.id=t.project_id AND p.tenant_id=t.tenant_id
  WHERE f.tenant_id=? AND f.user_id=? ORDER BY f.started_at DESC,f.id DESC LIMIT 50`,
@@ -25,7 +25,7 @@ export async function focusRead(a: Actor) {
     .all(a.tenantId, a.id);
   const taskTotals = await db()
     .prepare(
-      `SELECT f.task_id,t.title,count(*)::int AS sessions,sum(f.elapsed_seconds+CASE WHEN f.running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (clock_timestamp()-f.running_since)))::bigint) END) AS seconds FROM focus_sessions f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id WHERE f.tenant_id=? AND f.user_id=? GROUP BY f.task_id,t.title ORDER BY seconds DESC LIMIT 1000`,
+      `SELECT f.task_id,t.title,count(*)::int AS sessions,sum(f.elapsed_seconds+CASE WHEN f.running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (humeto_action_time()-f.running_since)))::bigint) END) AS seconds FROM focus_sessions f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id WHERE f.tenant_id=? AND f.user_id=? GROUP BY f.task_id,t.title ORDER BY seconds DESC LIMIT 1000`,
     )
     .all(a.tenantId, a.id);
   return NextResponse.json(
@@ -142,7 +142,7 @@ export async function focusMutation(a: Actor, body: unknown) {
       const startingNote = (!switching && v.note) || previous?.note || "";
       await db()
         .prepare(
-          `INSERT INTO focus_sessions(id,tenant_id,user_id,task_id,target_minutes,state,running_since,check_in_at,note,next_step,progress) VALUES(?,?,?,?,?,'running',clock_timestamp(),clock_timestamp()+(? * interval '1 minute'),?,?,?)`,
+          `INSERT INTO focus_sessions(id,tenant_id,user_id,task_id,target_minutes,state,running_since,check_in_at,note,next_step,progress) VALUES(?,?,?,?,?,'running',humeto_action_time(),humeto_action_time()+(? * interval '1 minute'),?,?,?)`,
         )
         .run(
           sid,
@@ -185,7 +185,9 @@ export async function focusMutation(a: Actor, body: unknown) {
           409,
         );
       const t = await db()
-        .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE")
+        .prepare(
+          "SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE",
+        )
         .get(v.taskId || "", a.tenantId);
       if (!t) return fail("Task not found.", 404);
       if (t.stage === "Done") return fail("Choose an unfinished task.", 409);
@@ -207,12 +209,16 @@ export async function focusMutation(a: Actor, body: unknown) {
     if (active.revision !== v.revision)
       return fail("Focus changed in another tab. Refresh and try again.", 409);
     const t = await db()
-      .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE")
+      .prepare(
+        "SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE",
+      )
       .get(active.task_id, a.tenantId);
     if (!t) return fail("Task not found.", 404);
     if (v.action === "switch") {
       const next = await db()
-        .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE")
+        .prepare(
+          "SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' FOR UPDATE",
+        )
         .get(v.taskId || "", a.tenantId);
       if (!next) return fail("Next task not found.", 404);
       if (next.id === active.task_id || next.stage === "Done")
@@ -222,7 +228,7 @@ export async function focusMutation(a: Actor, body: unknown) {
       // Validate both tasks before ending anything. The transaction makes switching all-or-nothing.
       await db()
         .prepare(
-          `UPDATE focus_sessions SET elapsed_seconds=elapsed_seconds+CASE WHEN running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (clock_timestamp()-running_since)))::bigint) END,state='stopped',running_since=NULL,check_in_at=NULL,ended_at=clock_timestamp(),note=CASE WHEN ?='' THEN note ELSE ? END,revision=revision+1 WHERE id=?`,
+          `UPDATE focus_sessions SET elapsed_seconds=elapsed_seconds+CASE WHEN running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (humeto_action_time()-running_since)))::bigint) END,state='stopped',running_since=NULL,check_in_at=NULL,ended_at=humeto_action_time(),note=CASE WHEN ?='' THEN note ELSE ? END,revision=revision+1 WHERE id=?`,
         )
         .run(v.note, v.note, active.id);
       const stopped = await db()
@@ -310,10 +316,10 @@ export async function focusMutation(a: Actor, body: unknown) {
         await db()
           .prepare(
             `UPDATE focus_sessions SET
- elapsed_seconds=elapsed_seconds+CASE WHEN running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (clock_timestamp()-running_since)))::bigint) END,
- state=?,running_since=CASE WHEN ?='running' THEN clock_timestamp() ELSE NULL END,
- check_in_at=CASE WHEN ?='running' THEN clock_timestamp()+(? * interval '1 minute') ELSE NULL END,
- ended_at=CASE WHEN ?='stopped' THEN clock_timestamp() ELSE NULL END,
+ elapsed_seconds=elapsed_seconds+CASE WHEN running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (humeto_action_time()-running_since)))::bigint) END,
+ state=?,running_since=CASE WHEN ?='running' THEN humeto_action_time() ELSE NULL END,
+ check_in_at=CASE WHEN ?='running' THEN humeto_action_time()+(? * interval '1 minute') ELSE NULL END,
+ ended_at=CASE WHEN ?='stopped' THEN humeto_action_time() ELSE NULL END,
  note=CASE WHEN ?='' THEN note ELSE ? END,progress=COALESCE(?,progress),next_step=COALESCE(?,next_step),blocker=?,revision=revision+1 WHERE id=? AND tenant_id=? AND user_id=?`,
           )
           .run(
@@ -335,7 +341,7 @@ export async function focusMutation(a: Actor, body: unknown) {
       if (v.action === "break") {
         await db()
           .prepare(
-            "UPDATE focus_sessions SET break_until=clock_timestamp()+(? * interval '1 minute'),break_kind=? WHERE id=?",
+            "UPDATE focus_sessions SET break_until=humeto_action_time()+(? * interval '1 minute'),break_kind=? WHERE id=?",
           )
           .run(v.minutes, v.breakKind, active.id);
       } else if (["resume", "extend", "stop", "blocked"].includes(v.action)) {
@@ -347,7 +353,7 @@ export async function focusMutation(a: Actor, body: unknown) {
       }
       const row = await db()
         .prepare(
-          "SELECT elapsed_seconds+CASE WHEN running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (clock_timestamp()-running_since)))::bigint) END AS seconds FROM focus_sessions WHERE id=?",
+          "SELECT elapsed_seconds+CASE WHEN running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (humeto_action_time()-running_since)))::bigint) END AS seconds FROM focus_sessions WHERE id=?",
         )
         .get(active.id);
       await record(

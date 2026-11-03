@@ -340,6 +340,63 @@ try {
       assert.equal((await nativeApi("/api/mobile")).status, 200);
     },
   );
+  await check(
+    "Encrypted offline task survives WebView restart and syncs once",
+    async () => {
+      const source =
+        "Object.defineProperty(navigator,'onLine',{get:()=>localStorage.getItem('offline-qa')!=='1',configurable:true});";
+      await cdp.send("Page.enable", {});
+      const init = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+        source,
+      });
+      await cdp.evaluate(
+        source +
+          "localStorage.setItem('offline-qa','1');window.dispatchEvent(new Event('offline'));",
+      );
+      await cdp.click("Tasks", true);
+      await cdp.click("Add task", true);
+      await cdp.fill("input[name=title]", "Native offline private draft");
+      await cdp.click("Create task", true);
+      await cdp.wait(
+        "!document.querySelector('[role=dialog]') && document.body.innerText.includes('change waiting to sync')",
+      );
+      const plain = await cdp.evaluate(
+        "window.Capacitor.Plugins.HumetoDevice.readOffline().then(r=>JSON.parse(r.value))",
+      );
+      assert.equal(plain.accounts[plain.active].queue.length, 1);
+      const encrypted = adbRun([
+        "shell",
+        "run-as",
+        "com.humeto.tasks.qa",
+        "cat",
+        "files/humeto-offline-v1",
+      ]);
+      assert.ok(encrypted.includes('"iv"'));
+      assert.ok(!encrypted.includes("Native offline private draft"));
+      assert.ok(!encrypted.includes(userEmail));
+      await cdp.send("Page.reload", {});
+      await cdp.wait(
+        "document.body.innerText.includes('What matters today?') && document.body.innerText.includes('Offline')",
+      );
+      await cdp.click("Tasks", true);
+      await cdp.wait(
+        "document.body.innerText.includes('Native offline private draft')",
+      );
+      await cdp.evaluate(
+        "localStorage.removeItem('offline-qa');window.dispatchEvent(new Event('online'));",
+      );
+      await cdp.wait(
+        "!document.body.innerText.includes('change waiting to sync') && !document.body.innerText.includes('Sync needs review')",
+      );
+      const records = (await nativeApi("/api/mobile")).data.tasks.filter(
+        (t) => t.title === "Native offline private draft",
+      );
+      assert.equal(records.length, 1);
+      await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {
+        identifier: init.identifier,
+      });
+    },
+  );
   const title = "Android native acceptance task";
   let taskId = "";
   await check(

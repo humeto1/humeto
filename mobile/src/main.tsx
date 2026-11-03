@@ -1,3 +1,5 @@
+import { syncStatus, resolveConflict, cached } from "./offline";
+import { networkApi } from "./api";
 import { taskSearchScore } from "../../shared/task-search";
 import { TaskSearchFeedback } from "../../shared/task-search-feedback";
 import { VoiceInstructions } from "../../shared/voice-instructions";
@@ -90,6 +92,7 @@ import type { Bootstrap, Task, Workstream } from "./types";
 import {
   enableNotifications,
   syncNotifications,
+  cancelOfflineAlerts,
   clearNotifications,
   syncFocusTimerNotification,
 } from "./notifications";
@@ -425,7 +428,11 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
               />
-              <span>Keep me signed in for 30 days</span>
+              <span>
+                {Capacitor.isNativePlatform()
+                  ? "Keep me signed in on this device"
+                  : "Keep me signed in for 30 days"}
+              </span>
             </label>
           )}
           {error && (
@@ -484,6 +491,7 @@ function App() {
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [online, setOnline] = useState(navigator.onLine),
+    [sync, setSync] = useState(syncStatus()),
     [busy, setBusy] = useState(false),
     [sheet, setSheet] = useState<string | null>(null),
     [selected, setSelected] = useState<string | null>(null),
@@ -526,28 +534,46 @@ function App() {
   scheduleRef.current = schedule;
   async function refresh() {
     const sequence = ++refreshSequence.current;
-    const [d, f, s, h] = await Promise.all([
-      api<Bootstrap>("/api/mobile"),
-      api("/api/workspace/focus"),
-      api("/api/workspace/scheduling"),
+    const d = await api<Bootstrap>("/api/mobile");
+    const [f, s, h] = await Promise.all([
+      api("/api/workspace/focus")
+        .then((snapshot) => ({
+          ...snapshot,
+          receivedAt: snapshot.receivedAt || Date.now(),
+        }))
+        .catch(() => focusRef.current),
+      api("/api/workspace/scheduling").catch(() => scheduleRef.current),
       api(
         "/api/workspace/task-history?timezone=" + encodeURIComponent(timezone),
-      ),
+      ).catch(() => null),
     ]);
     if (sequence !== refreshSequence.current) return;
     setData(d);
-    f.receivedAt = Date.now();
     setFocus(f);
     setSchedule(s);
     setHistory(h);
-    await syncNotifications(
-      s.reminders,
-      f.active,
-      s.preferences,
-      s.series,
-      f.serverNow,
-      f.receivedAt,
-    );
+    setError("");
+    const status = syncStatus();
+    setSync(status);
+    setOnline(navigator.onLine && !status.offline);
+    if (s && f && !status.offline && navigator.onLine && !status.pending) {
+      await syncNotifications(
+        s.reminders,
+        f.active,
+        s.preferences,
+        s.series,
+        f.serverNow,
+        f.receivedAt,
+      ).catch(() => {});
+    } else if (f) {
+      await cancelOfflineAlerts(d.tasks).catch(() => {});
+      await syncFocusTimerNotification(
+        f.active,
+        f.serverNow,
+        s?.preferences?.enabled !== false,
+        f.receivedAt,
+      ).catch(() => {});
+    }
   }
   useEffect(() => {
     const refreshAlerts = () => void load();
@@ -574,14 +600,45 @@ function App() {
     }
   }
   useEffect(() => {
-    void load();
+    // Open the saved workspace immediately; a slow DNS/network probe runs behind it.
+    void (async () => {
+      try {
+        const saved = await cached("/api/mobile");
+        const unlocked =
+          Capacitor.getPlatform() !== "android" || !!(await getSavedToken());
+        if (saved && unlocked) {
+          dataRef.current = saved;
+          setData(saved);
+          const f = await cached("/api/workspace/focus");
+          const s = await cached("/api/workspace/scheduling");
+          if (f) {
+            focusRef.current = f;
+            setFocus(f);
+          }
+          if (s) {
+            scheduleRef.current = s;
+            setSchedule(s);
+          }
+          setLoading(false);
+        }
+      } catch {
+        /* Keep storage intact and let load show an actionable error. */
+      }
+      await load();
+    })();
     const t = setInterval(() => {
       if (document.visibilityState === "visible" && dataRef.current)
         void load();
     }, 30000);
+    const syncChanged = () => {
+      const state = syncStatus();
+      setSync(state);
+      setOnline(navigator.onLine && !state.offline);
+    };
+    window.addEventListener("humeto-sync", syncChanged);
     const network = () => {
       setOnline(navigator.onLine);
-      if (navigator.onLine && dataRef.current) void load();
+      if (navigator.onLine) void load();
     };
     window.addEventListener("online", network);
     window.addEventListener("offline", network);
@@ -599,6 +656,7 @@ function App() {
     });
     return () => {
       clearInterval(t);
+      window.removeEventListener("humeto-sync", syncChanged);
       window.removeEventListener("online", network);
       window.removeEventListener("offline", network);
       void listener.then((l) => l.remove());
@@ -662,7 +720,9 @@ function App() {
     try {
       await fn();
       if (refreshAfter) await refresh();
-      setNotice(msg);
+      setNotice(
+        syncStatus().pending ? "Saved on this device. Sync pending." : msg,
+      );
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) {
         dataRef.current = null;
@@ -685,7 +745,6 @@ function App() {
   const touchTasks = useTouchDrag({
     enabled:
       !!data?.writable &&
-      online &&
       !busy &&
       tab === "tasks" &&
       ["board", "priority"].includes(view),
@@ -730,7 +789,7 @@ function App() {
         <Auth ready={refresh} />
       </>
     );
-  const writable = data.writable && online && !busy,
+  const writable = data.writable && !sync.needsAuth && !busy,
     active = focus?.active,
     pending = data.tasks.filter((t) => t.stage !== "Done"),
     completed = data.tasks.filter((t) => t.stage === "Done");
@@ -887,7 +946,7 @@ function App() {
           ...extras,
         });
         const updated = await api("/api/workspace/focus");
-        updated.receivedAt = Date.now();
+        updated.receivedAt ||= Date.now();
         focusRef.current = updated;
         setFocus(updated);
         await syncFocusTimerNotification(
@@ -904,13 +963,7 @@ function App() {
     );
   }
   const elapsed = active
-    ? Number(active.total_seconds) +
-      (active.state === "running" && focus.serverNow
-        ? Math.max(
-            0,
-            Math.floor((tick - new Date(focus.serverNow).getTime()) / 1000),
-          )
-        : 0)
+    ? Number(active.total_seconds || 0) + (active.state === "running" ? Math.max(0, Math.floor((tick - (focus?.receivedAt || tick)) / 1000)) : 0)
     : 0;
   return (
     <TaskCurrencyProvider request={api} syncToken={data.tasks}>
@@ -948,7 +1001,18 @@ function App() {
         </header>
         {!online && (
           <div className="banner">
-            <WifiOff size={16} /> You're offline. Reconnect to save changes.
+            <WifiOff size={16} /> Offline — changes are saved on this device and
+            will sync when connected. Reports update after sync.
+          </div>
+        )}
+        {(sync.pending > 0 || sync.conflict) && (
+          <div className="banner" role="status">
+            {sync.conflict
+              ? "Sync needs review. Your offline changes are kept."
+              : `${sync.pending} change${sync.pending === 1 ? "" : "s"} waiting to sync.`}
+            <button className="text" onClick={() => setSheet("sync")}>
+              Review sync
+            </button>
           </div>
         )}
         {!data.writable && (
@@ -2053,6 +2117,92 @@ function App() {
             <option key={c} value={c} />
           ))}
         </datalist>
+        {sheet === "sync" && (
+          <Sheet title="Saved changes & sync" close={() => setSheet(null)}>
+            <p>{sync.pending} pending changes are stored on this device.</p>
+            {sync.lastSync && (
+              <p>Last connected: {new Date(sync.lastSync).toLocaleString()}</p>
+            )}
+            {sync.recovery.length > 0 && (
+              <details>
+                <summary>
+                  Offline recovery copies ({sync.recovery.length})
+                </summary>
+                {sync.recovery.map((item, index) => (
+                  <article key={index}>
+                    <strong>{item.title}</strong>
+                    <p>
+                      {item.body.title ||
+                        item.body.stage ||
+                        item.body.action ||
+                        "Saved plan change"}
+                    </p>
+                  </article>
+                ))}
+              </details>
+            )}
+
+            {sync.conflict && <p role="alert">{sync.conflict}</p>}
+            {sync.serverVersion && (
+              <article>
+                <h3>Current server version</h3>
+                <strong>{sync.serverVersion.title}</strong>
+                <p>
+                  {sync.serverVersion.stage || sync.serverVersion.status}
+                  {sync.serverVersion.due_date
+                    ? " · Due " + sync.serverVersion.due_date
+                    : ""}
+                </p>
+              </article>
+            )}
+
+            {sync.change && (
+              <>
+                <h3>{sync.change.title}</h3>
+                <p>
+                  {sync.change.body.title ||
+                    sync.change.body.stage ||
+                    sync.change.body.action ||
+                    "Saved task or plan update"}
+                </p>
+              </>
+            )}
+            <button
+              className="primary full"
+              disabled={
+                busy || !online || (!!sync.conflict && !sync.canReapply)
+              }
+              onClick={() =>
+                void run(async () => {
+                  await resolveConflict(networkApi, true);
+                }, "Sync retried.")
+              }
+            >
+              {sync.conflict ? "Keep my edit and retry sync" : "Retry sync"}
+            </button>
+            <p>
+              This reapplies your edit to the current server version. Review
+              changes made on other devices first.
+            </p>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void run(async () => {
+                  await resolveConflict(networkApi, false);
+                  setSheet(null);
+                }, "Server version loaded. An offline recovery copy is kept on this device.");
+              }}
+            >
+              <label className="check">
+                <input type="checkbox" required />I want to use the server
+                version for all pending changes.
+              </label>
+              <button className="secondary full" disabled={busy || !online}>
+                Use server version
+              </button>
+            </form>
+          </Sheet>
+        )}
         {sheet === "focus-picker" && (
           <Sheet
             title={active ? "Switch focus task" : "Choose a focus task"}
@@ -2311,18 +2461,34 @@ function App() {
                     {task.display_title || task.title}
                   </h2>
                   {task.display_title && <p>Original: {task.title}</p>}
-                  {task.stage !== "Done" && active?.task_id !== task.id && (
-                    <button
-                      className="secondary"
-                      disabled={!writable}
-                      onClick={() => {
-                        setFocusQuery(task.title);
-                        setSheet("focus-picker");
-                      }}
-                    >
-                      <Timer size={16} />
-                      Focus on this task
-                    </button>
+                  {task.stage !== "Done" && (
+                    <div className="button-row">
+                      {active?.task_id !== task.id && (
+                        <button
+                          className="secondary"
+                          disabled={!writable}
+                          onClick={() => {
+                            setFocusQuery(task.title);
+                            setSheet("focus-picker");
+                          }}
+                        >
+                          <Timer size={16} />
+                          Focus on this task
+                        </button>
+                      )}
+                      <button
+                        className="primary"
+                        disabled={!writable}
+                        onClick={() =>
+                          void run(async () => {
+                            await patch(task, { stage: "Done" });
+                            setSheet(null);
+                          }, "Completed. Well done taking that step.")
+                        }
+                      >
+                        <CheckCircle2 size={17} /> Mark complete
+                      </button>
+                    </div>
                   )}
                   <p className="muted">
                     {task.project_title || "No project"} ·{" "}
@@ -2853,6 +3019,9 @@ function App() {
             >
               Open Humeto web <ArrowUpRight size={15} />
             </button>
+            <button className="secondary full" onClick={() => setSheet("sync")}>
+              Offline data & sync · {sync.pending} waiting
+            </button>
             <button
               className="secondary full"
               disabled={busy}
@@ -2879,8 +3048,10 @@ function App() {
             <small className="muted">
               Humeto mobile · 0.2.21 testing build
               <br />
-              Cloud sync requires an internet connection. No private documents
-              or passwords are stored in the app bundle.
+              Cloud sync requires an internet connection. Tasks and plans are
+              saved on this device for offline use. AI, chats, new files and
+              recurring schedule changes need internet. Passwords are never
+              stored.
             </small>
           </Sheet>
         )}

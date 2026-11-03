@@ -156,7 +156,11 @@ export async function POST(
       const token = await newSession(
         user.id,
         m.tenant_id,
-        input.remember ? 30 * 86400000 : 12 * 3600000,
+        input.remember
+          ? input.nativeSession
+            ? 365 * 86400000
+            : 30 * 86400000
+          : 12 * 3600000,
         input.nativeSession && m.role === "platform_admin"
           ? "workspace"
           : "platform",
