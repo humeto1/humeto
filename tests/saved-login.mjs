@@ -5,7 +5,7 @@ import { randomUUID, randomBytes, scryptSync, createHash } from "node:crypto";
 import { database } from "../src/lib/postgres.mjs";
 const base = process.env.HUMETO_TEST_URL;
 test(
-  "saved login lasts 30 days, ordinary login 12 hours, and native logout revokes its token",
+  "saved native login lasts a year, browser login 30 days, and logout revokes its token",
   { skip: process.env.HUMETO_ISOLATED_QA !== "true" },
   async () => {
     const d = database(),
@@ -50,14 +50,14 @@ test(
         data: { email, password, remember: true, nativeSession: true },
       });
       assert.equal(r.status(), 200);
-      assert.match(r.headers()["set-cookie"], /Max-Age=2592000/);
+      assert.match(r.headers()["set-cookie"], /Max-Age=31536000/);
       const token = (await r.json()).token;
       assert.equal(typeof token, "string");
       const hash = createHash("sha256").update(token).digest("hex");
       const row = await d
         .prepare("SELECT expires_at FROM sessions WHERE token_hash=?")
         .get(hash);
-      assert.ok(Number(row.expires_at) - Date.now() > 29 * 86400000);
+      assert.ok(Number(row.expires_at) - Date.now() > 360 * 86400000);
       const native = await client({ "x-humeto-session": token });
       assert.equal((await native.get("/api/mobile")).status(), 200);
       const foreign = await request.newContext({
@@ -112,6 +112,7 @@ test(
       const webLogin = await c.post("/api/auth/login", {
         data: { email, password, remember: true },
       });
+      assert.match(webLogin.headers()["set-cookie"], /Max-Age=2592000/);
       assert.equal((await webLogin.json()).token, undefined);
       assert.equal((await c.get("/api/mobile")).status(), 403);
     } finally {

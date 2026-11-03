@@ -204,6 +204,22 @@ test("search offers reviewed creation and checks filtered, completed, archived a
         .isDisabled(),
       true,
     );
+    // Do not leave a binned fixture that another retention test can legitimately purge.
+    const retained = await (
+      await c.request.get("/api/workspace/task-storage")
+    ).json();
+    for (const task of retained.items.filter((item) =>
+      made.some((created) => created.id === item.id),
+    )) {
+      assert.equal(
+        (
+          await c.request.post("/api/workspace/task-storage/" + task.id, {
+            data: { action: "restore", revision: task.revision },
+          })
+        ).status(),
+        200,
+      );
+    }
     await c.close();
   } finally {
     await browser.close();
