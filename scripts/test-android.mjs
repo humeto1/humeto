@@ -463,6 +463,9 @@ try {
       await cdp.wait(
         `document.querySelector('[aria-label="Task Bin"]')?.textContent.includes('Android native acceptance task')`,
       );
+      await cdp.wait(
+        `Boolean([...document.querySelectorAll('[aria-label="Task Bin"] article')].find(a=>a.textContent.includes('Android native acceptance task'))?.querySelector('button:not(:disabled)'))`,
+      );
       await cdp.evaluate(
         `[...document.querySelectorAll('[aria-label="Task Bin"] article')].find(a=>a.textContent.includes('Android native acceptance task')).querySelector('button').click()`,
       );
