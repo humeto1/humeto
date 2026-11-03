@@ -98,7 +98,7 @@ test(
           "SELECT summary FROM audit WHERE actor_id=? AND action='created' AND entity_type='workspace'",
         )
         .get(u.id);
-      assert.match(record.summary, /affirmed age 18\+.*2026-11-01/);
+      assert.match(record.summary, /affirmed age 18\+.*2026-11-03/);
     } finally {
       await c.dispose();
       await d.close();

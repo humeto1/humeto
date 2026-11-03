@@ -312,7 +312,7 @@ export async function POST(
         tid,
         "Created a " +
           input.accountType +
-          " workspace with a 15-day trial; affirmed age 18+ and accepted Terms/Privacy version 2026-11-01",
+          " workspace with a 15-day trial; affirmed age 18+ and accepted Terms/Privacy version 2026-11-03",
       );
       let delivered = true;
       try {

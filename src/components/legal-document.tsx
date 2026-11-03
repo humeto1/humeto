@@ -1,6 +1,6 @@
 import Link from "next/link";
 import styles from "./legal-document.module.css";
-export const POLICY_VERSION = "2026-11-01";
+export const POLICY_VERSION = "2026-11-03";
 export default function LegalDocument({
   type,
 }: {
@@ -24,7 +24,7 @@ export default function LegalDocument({
         DOTIVATE.
       </p>
       <p>
-        Updated 1 November 2026 · Contact{" "}
+        Updated 3 November 2026 · Contact{" "}
         <a href="mailto:help@humeto.com">help@humeto.com</a>
       </p>
       <nav aria-label="Policies">

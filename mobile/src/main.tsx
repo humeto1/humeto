@@ -3046,7 +3046,7 @@ function App() {
               <LogOut size={16} /> Sign out
             </button>
             <small className="muted">
-              Humeto mobile · 0.2.21 testing build
+              Humeto mobile · 0.2.22 testing build
               <br />
               Cloud sync requires an internet connection. Tasks and plans are
               saved on this device for offline use. AI, chats, new files and
