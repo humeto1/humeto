@@ -42,9 +42,13 @@ export async function storageWrite(a: Actor, id: string, body: unknown) {
         { error: "Task changed elsewhere. Refresh and retry." },
         { status: 409 },
       );
+    const actionTime = await db()
+      .prepare("SELECT humeto_action_time() AS at")
+      .get();
     if (
       task.storage_state === "bin" &&
-      new Date(String(task.purge_after)).getTime() <= Date.now()
+      new Date(String(task.purge_after)).getTime() <=
+        new Date(String(actionTime!.at)).getTime()
     )
       return Response.json(
         { error: "The 30-day restore period has ended." },
@@ -58,7 +62,7 @@ export async function storageWrite(a: Actor, id: string, body: unknown) {
       );
     await db()
       .prepare(
-        "UPDATE tasks SET storage_state=?,stored_at=CASE WHEN ?='active' THEN NULL ELSE now() END,purge_after=CASE WHEN ?='bin' THEN now()+interval '30 days' ELSE NULL END,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=?",
+        "UPDATE tasks SET storage_state=?,stored_at=CASE WHEN ?='active' THEN NULL ELSE humeto_action_time() END,purge_after=CASE WHEN ?='bin' THEN humeto_action_time()+interval '30 days' ELSE NULL END,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=?",
       )
       .run(state, state, state, a.id, id, a.tenantId);
     await audit(

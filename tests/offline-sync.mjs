@@ -139,6 +139,43 @@ test("mobile sync is account scoped, idempotent, conflict-safe, and preserves of
       await d.query("SELECT completed_at FROM tasks WHERE id=$1", [taskId])
     ).rows[0];
     assert.equal(Date.parse(finished.completed_at), Date.parse(stale.at));
+    const binAt = new Date(at + 140000).toISOString();
+    assert.equal(
+      (
+        await send({
+          id: randomUUID(),
+          owner,
+          path: "/api/workspace/task-storage/" + taskId,
+          method: "POST",
+          at: binAt,
+          body: { action: "bin", revision: 3 },
+        })
+      ).status,
+      200,
+    );
+    const stored = (
+      await d.query("SELECT stored_at,purge_after FROM tasks WHERE id=$1", [
+        taskId,
+      ])
+    ).rows[0];
+    assert.equal(new Date(stored.stored_at).toISOString(), binAt);
+    assert.equal(
+      new Date(stored.purge_after) - new Date(stored.stored_at),
+      30 * 86400000,
+    );
+    assert.equal(
+      (
+        await send({
+          id: randomUUID(),
+          owner,
+          path: "/api/workspace/task-storage/" + taskId,
+          method: "POST",
+          at: new Date(at + 150000).toISOString(),
+          body: { action: "restore", revision: 4 },
+        })
+      ).status,
+      200,
+    );
     const normal = await c.request.post("/api/workspace/tasks", {
       data: {
         title: "Normal after replay " + randomUUID(),
