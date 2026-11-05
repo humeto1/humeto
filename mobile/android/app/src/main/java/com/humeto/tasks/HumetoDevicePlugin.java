@@ -1,5 +1,11 @@
 package com.humeto.tasks;
 
+import android.app.Activity;
+import android.speech.RecognizerIntent;
+import android.content.ActivityNotFoundException;
+import androidx.activity.result.ActivityResult;
+import com.getcapacitor.annotation.ActivityCallback;
+import java.util.ArrayList;
 import android.app.NotificationManager;
 import android.app.NotificationChannel;
 import android.os.Build;
@@ -21,6 +27,33 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class HumetoDevicePlugin extends Plugin {
  public static final int FOCUS_NOTIFICATION_ID = 2000000002;
  public static final String FOCUS_CHANNEL_ID = "humeto-focus-active-v1";
+
+ @PluginMethod public void dictateInstruction(PluginCall call) {
+  Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+  intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+  intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag());
+  intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your instruction for Humeto");
+  intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+  try {
+   startActivityForResult(call, intent, "dictationResult");
+  } catch (ActivityNotFoundException e) {
+   call.reject("Speech recognition is unavailable on this device. Enable or install a speech recognition service.");
+  } catch (Exception e) {
+   call.reject("Unable to start speech recognition. Check your device speech and microphone settings.");
+  }
+ }
+
+ @ActivityCallback private void dictationResult(PluginCall call, ActivityResult result) {
+  if (call == null) return;
+  JSObject response = new JSObject();
+  String text = "";
+  if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+   ArrayList<String> matches = result.getData().getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+   if (matches != null && !matches.isEmpty()) text = matches.get(0);
+  }
+  response.put("text", text.length() > 2000 ? text.substring(0, 2000) : text);
+  call.resolve(response);
+ }
 
  private void ensureFocusChannel() {
   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

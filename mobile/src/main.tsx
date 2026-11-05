@@ -2,6 +2,7 @@ import { syncStatus, resolveConflict, cached } from "./offline";
 import { networkApi } from "./api";
 import { taskSearchScore } from "../../shared/task-search";
 import { TaskSearchFeedback } from "../../shared/task-search-feedback";
+import { nativeDictateInstruction } from "./dictation";
 import { VoiceInstructions } from "../../shared/voice-instructions";
 import { computeGoalTiming } from "../../shared/goal-clock";
 import { GoalDeadlineFields } from "../../shared/goal-timing";
@@ -1877,6 +1878,7 @@ function App() {
                     ))}
                   </div>
                   <VoiceInstructions
+                    nativeDictate={nativeDictateInstruction}
                     disabled={!writable}
                     onInsert={(text) =>
                       setDraft((previous) =>
@@ -3046,7 +3048,7 @@ function App() {
               <LogOut size={16} /> Sign out
             </button>
             <small className="muted">
-              Humeto mobile · 0.2.22 testing build
+              Humeto mobile · 0.2.23 testing build
               <br />
               Cloud sync requires an internet connection. Tasks and plans are
               saved on this device for offline use. AI, chats, new files and

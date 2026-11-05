@@ -26,9 +26,11 @@ type SpeechWindow = Window & {
 export function VoiceInstructions({
   onInsert,
   disabled = false,
+  nativeDictate,
 }: {
   onInsert: (text: string) => void;
   disabled?: boolean;
+  nativeDictate?: () => Promise<string>;
 }) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [listening, setListening] = useState(false);
@@ -60,6 +62,17 @@ export function VoiceInstructions({
     if (disabled) recognition.current?.stop();
   }, [disabled]);
   function start() {
+    if (nativeDictate) {
+      if (listening) return;
+      setText("");
+      setError("");
+      setListening(true);
+      void nativeDictate()
+        .then((transcript) => setText(transcript.slice(0, 2000)))
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Unable to start speech recognition."))
+        .finally(() => setListening(false));
+      return;
+    }
     const w = window as SpeechWindow;
     const Constructor = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!Constructor || recognition.current) return;
@@ -112,10 +125,10 @@ export function VoiceInstructions({
         lineHeight: 1.5,
       }}
     >
-      {supported && (
+      {(nativeDictate || supported) && (
         <button
           type="button"
-          disabled={disabled}
+          disabled={disabled || (!!nativeDictate && listening)}
           aria-pressed={listening}
           onClick={() => (listening ? recognition.current?.stop() : start())}
           style={{
@@ -127,12 +140,14 @@ export function VoiceInstructions({
           }}
         >
           {listening ? <Square size={16} /> : <Mic size={16} />}
-          {listening ? "Stop dictation" : "Dictate instruction"}
+          {listening ? (nativeDictate ? "Listening…" : "Stop dictation") : "Dictate instruction"}
         </button>
       )}
       <p style={{ margin: "4px 0" }} role="status">
         {listening
-          ? "Listening… Speak in your device’s language. Stop to review."
+          ? (nativeDictate ? "Speak in the speech window. Your transcript will appear here for review." : "Listening… Speak in your device’s language. Stop to review.")
+          : nativeDictate
+            ? "Device speech recognition · Your speech provider may process audio online. Review the text before sending."
           : supported === false
             ? "To speak your instruction, use your keyboard’s microphone or a browser that supports dictation."
             : "Browser dictation · Your browser may process speech online. Humeto receives text only when you send it."}
