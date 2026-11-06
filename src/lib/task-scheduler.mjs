@@ -37,7 +37,7 @@ export async function runTaskScheduler({
       .run(now.toISOString());
   const series = await d
     .prepare(
-      "SELECT id FROM task_recurrences WHERE status='active' AND next_day<=? AND (next_day || ' ' || local_time)<=to_char(timezone(task_recurrences.timezone,?::timestamptz),'YYYY-MM-DD HH24:MI')" +
+      "SELECT id FROM task_recurrences WHERE status='active' AND wbs_suspended=FALSE AND next_day<=? AND (next_day || ' ' || local_time)<=to_char(timezone(task_recurrences.timezone,?::timestamptz),'YYYY-MM-DD HH24:MI')" +
         (tenantId ? " AND tenant_id=? AND user_id=?" : "") +
         (routineOnly ? " AND track_occurrences=TRUE" : "") +
         " ORDER BY next_day LIMIT 500",
@@ -53,7 +53,7 @@ export async function runTaskScheduler({
     await d.transaction(async () => {
       const s = await d
         .prepare(
-          "SELECT * FROM task_recurrences WHERE id=? AND status='active' FOR UPDATE SKIP LOCKED",
+          "SELECT * FROM task_recurrences WHERE id=? AND status='active' AND wbs_suspended=FALSE FOR UPDATE SKIP LOCKED",
         )
         .get(id);
       if (!s || !(await writable(d, s.tenant_id, s.user_id, now))) return;
@@ -112,7 +112,7 @@ export async function runTaskScheduler({
         if (claim.changes) {
           await d
             .prepare(
-              "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category,work_kind,value_type,value_minor,value_currency,value_note,value_timing,payment_pattern) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+              "INSERT INTO tasks(id,tenant_id,person_id,title,important,urgent,due_date,assignee,last_actor_id,project_id,category,work_kind,value_type,value_minor,value_currency,value_note,value_timing,payment_pattern,is_csf,is_kpi,activity_note) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             )
             .run(
               taskId,
@@ -133,6 +133,9 @@ export async function runTaskScheduler({
               t.value_note || "",
               t.value_timing || "prompt",
               t.payment_pattern || "one_time",
+              !!t.is_csf,
+              !!t.is_kpi,
+              t.activity_note || "",
             );
           await d
             .prepare(

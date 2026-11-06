@@ -69,7 +69,13 @@ export function VoiceInstructions({
       setListening(true);
       void nativeDictate()
         .then((transcript) => setText(transcript.slice(0, 2000)))
-        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Unable to start speech recognition."))
+        .catch((cause: unknown) =>
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "Unable to start speech recognition.",
+          ),
+        )
         .finally(() => setListening(false));
       return;
     }
@@ -117,10 +123,9 @@ export function VoiceInstructions({
     <div
       className="voice-instructions"
       style={{
-        width: "100%",
+        position: "relative",
+        alignSelf: "center",
         flexShrink: 0,
-        maxHeight: "30dvh",
-        overflowY: "auto",
         fontSize: 12,
         lineHeight: 1.5,
       }}
@@ -129,55 +134,91 @@ export function VoiceInstructions({
         <button
           type="button"
           disabled={disabled || (!!nativeDictate && listening)}
+          aria-label={
+            listening
+              ? nativeDictate
+                ? "Listening…"
+                : "Stop dictation"
+              : "Dictate instruction"
+          }
+          title="Dictate instruction"
           aria-pressed={listening}
           onClick={() => (listening ? recognition.current?.stop() : start())}
           style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 6,
-            padding: "8px 12px",
-            minHeight: 44,
+            justifyContent: "center",
+            padding: 0,
+            width: 48,
+            height: 48,
+            minWidth: 48,
+            minHeight: 48,
+            border: 0,
+            borderRadius: "50%",
+            background: listening ? "#a93c36" : "#204e3e",
+            color: "white",
           }}
         >
-          {listening ? <Square size={16} /> : <Mic size={16} />}
-          {listening ? (nativeDictate ? "Listening…" : "Stop dictation") : "Dictate instruction"}
+          {listening ? <Square size={22} /> : <Mic size={24} />}
         </button>
       )}
-      <p style={{ margin: "4px 0" }} role="status">
-        {listening
-          ? (nativeDictate ? "Speak in the speech window. Your transcript will appear here for review." : "Listening… Speak in your device’s language. Stop to review.")
-          : nativeDictate
-            ? "Device speech recognition · Your speech provider may process audio online. Review the text before sending."
-          : supported === false
-            ? "To speak your instruction, use your keyboard’s microphone or a browser that supports dictation."
-            : "Browser dictation · Your browser may process speech online. Humeto receives text only when you send it."}
-      </p>
-      {error && <p role="alert">{error}</p>}
-      {text && (
-        <div>
-          <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-            {text}
-          </p>
-          <button
-            type="button"
-            disabled={listening || disabled}
-            onClick={() => {
-              onInsert(text);
-              setText("");
-            }}
-          >
-            Use dictated text
-          </button>{" "}
-          <button
-            type="button"
-            disabled={listening}
-            onClick={() => setText("")}
-          >
-            Discard
-          </button>
-          <p>Review and edit your instruction before sending.</p>
-        </div>
-      )}
+      <details
+        open={listening || !!text || !!error || undefined}
+        style={{
+          position: "absolute",
+          right: 0,
+          bottom: "calc(100% + 10px)",
+          width: "min(310px, calc(100vw - 48px))",
+          maxHeight: "30dvh",
+          overflowY: "auto",
+          padding: "10px 14px",
+          borderRadius: 16,
+          background: "#fff",
+          boxShadow: "0 4px 24px #183b3220",
+          zIndex: 5,
+        }}
+      >
+        <summary style={{ cursor: "pointer", color: "#536852" }}>
+          About dictation
+        </summary>
+        <p style={{ margin: "4px 0" }} role="status">
+          {listening
+            ? nativeDictate
+              ? "Speak in the speech window. Your transcript will appear here for review."
+              : "Listening… Speak in your device’s language. Stop to review."
+            : nativeDictate
+              ? "Device speech recognition · Your speech provider may process audio online. Review the text before sending."
+              : supported === false
+                ? "To speak your instruction, use your keyboard’s microphone or a browser that supports dictation."
+                : "Browser dictation · Your browser may process speech online. Humeto receives text only when you send it."}
+        </p>
+        {error && <p role="alert">{error}</p>}
+        {text && (
+          <div>
+            <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+              {text}
+            </p>
+            <button
+              type="button"
+              disabled={listening || disabled}
+              onClick={() => {
+                onInsert(text);
+                setText("");
+              }}
+            >
+              Use dictated text
+            </button>{" "}
+            <button
+              type="button"
+              disabled={listening}
+              onClick={() => setText("")}
+            >
+              Discard
+            </button>
+            <p>Review and edit your instruction before sending.</p>
+          </div>
+        )}
+      </details>
     </div>
   );
 }

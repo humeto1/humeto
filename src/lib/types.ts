@@ -44,6 +44,8 @@ export type Application = {
   submitted_at?: string;
 };
 export type Task = {
+  is_csf?: boolean;
+  is_kpi?: boolean;
   routine_id?: string;
   display_title?: string;
   value_type?: string;
@@ -113,6 +115,7 @@ export type Intake = {
 };
 
 export type Workstream = {
+  financial_target?: import("../../shared/plan-summary").FinancialTarget | null;
   category?: string;
   goal_id?: string;
   success_metric?: string;

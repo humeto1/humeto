@@ -37,7 +37,7 @@ export async function planningRead(req: Request, a: Actor) {
   });
   const routines = await db()
     .prepare(
-      "SELECT r.*,t.title,t.category,t.project_id,COALESCE(w.enabled,FALSE) AS wording_enabled,COALESCE(w.variants,'[]'::jsonb) AS wording_variants,COALESCE(w.revision,0) AS wording_revision,w.canonical_title AS wording_canonical FROM task_recurrences r JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id LEFT JOIN routine_wording w ON w.series_id=r.id WHERE r.tenant_id=? AND r.user_id=? AND r.track_occurrences=TRUE ORDER BY r.created_at DESC",
+      "SELECT r.*,t.title,t.category,t.project_id,COALESCE(w.enabled,FALSE) AS wording_enabled,COALESCE(w.variants,'[]'::jsonb) AS wording_variants,COALESCE(w.revision,0) AS wording_revision,w.canonical_title AS wording_canonical FROM task_recurrences r JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id LEFT JOIN routine_wording w ON w.series_id=r.id WHERE r.tenant_id=? AND r.user_id=? AND r.track_occurrences=TRUE AND r.wbs_suspended=FALSE ORDER BY r.created_at DESC",
     )
     .all(a.tenantId, a.id);
   const rows = await db()

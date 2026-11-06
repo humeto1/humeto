@@ -12,7 +12,7 @@ export async function storageRead(a: Actor) {
   await db().query("SELECT humeto_purge_task_bin(now(),$1)", [a.tenantId]);
   const items = await db()
     .prepare(
-      "SELECT id,title,stage,project_id,revision,storage_state,stored_at,purge_after FROM tasks WHERE tenant_id=? AND storage_state!='active' AND (purge_after IS NULL OR purge_after>now()) ORDER BY stored_at DESC LIMIT 1000",
+      "SELECT id,title,stage,project_id,revision,storage_state,stored_at,purge_after FROM tasks WHERE tenant_id=? AND storage_state IN ('archive','bin') AND (purge_after IS NULL OR purge_after>now()) ORDER BY stored_at DESC LIMIT 1000",
     )
     .all(a.tenantId);
   return Response.json({ items });

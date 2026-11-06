@@ -1,4 +1,6 @@
 "use client";
+import { TaskActivityTags } from "../../shared/task-activity-tags";
+import { ActivityBadges } from "../../shared/activity-markers";
 import { taskSearchScore } from "../../shared/task-search";
 import { TaskSearchFeedback } from "../../shared/task-search-feedback";
 import PlatformOverview, {
@@ -1014,6 +1016,7 @@ export default function Workspace({
             {t.routine_id && <span aria-label="Repeating task">🔁 </span>}
             {t.display_title || t.title}
           </strong>
+          <ActivityBadges activity={t} />
           {t.display_title && <small>Original: {t.title}</small>}
           <TaskValueBadge task={t} />
           <span className="compact-task-context">
@@ -3335,6 +3338,16 @@ export default function Workspace({
                             </button>
                           </>
                         )}
+                      </TaskDetailGroup>
+                      <TaskDetailGroup
+                        title="Activity tags"
+                        hint="None, KPI, CSF"
+                      >
+                        <TaskActivityTags
+                          task={task}
+                          writable={staff && writable}
+                          refresh={refresh}
+                        />
                       </TaskDetailGroup>
                       <TaskDetailGroup
                         title="Team & plans"

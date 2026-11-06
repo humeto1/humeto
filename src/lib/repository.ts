@@ -150,7 +150,7 @@ export async function bootstrap(a: Actor) {
       ["owner", "consultant"].includes(a.role)
         ? await db()
             .prepare(
-              "SELECT * FROM projects WHERE tenant_id=? ORDER BY created_at DESC,_rowid DESC",
+              "SELECT p.*,row_to_json(f) AS financial_target FROM projects p LEFT JOIN plan_financial_targets f ON f.tenant_id=p.tenant_id AND f.entity_type='project' AND f.entity_id=p.id WHERE p.tenant_id=? ORDER BY p.created_at DESC,p._rowid DESC",
             )
             .all(a.tenantId)
         : [])(),
@@ -158,7 +158,7 @@ export async function bootstrap(a: Actor) {
       ["owner", "consultant"].includes(a.role)
         ? await db()
             .prepare(
-              "SELECT * FROM goals WHERE tenant_id=? ORDER BY created_at DESC,_rowid DESC",
+              "SELECT p.*,row_to_json(f) AS financial_target FROM goals p LEFT JOIN plan_financial_targets f ON f.tenant_id=p.tenant_id AND f.entity_type='goal' AND f.entity_id=p.id WHERE p.tenant_id=? ORDER BY p.created_at DESC,p._rowid DESC",
             )
             .all(a.tenantId)
         : [])(),

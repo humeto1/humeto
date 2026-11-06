@@ -1,3 +1,6 @@
+import {TaskActivityTags} from "../../shared/task-activity-tags";
+import {PlanSummary} from "../../shared/plan-summary";
+import {ActivityBadges} from "../../shared/activity-markers";
 import { syncStatus, resolveConflict, cached } from "./offline";
 import { networkApi } from "./api";
 import { taskSearchScore } from "../../shared/task-search";
@@ -903,6 +906,7 @@ function App() {
             {t.routine_id && <span aria-label="Repeating task">🔁 </span>}
             {t.display_title || t.title}
           </strong>
+          <ActivityBadges activity={t}/>
           {t.display_title && <small>Original: {t.title}</small>}
           <small>
             {t.project_title || "No project"} · {formatDate(t.due_date)}
@@ -1877,18 +1881,7 @@ function App() {
                       </article>
                     ))}
                   </div>
-                  <VoiceInstructions
-                    nativeDictate={nativeDictateInstruction}
-                    disabled={!writable}
-                    onInsert={(text) =>
-                      setDraft((previous) =>
-                        [previous, text]
-                          .filter(Boolean)
-                          .join(" ")
-                          .slice(0, 2000),
-                      )
-                    }
-                  />
+
                   <form
                     className="composer"
                     onSubmit={(e) => {
@@ -1915,11 +1908,24 @@ function App() {
                       onChange={(e) => setDraft(e.target.value)}
                       placeholder="Capture a task, plan your day…"
                       aria-label="Message Humeto"
-                      rows={2}
+                      rows={1}
                     />
+                  <VoiceInstructions
+                    nativeDictate={nativeDictateInstruction}
+                    disabled={!writable}
+                    onInsert={(text) =>
+                      setDraft((previous) =>
+                        [previous, text]
+                          .filter(Boolean)
+                          .join(" ")
+                          .slice(0, 2000),
+                      )
+                    }
+                  />
                     <button
                       className="primary round"
                       aria-label="Send message"
+                      hidden={!draft.trim()}
                       disabled={!writable || !draft.trim()}
                     >
                       <Send size={18} />
@@ -2012,10 +2018,7 @@ function App() {
                           <span>
                             <strong>{p.title}</strong>
                             <small>
-                              {p.category || "Uncategorized"} ·{" "}
-                              {p.target_date
-                                ? "Deadline " + p.target_date
-                                : "Ongoing · no deadline"}
+{p.category || "Uncategorized"}
                             </small>
                             {p.goal_id && (
                               <small>
@@ -2042,9 +2045,7 @@ function App() {
                           </span>
                           <ChevronRight size={17} />
                         </button>
-                        {kind === "goals" && (
-                          <p>{computeGoalTiming(p).summary}</p>
-                        )}
+                        <PlanSummary plan={p}/>
                         <ParentControls
                           type={kind === "projects" ? "project" : "goal"}
                           id={p.id}
@@ -2602,6 +2603,7 @@ function App() {
                       </button>
                     </form>
                   </TaskDetailGroup>
+                  <TaskDetailGroup title="Activity tags" hint="None, KPI, CSF"><TaskActivityTags task={task} writable={writable} request={api} refresh={refresh}/></TaskDetailGroup>
                   <TaskDetailGroup
                     title="Team & plans"
                     hint="Assignments, project & goals"

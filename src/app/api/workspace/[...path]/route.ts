@@ -1300,6 +1300,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
       .object({
         ...impactFields,
         stage: z.string().min(1).max(100),
+        isCsf: z.boolean().optional(),
+        isKpi: z.boolean().optional(),
         revision: z.number().int().positive(),
         title: z.string().trim().min(2).max(200).optional(),
         category: z.string().trim().max(60).optional(),
@@ -1315,6 +1317,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
       .prepare("SELECT * FROM tasks WHERE id=? AND tenant_id=?")
       .get(rid, a.tenantId)) as
       | {
+          is_csf: boolean;
+          is_kpi: boolean;
           value_type: string;
           value_minor: number | null;
           value_currency: string;
@@ -1339,7 +1343,7 @@ async function handle(req: Request, parts: string[], a: Actor) {
       return fail("Choose a team member from this workspace.", 400);
     const result = await db()
       .prepare(
-        "UPDATE tasks SET stage=?,title=?,category=?,value_type=?,value_minor=?,value_currency=?,value_note=?,value_timing=?,payment_pattern=?,due_date=?,assignee=?,important=?,urgent=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
+        "UPDATE tasks SET stage=?,title=?,category=?,value_type=?,value_minor=?,value_currency=?,value_note=?,value_timing=?,payment_pattern=?,due_date=?,assignee=?,important=?,urgent=?,is_csf=?,is_kpi=?,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=? AND revision=?",
       )
       .run(
         input.stage,
@@ -1352,6 +1356,8 @@ async function handle(req: Request, parts: string[], a: Actor) {
           ? task.important
           : Number(input.important),
         input.urgent === undefined ? task.urgent : Number(input.urgent),
+        input.isCsf ?? task.is_csf,
+        input.isKpi ?? task.is_kpi,
         a.id,
         rid,
         a.tenantId,

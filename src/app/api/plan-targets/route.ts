@@ -68,7 +68,16 @@ async function route(req: Request) {
         completion_date: date,
         conditional_date: date,
         condition: z.string().trim().max(1000),
-        basis: z.enum(["project", "occurrence", "month", "year"]),
+        basis: z.enum([
+          "project",
+          "occurrence",
+          "day",
+          "week",
+          "month",
+          "quarter",
+          "half_year",
+          "year",
+        ]),
       })
       .parse(await req.json());
     if (v.conditional && !v.condition)

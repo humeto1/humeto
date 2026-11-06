@@ -1264,3 +1264,39 @@ legend {
 :root[data-chat-keyboard="true"] .chat-screen .voice-instructions {
   max-height: 64px !important;
 }
+
+/* Compact chat composer. */
+.chat-screen .composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+.chat-screen .composer:focus-within {
+  box-shadow: none;
+}
+.chat-screen .composer textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  max-height: 120px;
+  padding: 13px 18px;
+  border-radius: 28px;
+  background: white;
+  line-height: 26px;
+  font-size: 16px;
+  box-shadow: 0 0 0 1px #dce5d0 !important;
+}
+
+.chat-screen .composer > button {
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+}
+.chat-screen .composer > button[hidden] {
+  display: none;
+}

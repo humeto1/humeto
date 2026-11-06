@@ -1,4 +1,6 @@
 export type Task = {
+  is_csf?: boolean;
+  is_kpi?: boolean;
   routine_id?: string;
   display_title?: string;
   value_type?: string;
@@ -21,6 +23,7 @@ export type Task = {
   goals?: { id: string; title: string }[];
 };
 export type Workstream = {
+  financial_target?: import("../../shared/plan-summary").FinancialTarget | null;
   revision: number;
   category?: string;
   goal_id?: string;

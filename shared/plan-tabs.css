@@ -1,0 +1,759 @@
+.parent-controls.plan-tools {
+  margin-top: 16px;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+.plan-tool-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  background: #edf1e5;
+  border: 1px solid #e0e6d7;
+  border-radius: 15px;
+}
+.plan-tool-tabs > button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 58px;
+  width: 100%;
+  padding: 7px 3px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: #56674d;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.plan-tool-tabs > button[aria-selected="true"] {
+  background: #fff;
+  color: #214e3d;
+  box-shadow: 0 2px 7px #2a453214;
+}
+.plan-tool-tabs > button:focus-visible,
+.plan-tool-panel:focus-visible {
+  outline: 2px solid #527c60;
+  outline-offset: 2px;
+}
+.plan-tool-panel {
+  padding-top: 16px;
+  min-width: 0;
+}
+.plan-tool-panel[hidden] {
+  display: none !important;
+}
+.plan-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.plan-kicker {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  line-height: 1.5;
+  color: #5e7156;
+  font-weight: 700;
+}
+.plan-tools .plan-panel-heading h3 {
+  font-size: 17px;
+  line-height: 1.3;
+  margin: 6px 0;
+  color: #244a38;
+}
+.plan-tools .plan-panel-heading p {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #5e6d57;
+  margin: 0;
+}
+.plan-settings {
+  display: grid;
+  gap: 10px;
+}
+.plan-settings > details > summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 46px;
+  padding: 12px;
+  border: 1px solid #dce5d3;
+  border-radius: 12px;
+  background: #f8faf4;
+  color: #294737;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+.plan-settings > details > summary::-webkit-details-marker {
+  display: none;
+}
+.plan-settings > details > summary::after {
+  content: "";
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+}
+.plan-settings > details[open] > summary::after {
+  transform: rotate(225deg);
+}
+.plan-settings .plan-team-control > button,
+.plan-settings .plan-financial-control > button {
+  min-height: 46px;
+  border-radius: 12px;
+}
+.plan-settings > details > summary:focus-visible {
+  outline: 2px solid #527c60;
+  outline-offset: 2px;
+}
+.goal-project-maps {
+  display: grid;
+  gap: 14px;
+}
+.goal-project-maps h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.plan-tool-error {
+  padding: 12px;
+  border-radius: 10px;
+  background: #fff0e9;
+  color: #883f29;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.plan-tool-notice {
+  margin: 0 0 12px;
+  color: #365d37;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.plan-tool-notice:empty {
+  display: none;
+}
+.success-measures {
+  min-width: 0;
+}
+.success-measures button,
+.success-editor button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #d7e0ce;
+  border-radius: 11px;
+  background: #fff;
+  color: #2a513d;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.success-measures button:disabled,
+.success-editor button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.success-measures button:focus-visible,
+.success-editor button:focus-visible,
+.success-editor input:focus-visible,
+.success-editor select:focus-visible,
+.success-editor textarea:focus-visible {
+  outline: 2px solid #527c60;
+  outline-offset: 2px;
+}
+.success-measures .plan-tool-primary,
+.success-editor .plan-tool-primary {
+  background: #234f3c;
+  color: white;
+  border-color: #234f3c;
+  font-weight: 600;
+}
+.success-measures .plan-tool-icon,
+.success-editor .plan-tool-icon {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+}
+.success-summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #eff4e6;
+  border: 1px solid #e0e9d3;
+  border-radius: 13px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.success-summary > strong {
+  font-size: 28px;
+  line-height: 1;
+  white-space: nowrap;
+  color: #234f3c;
+}
+.success-summary strong small {
+  font-size: 15px;
+  font-weight: 400;
+}
+.success-summary > span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #3e573b;
+}
+.success-summary > span small {
+  display: block;
+  font-size: 10px;
+  color: #53694c;
+  margin-top: 3px;
+}
+.success-empty {
+  padding: 22px 14px;
+  text-align: center;
+  border: 1px dashed #cddbc0;
+  border-radius: 15px;
+  background: #fafbf7;
+}
+.success-empty > svg {
+  color: #557650;
+}
+.success-empty h4 {
+  margin: 10px 0 8px;
+  font-size: 15px;
+  color: #264832;
+}
+.success-empty p {
+  font-size: 12px;
+  color: #5c6b53;
+  line-height: 1.7;
+  margin: 0 0 16px;
+}
+.success-factor {
+  padding: 14px;
+  border: 1px solid #dce4d3;
+  background: #fbfcf8;
+  border-radius: 15px;
+  margin-bottom: 14px;
+  min-width: 0;
+}
+.success-factor > header {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.success-factor h4 {
+  margin: 6px 0;
+  color: #254a37;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.success-factor > p,
+.success-helper {
+  font-size: 12px;
+  line-height: 1.65;
+  color: #5c6d53;
+}
+.success-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 10px;
+  background: #e9edde;
+  color: #4c6044;
+}
+.success-state-active {
+  background: #e1efd9;
+  color: #305c35;
+}
+.success-state-attention {
+  background: #fff0d4;
+  color: #7b521b;
+}
+.success-kpis {
+  display: grid;
+  gap: 10px;
+  margin-top: 13px;
+}
+.success-kpi {
+  min-width: 0;
+  background: #fff;
+  padding: 12px;
+  border: 1px solid #e0e7d9;
+  border-radius: 12px;
+}
+.success-kpi-archived {
+  background: #f1f2ee;
+}
+.success-kpi-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+.success-kpi h5 {
+  font-size: 13px;
+  margin: 0;
+  color: #304e39;
+  line-height: 1.5;
+}
+.success-kpi-value {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 3px 0 13px;
+}
+.success-kpi-value > strong {
+  font-size: 29px;
+  line-height: 1;
+  color: #274f39;
+}
+.success-kpi-value > span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #4f6349;
+}
+.success-kpi-value small {
+  display: block;
+  font-size: 10px;
+}
+.success-meter {
+  height: 5px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: #e8eddf;
+}
+.success-meter > span {
+  display: block;
+  height: 100%;
+  background: #6d9560;
+  border-radius: 5px;
+}
+.success-kpi-bottom {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 9px;
+}
+.success-kpi-bottom > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #637159;
+  font-size: 10px;
+}
+.success-kpi-bottom > .success-hit {
+  color: #32613b;
+}
+.success-measures .success-kpi-bottom button {
+  padding: 6px 9px;
+  min-height: 36px;
+  font-size: 11px;
+  background: #f5f8ee;
+}
+.success-period {
+  display: block;
+  margin-top: 8px;
+  font-size: 9px;
+  line-height: 1.5;
+  color: #5d6c54;
+}
+.success-measures .plan-tool-add {
+  width: 100%;
+  background: transparent;
+  border-style: dashed;
+  margin-top: 10px;
+}
+.success-history {
+  margin-top: 10px;
+  border-top: 1px solid #e6ebdf;
+  padding-top: 8px;
+}
+.success-history summary {
+  font-size: 11px;
+  cursor: pointer;
+  min-height: 28px;
+  color: #52694b;
+}
+.success-history > div {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-top: 1px solid #edf0e8;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.success-history small {
+  display: block;
+  font-weight: 400;
+}
+.success-show-archived {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #53654b;
+  min-height: 44px;
+}
+.success-show-archived input {
+  width: 17px !important;
+  height: 17px;
+  min-height: 0 !important;
+  margin: 0;
+}
+.success-editor {
+  padding: 20px;
+  background: #fffefa;
+  color: #294735;
+}
+.success-editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.success-editor h4 {
+  font-size: 19px;
+  line-height: 1.3;
+  margin: 0;
+}
+.success-editor form {
+  display: grid;
+  gap: 8px;
+}
+.success-editor form > label,
+.success-form-row label {
+  font-size: 12px;
+  color: #52644a;
+  line-height: 1.5;
+}
+.success-editor form > label:not(:first-child) {
+  margin-top: 8px;
+}
+.success-editor input,
+.success-editor textarea,
+.success-editor select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 12px;
+  min-height: 46px;
+  border: 1px solid #d5dfca;
+  border-radius: 10px;
+  background: #fff;
+  color: #264c36;
+  font: inherit;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+.success-editor label input {
+  margin-top: 6px;
+}
+.success-editor p {
+  font-size: 12px;
+  line-height: 1.65;
+}
+.success-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+.success-form-row label {
+  min-width: 0;
+}
+.success-editor-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+.success-editor-actions button {
+  flex: 1;
+}
+.success-modal {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  max-height: 90dvh;
+  padding: 0 0 env(safe-area-inset-bottom);
+  overflow: auto;
+  border: 0;
+  border-radius: 24px 24px 0 0;
+  background: #fffefa;
+  font-family: inherit;
+  overscroll-behavior: contain;
+}
+.success-modal::backdrop {
+  background: #173b3355;
+}
+@media (min-width: 800px) {
+  .plan-tool-tabs > button {
+    flex-direction: row;
+    gap: 7px;
+    min-height: 46px;
+  }
+  .success-modal {
+    inset: 0;
+    margin: auto;
+    max-height: 85dvh;
+    height: fit-content;
+    border-radius: 22px;
+  }
+}
+/* Dense project overview; editors keep comfortable touch controls. */
+.mobile-plan-card {
+  padding: 12px;
+  border-radius: 15px;
+  margin-bottom: 10px;
+}
+.mobile-plan-card .parent-controls {
+  margin-top: 10px !important;
+}
+.plan-tool-tabs {
+  gap: 3px;
+  padding: 3px;
+  border-radius: 11px;
+}
+.plan-tool-tabs > button {
+  flex-direction: row;
+  gap: 5px;
+  min-height: 42px;
+  padding: 7px 3px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+.plan-tool-tabs > button svg {
+  width: 14px;
+  height: 14px;
+}
+.plan-tool-panel {
+  padding-top: 10px;
+}
+.plan-panel-heading {
+  margin-bottom: 10px;
+}
+.plan-tools .plan-panel-heading h3 {
+  font-size: 14px;
+  margin: 0 0 4px;
+}
+.plan-panel-heading .plan-kicker {
+  display: none;
+}
+.plan-tools .plan-panel-heading p {
+  font-size: 11px;
+  line-height: 1.5;
+}
+.plan-settings {
+  gap: 7px;
+}
+.plan-settings > details > summary,
+.plan-settings .plan-team-control > button,
+.plan-settings .plan-financial-control > button {
+  min-height: 42px;
+  padding: 9px 10px;
+  font-size: 12px;
+  border-radius: 9px;
+}
+.plan-tools .wbs-launch {
+  padding: 11px 12px;
+  border-radius: 11px;
+  gap: 8px;
+}
+.plan-tools .wbs-launch strong {
+  font-size: 13px;
+}
+.plan-tools .wbs-launch small {
+  font-size: 10px;
+}
+.plan-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 8px;
+  margin: 9px 0 10px;
+  padding: 9px 10px;
+  border: 1px solid #e0e6d8;
+  border-radius: 9px;
+  background: #f7f9f1;
+}
+.plan-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #46613e;
+  min-width: 0;
+}
+.plan-summary-item > svg {
+  flex-shrink: 0;
+}
+.plan-summary-item small {
+  display: block;
+  font-size: 9px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: #5b6b52;
+}
+.plan-summary-item strong {
+  display: block;
+  font-size: 11px;
+  line-height: 1.6;
+  color: #244b36;
+  overflow-wrap: anywhere;
+}
+.success-activity-state {
+  display: block;
+  font-size: 10px;
+  line-height: 1.7;
+  color: #5d6d54;
+  margin-top: 4px;
+}
+.success-factor {
+  padding: 10px;
+  margin-bottom: 9px;
+  border-radius: 11px;
+}
+.success-factor h4 {
+  margin: 0 0 5px;
+  font-size: 13px;
+}
+.success-summary {
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.success-summary > strong {
+  font-size: 23px;
+}
+.success-kpis {
+  gap: 7px;
+  margin-top: 9px;
+}
+.success-kpi {
+  padding: 9px;
+  border-radius: 9px;
+}
+.success-kpi-value {
+  margin: 0 0 5px;
+}
+.success-kpi-value > strong {
+  font-size: 23px;
+}
+.success-kpi-bottom {
+  margin-top: 5px;
+}
+.success-activity-picker {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  margin-bottom: 12px;
+  color: #52644a;
+}
+.success-activity-picker select {
+  min-width: 0;
+  width: 100%;
+  padding: 11px;
+  font: inherit;
+  font-size: 16px;
+  border: 1px solid #d5dfca;
+  border-radius: 9px;
+  background: #fff;
+}
+.plan-tools .compact-financial-form {
+  display: grid;
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  gap: 8px;
+  padding: 8px 0;
+}
+.plan-tools .compact-financial-form > fieldset {
+  grid-column: 1/-1;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #dfe5d7;
+  border-radius: 9px;
+}
+.plan-tools .compact-financial-form legend {
+  font-size: 11px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+.plan-tools .compact-financial-form label {
+  min-width: 0;
+  font-size: 10px;
+  gap: 4px;
+  margin: 0;
+}
+.plan-tools .compact-financial-form input,
+.plan-tools .compact-financial-form select {
+  min-width: 0;
+  min-height: 40px;
+  height: 40px;
+  padding: 7px;
+  font-size: 14px;
+  border-radius: 7px;
+  width: 100%;
+}
+.plan-tools .compact-financial-form > label:last-of-type,
+.plan-tools .compact-financial-form > button {
+  grid-column: 1/-1;
+}
+.plan-tools .compact-financial-form textarea {
+  min-height: 56px;
+  height: 56px;
+  padding: 7px;
+  font-size: 14px;
+}
+.plan-tools .plan-financial-control p {
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 7px 0;
+}
+.workstream-card {
+  padding: 14px;
+}
+.workstream-card > .workstream-count {
+  margin: 8px 0;
+}
+.workstream-card > .workstream-count strong {
+  font-size: 22px;
+}
+.workstream-card > .plan-summary {
+  display: grid;
+}
+@media (max-width: 360px) {
+  .plan-tool-tabs > button {
+    gap: 3px;
+    font-size: 10px;
+  }
+  .plan-tool-tabs > button svg {
+    width: 12px;
+    height: 12px;
+  }
+}
+.plan-tools .compact-financial-form legend {
+  color: #52644a;
+}

@@ -299,6 +299,8 @@ function applyLocal(a: Account, op: Op) {
     if ("goalIds" in body)
       task.goals = boot.goals.filter((g: any) => body.goalIds.includes(g.id));
     for (const [from, to] of Object.entries({
+      isCsf: "is_csf",
+      isKpi: "is_kpi",
       valueType: "value_type",
       valueMinor: "value_minor",
       valueCurrency: "value_currency",

@@ -531,14 +531,7 @@ export default function TaskAssistant({
                 </button>
               </div>
             )}
-            <VoiceInstructions
-              disabled={busy || loading}
-              onInsert={(text) =>
-                setDraft((previous) =>
-                  [previous, text].filter(Boolean).join(" ").slice(0, 2000),
-                )
-              }
-            />
+
             <form onSubmit={send} className={styles.composer}>
               <label htmlFor="assistant-message" className={styles.srOnly}>
                 Message Humeto assistant
@@ -549,7 +542,7 @@ export default function TaskAssistant({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 maxLength={2000}
-                rows={2}
+                rows={1}
                 placeholder="Add a task, ask about priorities, or plan a reminder…"
                 disabled={loading}
                 onKeyDown={(e) => {
@@ -563,12 +556,18 @@ export default function TaskAssistant({
                   }
                 }}
               />
+              <VoiceInstructions
+                disabled={busy || loading}
+                onInsert={(text) =>
+                  setDraft((previous) =>
+                    [previous, text].filter(Boolean).join(" ").slice(0, 2000),
+                  )
+                }
+              />
               <div className={styles.composerBottom}>
-                <span>
-                  <Clock size={12} /> {timezone || "Detecting timezone…"}
-                </span>
                 <button
                   type="submit"
+                  hidden={!draft.trim()}
                   aria-label="Send message"
                   disabled={busy || loading || !draft.trim()}
                 >

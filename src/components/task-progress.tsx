@@ -1,4 +1,5 @@
 "use client";
+import { PlanSummary } from "../../shared/plan-summary";
 import { computeGoalTiming } from "../../shared/goal-clock";
 import { GoalDeadlineFields } from "../../shared/goal-timing";
 import { taskGoals } from "../../shared/task-relations";
@@ -273,6 +274,7 @@ export default function TaskProgress({
                     </button>
                   </div>
                   <h2>{item.title}</h2>
+                  <PlanSummary plan={item} />
                   <small>
                     {item.category || "Uncategorized"}
                     {item.goal_id

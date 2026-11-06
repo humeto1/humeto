@@ -5,11 +5,13 @@ export function PlanFinancial({
   id,
   request,
   writable,
+  onUpdate,
 }: {
   type: string;
   id: string;
   request: (path: string, body?: any) => Promise<any>;
   writable: boolean;
+  onUpdate?: () => Promise<void>;
 }) {
   const [target, setTarget] = useState<any>(null),
     [open, setOpen] = useState(false),
@@ -74,13 +76,17 @@ export function PlanFinancial({
             target. Actual receipts and profit remain in Finance.
           </p>
           <form
+            className="compact-financial-form"
             key={target.revision}
             onSubmit={(e) => {
               e.preventDefault();
               const body = Object.fromEntries(new FormData(e.currentTarget));
               setBusy(true);
               void request(path, { ...body, revision: target.revision })
-                .then(load)
+                .then(async () => {
+                  await load();
+                  await onUpdate?.();
+                })
                 .catch((e) => setError(e.message))
                 .finally(() => setBusy(false));
             }}
@@ -100,7 +106,11 @@ export function PlanFinancial({
               <select name="basis" defaultValue={target.basis}>
                 <option value="project">Whole plan / project</option>
                 <option value="occurrence">Each occurrence</option>
+                <option value="day">Each day</option>
+                <option value="week">Each week</option>
                 <option value="month">Each month</option>
+                <option value="quarter">Each quarter</option>
+                <option value="half_year">Every 6 months</option>
                 <option value="year">Each year</option>
               </select>
             </label>
@@ -112,7 +122,7 @@ export function PlanFinancial({
               <fieldset key={key}>
                 <legend>{label}</legend>
                 <label>
-                  Expected profit amount
+                  Profit amount
                   <input
                     name={key}
                     type="number"
@@ -124,7 +134,7 @@ export function PlanFinancial({
                   />
                 </label>
                 <label>
-                  Expected date
+                  Date (optional)
                   <input
                     name={key + "_date"}
                     type="date"
@@ -134,7 +144,7 @@ export function PlanFinancial({
               </fieldset>
             ))}
             <label>
-              Condition to receive the reward
+              Reward condition
               <textarea
                 name="condition"
                 defaultValue={target.condition || ""}

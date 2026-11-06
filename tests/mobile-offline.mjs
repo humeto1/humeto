@@ -210,7 +210,9 @@ test("mobile survives an offline restart, saves tasks and focus, then syncs once
       .getByRole("button", { name: "Keep my edit and retry sync", exact: true })
       .click();
     await p.waitForFunction(
-      () => !document.body.textContent.includes("Sync needs review"),
+      () =>
+        !document.body.textContent.includes("Sync needs review") &&
+        !document.body.textContent.includes("waiting to sync"),
     );
     const resolved = await (await c.request.get("/api/mobile")).json();
     assert.equal(
