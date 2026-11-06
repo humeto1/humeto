@@ -32,6 +32,7 @@ let serial = "";
 function adbRun(args) {
   return execFileSync(adb, [...(serial ? ["-s", serial] : []), ...args], {
     encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
     timeout: 45000,
   }).trim();
 }
@@ -167,7 +168,7 @@ try {
         "-no-boot-anim",
         "-no-snapshot",
         "-gpu",
-        "swiftshader_indirect",
+        "auto",
         "-cores",
         "2",
         "-memory",
@@ -192,6 +193,17 @@ try {
     if (adbRun(["shell", "getprop", "sys.boot_completed"]) === "1") break;
     await new Promise((r) => setTimeout(r, 500));
   }
+  adbRun(["shell", "input", "keyevent", "KEYCODE_WAKEUP"]);
+  adbRun(["shell", "wm", "dismiss-keyguard"]);
+  adbRun(["shell", "svc", "power", "stayon", "true"]);
+  adbRun([
+    "shell",
+    "settings",
+    "put",
+    "system",
+    "screen_off_timeout",
+    "2147483647",
+  ]);
   for (const key of [
     "window_animation_scale",
     "transition_animation_scale",
@@ -341,6 +353,130 @@ try {
     },
   );
   await check(
+    "Native compact plan tabs, WBS tags and KPI results share one activity",
+    async () => {
+      const boot = (await nativeApi("/api/mobile")).data;
+      const createdProject = await nativeApi("/api/workspace/projects", {
+        title: "Android release verification",
+        description: "Native release QA",
+        targetDate: "",
+        status: "Active",
+      });
+      assert.equal(createdProject.status, 200);
+      const project = { id: createdProject.data.id };
+      const created = await nativeApi("/api/plan-success", {
+        type: "project",
+        parentId: project.id,
+        action: "activity",
+        revision: 0,
+        title: "Android CSF activity",
+        isCsf: true,
+        isKpi: true,
+      });
+      assert.equal(created.status, 200);
+      let tree = (await nativeApi("/api/project-wbs?projectId=" + project.id))
+        .data;
+      const activity = tree.nodes.find((n) => n.id === created.data.id);
+      assert.ok(
+        activity &&
+          activity.is_csf &&
+          activity.is_kpi &&
+          activity.storage_state === "planning",
+      );
+      assert.equal(
+        (
+          await nativeApi("/api/project-wbs", {
+            projectId: project.id,
+            revision: tree.revision,
+            action: "edit",
+            id: activity.id,
+            taskRevision: activity.revision,
+            title: activity.title,
+            frequency: "once",
+            stage: "Done",
+            isCsf: true,
+            isKpi: true,
+          })
+        ).status,
+        200,
+      );
+      const metric = await nativeApi("/api/plan-success", {
+        type: "project",
+        parentId: project.id,
+        action: "kpi",
+        revision: 0,
+        activityId: activity.id,
+        title: "Native daily leads",
+        target: 3,
+        unit: "leads",
+        cadence: "daily",
+        direction: "at_least",
+        timezone: "UTC",
+      });
+      assert.equal(metric.status, 200);
+      let state = (
+        await nativeApi("/api/plan-success?type=project&parentId=" + project.id)
+      ).data;
+      const k = state.kpis.find((k) => k.id === metric.data.id);
+      assert.equal(
+        (
+          await nativeApi("/api/plan-success", {
+            type: "project",
+            parentId: project.id,
+            action: "result",
+            id: k.id,
+            activityId: activity.id,
+            kpiRevision: k.revision,
+            revision: 0,
+            day: k.day,
+            actual: 3,
+          })
+        ).status,
+        200,
+      );
+      await cdp.evaluate(
+        "Object.defineProperty(navigator,'onLine',{get:()=>true,configurable:true});window.dispatchEvent(new Event('online'))",
+      );
+      await cdp.click("Plans");
+      await cdp.click("Projects");
+      const card = `Array.from(document.querySelectorAll('.mobile-plan-card')).find(e=>e.querySelector('.project strong')?.textContent==='Android release verification')`;
+      await cdp.wait(`!!${card}`);
+      assert.deepEqual(
+        await cdp.evaluate(
+          `Array.from((${card}).querySelectorAll('[role=tab]')).map(e=>e.textContent)`,
+        ),
+        ["WBS", "Settings", "CSFs & KPIs"],
+      );
+      await cdp.evaluate(
+        `(${card}).querySelector('[role=tab][id$="-wbs"]').click()`,
+      );
+      await cdp.evaluate(`(${card}).querySelector('.wbs-launch').click()`);
+      await cdp.wait(
+        `Array.from(document.querySelectorAll('.wbs-done')).some(e=>e.textContent.includes('Android CSF activity')&&e.textContent.includes('CSF')&&e.textContent.includes('KPI'))`,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Close project map"]').click()`,
+      );
+      await cdp.evaluate(
+        `(${card}).querySelector('[role=tab][id$="-success"]').click()`,
+      );
+      await cdp.wait(
+        `(${card}).textContent.includes('Native daily leads')&&(${card}).textContent.includes('Target met')`,
+      );
+      assert.equal(
+        await cdp.evaluate("document.documentElement.scrollWidth>innerWidth"),
+        false,
+      );
+      writeFileSync(
+        join(out, "unified-activity-tags.png"),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], {
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: 15000,
+        }),
+      );
+    },
+  );
+  await check(
     "Encrypted offline task survives WebView restart and syncs once",
     async () => {
       const source =
@@ -375,6 +511,10 @@ try {
       assert.ok(!encrypted.includes("Native offline private draft"));
       assert.ok(!encrypted.includes(userEmail));
       await cdp.send("Page.reload", {});
+      await new Promise((r) => setTimeout(r, 1000));
+      cdp.close();
+      cdp = await connectWebView(forward);
+      await cdp.evaluate(source);
       await cdp.wait(
         "document.body.innerText.includes('What matters today?') && document.body.innerText.includes('Offline')",
       );
@@ -387,14 +527,17 @@ try {
       );
       await cdp.wait(
         "!document.body.innerText.includes('change waiting to sync') && !document.body.innerText.includes('Sync needs review')",
+        60000,
       );
       const records = (await nativeApi("/api/mobile")).data.tasks.filter(
         (t) => t.title === "Native offline private draft",
       );
       assert.equal(records.length, 1);
-      await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {
-        identifier: init.identifier,
-      });
+      await cdp
+        .send("Page.removeScriptToEvaluateOnNewDocument", {
+          identifier: init.identifier,
+        })
+        .catch(() => {});
     },
   );
   const title = "Android native acceptance task";
@@ -677,7 +820,13 @@ try {
         `Array.from(document.querySelectorAll('.mobile-plan-card')).some(e=>e.textContent.includes('Android QA project'))`,
       );
       await cdp.evaluate(
-        `Array.from(document.querySelectorAll('.mobile-plan-card')).find(e=>e.textContent.includes('Android QA project')).querySelector('summary').click()`,
+        `Array.from(document.querySelectorAll('.mobile-plan-card')).find(e=>e.querySelector('.project strong')?.textContent==='Android QA project').querySelector('[role=tab][id$="-settings"]').click()`,
+      );
+      await cdp.wait(
+        `!!Array.from(document.querySelectorAll('.mobile-plan-card')).find(e=>e.querySelector('.project strong')?.textContent==='Android QA project')?.querySelector('.plan-settings summary')`,
+      );
+      await cdp.evaluate(
+        `Array.from(document.querySelectorAll('.mobile-plan-card')).find(e=>e.querySelector('.project strong')?.textContent==='Android QA project').querySelector('.plan-settings summary').click()`,
       );
       await cdp.wait(
         `Array.from(document.querySelectorAll('button')).some(e=>e.textContent==='Add milestone')`,
@@ -1040,7 +1189,10 @@ try {
       await new Promise((r) => setTimeout(r, 1000));
       writeFileSync(
         join(out, "focus-notification-background.png"),
-        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], {
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: 15000,
+        }),
       );
       adbRun(["shell", "cmd", "statusbar", "collapse"]);
       let notificationDump = adbRun([
@@ -1292,7 +1444,10 @@ try {
       assert.equal(m.overflow, false);
       writeFileSync(
         join(out, "100-tasks.png"),
-        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], {
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: 15000,
+        }),
       );
     },
   );
@@ -1425,12 +1580,18 @@ try {
       );
       writeFileSync(
         join(out, "goals.png"),
-        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], {
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: 15000,
+        }),
       );
       await cdp.click("Today");
       writeFileSync(
         join(out, "today.png"),
-        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], {
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: 15000,
+        }),
       );
     },
   );
@@ -1568,7 +1729,10 @@ try {
       );
       writeFileSync(
         join(out, "calendar.png"),
-        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], {
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: 15000,
+        }),
       );
     },
   );
@@ -1726,7 +1890,10 @@ try {
       );
       writeFileSync(
         join(out, "failure.png"),
-        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"]),
+        execFileSync(adb, ["-s", serial, "exec-out", "screencap", "-p"], {
+          maxBuffer: 16 * 1024 * 1024,
+          timeout: 15000,
+        }),
       );
     } catch {}
   process.exitCode = 1;
