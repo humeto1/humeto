@@ -1,4 +1,5 @@
 "use client";
+import { ActivityMeasures } from "./activity-measures";
 import { ActivityBadges, ActivityTags } from "./activity-markers";
 import React, {
   useCallback,
@@ -1158,6 +1159,11 @@ export function WbsEditor({
                   <ActivityDetails
                     key={selectedNode.id}
                     node={selectedNode}
+                    request={request}
+                    onMeasurementsUpdate={async () => {
+                      await load();
+                      await onUpdate?.();
+                    }}
                     nodes={nodes}
                     busy={busy}
                     writable={
@@ -1178,8 +1184,9 @@ export function WbsEditor({
                           },
                           "Activity saved.",
                         )
-                      )
-                        setSelected(null);
+                      ) {
+                        if (!values.isKpi) setSelected(null);
+                      }
                     }}
                     onMove={async (parentId, beforeId) => {
                       await mutate(
@@ -1233,6 +1240,8 @@ export function WbsEditor({
 }
 function ActivityDetails({
   node,
+  request,
+  onMeasurementsUpdate,
   nodes,
   busy,
   writable,
@@ -1245,6 +1254,8 @@ function ActivityDetails({
   onRemove,
 }: {
   node: WbsNode;
+  request: Transport;
+  onMeasurementsUpdate: () => Promise<void>;
   nodes: WbsNode[];
   busy: boolean;
   writable: boolean;
@@ -1400,6 +1411,13 @@ function ActivityDetails({
           Save activity
         </button>
       </form>
+      <ActivityMeasures
+        activityId={node.id}
+        isKpi={!!node.is_kpi}
+        writable={writable}
+        request={request}
+        refresh={onMeasurementsUpdate}
+      />
       <details className="wbs-organize">
         <summary>Organize this branch</summary>
         <label>

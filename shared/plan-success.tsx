@@ -10,13 +10,16 @@ import {
 import { createPortal } from "react-dom";
 import { Plus, Target, Check, MoreHorizontal, X } from "lucide-react";
 import { type Transport } from "./transport";
-import { kpiAchievement } from "./kpi-period";
+import { kpiAchievement, kpiLocalDay } from "./kpi-period";
+import "./plan-tabs.css";
 import { ActivityBadges, ActivityTags } from "./activity-markers";
 const periods: Record<string, string> = {
   once: "Overall",
   daily: "Daily",
   weekly: "Weekly",
   monthly: "Monthly",
+  quarterly: "Quarterly",
+  half_year: "Every 6 months",
   yearly: "Yearly",
 };
 type Activity = {
@@ -52,6 +55,10 @@ type Kpi = {
   archived: boolean;
   revision: number;
   day: string;
+  today: string;
+  historyTotal: number;
+  historyMore: boolean;
+  periodTarget: { target: number; unit: string; direction: string };
   period: { start: string; end: string; label: string };
   current: Result | null;
   history: Result[];
@@ -60,7 +67,7 @@ type Data = { activities: Activity[]; kpis: Kpi[] };
 type Editing =
   | { kind: "activity"; item?: Activity }
   | { kind: "kpi"; activityId: string; item?: Kpi }
-  | { kind: "result"; item: Kpi };
+  | { kind: "result"; item: Kpi; day?: string };
 export function PlanSuccess({
   type,
   id,
@@ -69,7 +76,7 @@ export function PlanSuccess({
   active,
   onUpdate,
 }: {
-  type: "project" | "goal";
+  type: "project" | "goal" | "activity";
   id: string;
   writable: boolean;
   request: Transport;
@@ -82,24 +89,90 @@ export function PlanSuccess({
     [busy, setBusy] = useState(false),
     [editing, setEditing] = useState<Editing | null>(null),
     [choice, setChoice] = useState("new"),
-    [archived, setArchived] = useState(false);
+    [archived, setArchived] = useState(false),
+    [resultBusy, setResultBusy] = useState(false),
+    [historyBusy, setHistoryBusy] = useState(""),
+    [older, setOlder] = useState<
+      Record<string, { items: Result[]; more: boolean }>
+    >({});
   const locked = useRef(false),
     uid = useId();
   const path = `/api/plan-success?type=${type}&parentId=${encodeURIComponent(id)}`;
-  const load = useCallback(() => request(path).then(setData), [request, path]);
+  const load = useCallback(
+    (resetHistory = true) =>
+      request(path).then((next) => {
+        setData(next);
+        if (resetHistory) setOlder({});
+      }),
+    [request, path],
+  );
   useEffect(() => {
-    if (active) void load().catch((e) => setError(e.message));
-  }, [active, load]);
+    if (!active || editing || busy) return;
+    let alive = true;
+    const refresh = () => {
+      if (!document.hidden && alive)
+        void load(false).catch((e) => {
+          if (alive) setError(e.message);
+        });
+    };
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [active, load, !!editing, busy]);
+  async function moreHistory(k: Kpi) {
+    if (historyBusy) return;
+    setHistoryBusy(k.id);
+    try {
+      const previous = older[k.id]?.items || k.history;
+      const next = await request(
+        path +
+          "&kpiId=" +
+          encodeURIComponent(k.id) +
+          "&offset=" +
+          previous.length,
+      );
+      const page = next.kpis.find((m: Kpi) => m.id === k.id);
+      if (page)
+        setOlder((old) => ({
+          ...old,
+          [k.id]: {
+            items: [...previous, ...page.history],
+            more: page.historyMore,
+          },
+        }));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setHistoryBusy("");
+    }
+  }
   async function save(values: Record<string, unknown>) {
     if (locked.current) return;
     locked.current = true;
     setBusy(true);
     setError("");
     try {
-      await request("/api/plan-success", { type, parentId: id, ...values });
+      const saved = await request("/api/plan-success", {
+        type,
+        parentId: id,
+        ...values,
+      });
       await load();
-      setEditing(null);
-      setNotice("Activity saved. WBS and Tasks use this same record.");
+      if (
+        values.action === "activity" &&
+        values.isKpi &&
+        !data?.kpis.some((k) => k.activity_id === saved.id && !k.archived)
+      )
+        setEditing({ kind: "kpi", activityId: String(saved.id) });
+      else setEditing(null);
+      setNotice("Saved on this activity. Tasks and maps use the same record.");
       await onUpdate?.();
     } catch (e) {
       setError((e as Error).message);
@@ -130,9 +203,18 @@ export function PlanSuccess({
       : undefined;
   function addActivity() {
     setChoice("new");
-    setEditing({ kind: "activity" });
+    setEditing(
+      type === "activity" && data?.activities[0]
+        ? { kind: "activity", item: data.activities[0] }
+        : { kind: "activity" },
+    );
     setError("");
   }
+  const needsTarget = activities.filter(
+    (a) =>
+      a.is_kpi &&
+      !data?.kpis.some((k) => k.activity_id === a.id && !k.archived),
+  );
   return (
     <section className="success-measures" aria-label="Activity CSFs and KPIs">
       <div className="plan-panel-heading">
@@ -154,6 +236,13 @@ export function PlanSuccess({
             targets met<small>Measured totals for their current periods</small>
           </span>
         </div>
+      )}
+      {!!needsTarget.length && (
+        <p className="success-setup-notice" role="status">
+          {needsTarget.length} KPI{" "}
+          {needsTarget.length === 1 ? "activity needs" : "activities need"} a
+          target · {kpis.length} configured measurements
+        </p>
       )}
       {error && !editing && (
         <p className="plan-tool-error" role="alert">
@@ -195,6 +284,9 @@ export function PlanSuccess({
             <div>
               <h4>{a.title}</h4>
               <ActivityBadges activity={a} />
+              {needsTarget.some((item) => item.id === a.id) && (
+                <small className="activity-needs-target">Needs target</small>
+              )}
               <small className="success-activity-state">
                 {a.frequency
                   ? "Repeating"
@@ -289,9 +381,10 @@ export function PlanSuccess({
                         <button
                           type="button"
                           disabled={!writable || busy || k.archived}
-                          onClick={() =>
-                            setEditing({ kind: "result", item: k })
-                          }
+                          onClick={() => {
+                            setResultBusy(true);
+                            setEditing({ kind: "result", item: k });
+                          }}
                         >
                           {current ? "Update result" : "Log result"}
                         </button>
@@ -302,7 +395,7 @@ export function PlanSuccess({
                       {!!k.history.length && (
                         <details className="success-history">
                           <summary>History</summary>
-                          {k.history.map((h) => (
+                          {(older[k.id]?.items || k.history).map((h) => (
                             <div key={h.period_start + h.cadence_snapshot}>
                               <span>
                                 {h.cadence_snapshot === "once"
@@ -313,8 +406,39 @@ export function PlanSuccess({
                                 {Number(h.actual)} / {Number(h.target_snapshot)}{" "}
                                 {h.unit_snapshot}
                               </strong>
+                              <button
+                                type="button"
+                                disabled={!writable || busy}
+                                aria-label={`Edit result for ${h.cadence_snapshot === "once" ? "Overall" : h.period_start}`}
+                                onClick={() => {
+                                  setResultBusy(true);
+                                  setEditing({
+                                    kind: "result",
+                                    item: k,
+                                    day:
+                                      h.cadence_snapshot === "once"
+                                        ? k.today
+                                        : h.period_start,
+                                  });
+                                }}
+                              >
+                                Edit
+                              </button>
                             </div>
                           ))}
+                          <small>
+                            Showing {(older[k.id]?.items || k.history).length}{" "}
+                            of {k.historyTotal} results
+                          </small>
+                          {(older[k.id]?.more ?? k.historyMore) && (
+                            <button
+                              type="button"
+                              disabled={!!historyBusy}
+                              onClick={() => void moreHistory(k)}
+                            >
+                              Load older results
+                            </button>
+                          )}
                         </details>
                       )}
                     </section>
@@ -326,7 +450,10 @@ export function PlanSuccess({
                 disabled={!writable || busy}
                 onClick={() => setEditing({ kind: "kpi", activityId: a.id })}
               >
-                <Plus size={15} /> Add measurement
+                <Plus size={15} />{" "}
+                {needsTarget.some((item) => item.id === a.id)
+                  ? "Set target"
+                  : "Add measurement"}
               </button>
             </div>
           )}
@@ -375,7 +502,7 @@ export function PlanSuccess({
             </div>
             {editing.kind === "activity" && !editing.item && (
               <label className="success-activity-picker">
-                Choose a WBS activity
+                Choose an activity
                 <select
                   value={choice}
                   onChange={(e) => setChoice(e.target.value)}
@@ -428,9 +555,10 @@ export function PlanSuccess({
                     action: "result",
                     id: editing.item.id,
                     activityId: editing.item.activity_id,
-                    kpiRevision: editing.item.revision,
-                    revision: editing.item.current?.revision || 0,
-                    day: editing.item.day,
+                    kpiRevision: Number(f.get("kpiRevision")),
+                    revision: Number(f.get("resultRevision")),
+                    day: f.get("reportDay"),
+                    entryMode: f.get("entryMode"),
                     actual: Number(f.get("actual")),
                     note: f.get("note"),
                   });
@@ -498,10 +626,10 @@ export function PlanSuccess({
                       <input
                         name="target"
                         type="number"
-                        min="0.0001"
+                        min="0"
                         max="1000000000000"
                         step="any"
-                        defaultValue={editing.item?.target || 3}
+                        defaultValue={editing.item?.target ?? 3}
                         required
                       />
                     </label>
@@ -539,7 +667,8 @@ export function PlanSuccess({
                   {editing.item && (
                     <>
                       <p className="success-helper">
-                        Saved periods keep their original targets.
+                        Saved periods keep their original targets. Changes apply
+                        to new results from today.
                       </p>
                       <label className="success-show-archived">
                         <input
@@ -553,44 +682,24 @@ export function PlanSuccess({
                   )}
                 </>
               ) : (
-                <>
-                  <p>
-                    <strong>{editing.item.title}</strong> ·{" "}
-                    {editing.item.period.label}
-                  </p>
-                  <label htmlFor={uid + "actual"}>
-                    Measured total for this period
-                  </label>
-                  <input
-                    autoFocus
-                    id={uid + "actual"}
-                    name="actual"
-                    type="number"
-                    min="0"
-                    max="1000000000000"
-                    step="any"
-                    defaultValue={editing.item.current?.actual ?? ""}
-                    required
-                  />
-                  <p className="success-helper">
-                    Enter the full total. This replaces the saved value for this
-                    period.
-                  </p>
-                  <label htmlFor={uid + "note"}>Note (optional)</label>
-                  <textarea
-                    name="note"
-                    id={uid + "note"}
-                    defaultValue={editing.item.current?.note || ""}
-                    maxLength={1000}
-                    rows={2}
-                  />
-                </>
+                <ResultFields
+                  key={editing.item.id + (editing.day || "current")}
+                  item={editing.item}
+                  initialDay={editing.day}
+                  path={path}
+                  request={request}
+                  onBusy={setResultBusy}
+                />
               )}
               <div className="success-editor-actions">
                 <button
                   type="submit"
                   className="plan-tool-primary"
-                  disabled={busy || !writable}
+                  disabled={
+                    busy ||
+                    !writable ||
+                    (editing.kind === "result" && resultBusy)
+                  }
                 >
                   {busy
                     ? "Saving…"
@@ -663,5 +772,190 @@ function Modal({
       {children}
     </dialog>,
     document.body,
+  );
+}
+
+function ResultFields({
+  item,
+  initialDay,
+  path,
+  request,
+  onBusy,
+}: {
+  item: Kpi;
+  initialDay?: string;
+  path: string;
+  request: Transport;
+  onBusy: (busy: boolean) => void;
+}) {
+  const [metric, setMetric] = useState(item),
+    [day, setDay] = useState(initialDay || item.day),
+    [mode, setMode] = useState<"current" | "dated">(
+      initialDay ? "dated" : "current",
+    ),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState(""),
+    [rollover, setRollover] = useState(false);
+  const sequence = useRef(0),
+    alive = useRef(true);
+  async function choose(selected?: string) {
+    const ticket = ++sequence.current;
+    setLoading(true);
+    onBusy(true);
+    setError("");
+    if (selected !== undefined) {
+      setDay(selected);
+      setMode("dated");
+    }
+    if (selected === "") {
+      setError("Choose a reporting date.");
+      return;
+    }
+    try {
+      const next = await request(
+        path +
+          "&kpiId=" +
+          encodeURIComponent(item.id) +
+          (selected ? "&day=" + encodeURIComponent(selected) : ""),
+      );
+      const k = next.kpis.find((k: Kpi) => k.id === item.id);
+      if (!alive.current || ticket !== sequence.current) return;
+      if (!k) throw Error("Measurement is no longer available.");
+      setMetric(k);
+      setDay(k.day);
+      setMode(selected ? "dated" : "current");
+      setRollover(false);
+      setLoading(false);
+      onBusy(false);
+    } catch (e) {
+      if (alive.current && ticket === sequence.current) {
+        setError((e as Error).message);
+        setLoading(false);
+        onBusy(true);
+      }
+    }
+  }
+  useEffect(() => {
+    alive.current = true;
+    void choose(initialDay);
+    return () => {
+      alive.current = false;
+      sequence.current++;
+    };
+  }, []);
+  useEffect(() => {
+    const check = () => {
+      if (mode === "current" && kpiLocalDay(metric.timezone) !== metric.today) {
+        setRollover(true);
+        onBusy(true);
+      }
+    };
+    const timer = setInterval(check, 1000);
+    window.addEventListener("focus", check);
+    document.addEventListener("visibilitychange", check);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", check);
+      document.removeEventListener("visibilitychange", check);
+    };
+  }, [metric.today, metric.timezone, mode, onBusy]);
+  const current = metric.current;
+  const target = current
+      ? Number(current.target_snapshot)
+      : Number(metric.periodTarget.target),
+    unit = current ? current.unit_snapshot : metric.periodTarget.unit;
+  return (
+    <>
+      <p>
+        <strong>{metric.title}</strong> · {metric.period.label}
+      </p>
+      <label>
+        Reporting date
+        <input
+          type="date"
+          name="reportDay"
+          value={day}
+          max={kpiLocalDay(metric.timezone)}
+          onChange={(e) => void choose(e.target.value)}
+          required
+        />
+      </label>
+      <div className="success-date-shortcuts">
+        <button type="button" onClick={() => void choose()}>
+          Today
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const d = new Date(kpiLocalDay(metric.timezone) + "T12:00:00Z");
+            d.setUTCDate(d.getUTCDate() - 1);
+            void choose(d.toISOString().slice(0, 10));
+          }}
+        >
+          Yesterday
+        </button>
+      </div>
+      {rollover && (
+        <p role="alert">
+          A new reporting day has started. Choose Today or select a date before
+          saving. Your entered total is still here.
+        </p>
+      )}
+      {loading && <p role="status">Loading reporting period…</p>}
+      {error && (
+        <p role="alert">
+          {error}
+          <button
+            type="button"
+            onClick={() => void choose(mode === "current" ? undefined : day)}
+          >
+            Retry
+          </button>
+        </p>
+      )}
+      <input type="hidden" name="entryMode" value={mode} />
+      <input
+        type="hidden"
+        name="resultRevision"
+        value={current?.revision || 0}
+      />
+      <input type="hidden" name="kpiRevision" value={metric.revision} />
+      <fieldset
+        disabled={loading || !!error || rollover}
+        className="success-result-fields"
+        key={metric.id + metric.period.start + ":" + (current?.revision || 0)}
+      >
+        <legend>
+          {metric.period.label} · Target {target.toLocaleString()} {unit} ·{" "}
+          {metric.timezone}
+        </legend>
+        <label>
+          Measured total for this period
+          <input
+            name="actual"
+            type="number"
+            min="0"
+            max="1000000000000"
+            step="any"
+            defaultValue={current?.actual ?? ""}
+            required
+          />
+        </label>
+        <p className="success-helper">
+          Enter the full total. This replaces the saved value for this period.
+          Historical entries use that date’s target; saved periods retain their
+          original target.
+        </p>
+        <label>
+          Note (optional)
+          <textarea
+            name="note"
+            defaultValue={current?.note || ""}
+            maxLength={1000}
+            rows={2}
+          />
+        </label>
+      </fieldset>
+    </>
   );
 }

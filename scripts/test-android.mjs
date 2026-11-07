@@ -603,6 +603,59 @@ try {
       await cdp.wait(
         `!document.querySelector('[aria-label="Edit Native promoted child"]')&&!document.querySelector('[aria-label="Edit Native nested leaf"]')`,
       );
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Edit Android CSF activity"]')&&!document.querySelector('[aria-label="Activity options for Android CSF activity"]').disabled`,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Edit Android CSF activity"]').click()`,
+      );
+      await cdp.wait(
+        `!!document.querySelector('.activity-measures [aria-label="Edit measurement Native daily leads"]')`,
+      );
+      await cdp.evaluate(
+        `document.querySelector('.activity-measures [aria-label="Edit measurement Native daily leads"]').click()`,
+      );
+      await cdp.fill(".success-modal input[name=target]", "0");
+      await cdp.select(".success-modal select[name=direction]", "at_most");
+      await cdp.click("Save indicators", true);
+      await cdp.wait(`!document.querySelector('.success-modal')`);
+      let measures = (
+        await nativeApi(
+          "/api/plan-success?type=activity&parentId=" + activity.id,
+        )
+      ).data;
+      assert.equal(
+        measures.kpis.find((m) => m.id === metric.data.id).target,
+        0,
+      );
+      await cdp.wait(
+        `!!Array.from(document.querySelectorAll('.activity-measures .success-kpi button')).find(b=>b.textContent.trim()==='Update result'&&!b.disabled)`,
+      );
+      await cdp.evaluate(
+        `Array.from(document.querySelectorAll('.activity-measures .success-kpi button')).find(b=>b.textContent.trim()==='Update result').click()`,
+      );
+      await cdp.wait(
+        `!!document.querySelector('.success-modal input[name=reportDay]')&&!document.querySelector('.success-modal input[name=actual]').disabled`,
+      );
+      await cdp.click("Yesterday", true);
+      await cdp.wait(
+        `!!document.querySelector('.success-modal input[name=actual]')&&!document.querySelector('.success-modal input[name=actual]').disabled`,
+      );
+      await cdp.fill(".success-modal input[name=actual]", "0");
+      await cdp.click("Save result", true);
+      await cdp.wait(`!document.querySelector('.success-modal')`);
+      measures = (
+        await nativeApi(
+          "/api/plan-success?type=activity&parentId=" + activity.id,
+        )
+      ).data;
+      assert.equal(
+        measures.kpis.find((m) => m.id === metric.data.id).historyTotal,
+        2,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Close activity details"]').click()`,
+      );
       assert.equal(
         await cdp.evaluate("document.documentElement.scrollWidth>innerWidth"),
         false,

@@ -1,4 +1,11 @@
-export type KpiCadence = "once" | "daily" | "weekly" | "monthly" | "yearly";
+export type KpiCadence =
+  | "once"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "quarterly"
+  | "half_year"
+  | "yearly";
 export function kpiPeriod(cadence: KpiCadence, day: string) {
   const date = new Date(day + "T12:00:00Z");
   if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== day)
@@ -12,6 +19,19 @@ export function kpiPeriod(cadence: KpiCadence, day: string) {
     start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 6);
+    return {
+      start: iso(start),
+      end: iso(end),
+      label: iso(start) + " – " + iso(end),
+    };
+  }
+  if (cadence === "quarterly" || cadence === "half_year") {
+    const months = cadence === "quarterly" ? 3 : 6;
+    const firstMonth = Math.floor(date.getUTCMonth() / months) * months;
+    const start = new Date(date);
+    start.setUTCMonth(firstMonth, 1);
+    const end = new Date(start);
+    end.setUTCMonth(firstMonth + months, 0);
     return {
       start: iso(start),
       end: iso(end),
@@ -37,4 +57,13 @@ export function kpiAchievement(
 ) {
   if (actual === null) return null;
   return direction === "at_most" ? actual <= target : actual >= target;
+}
+
+export function kpiLocalDay(timezone: string, now = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
 }

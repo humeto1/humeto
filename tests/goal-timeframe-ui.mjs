@@ -37,6 +37,7 @@ test("goal UI selects a bounded duration, extends it and creates an independent 
       .locator(".workstream-card")
       .filter({ has: page.getByRole("heading", { name: title, exact: true }) });
     await card.waitFor();
+    await card.getByRole("tab", { name: "Settings", exact: true }).click();
     await card
       .getByText("Days, duration & milestones", { exact: true })
       .click();

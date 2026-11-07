@@ -757,3 +757,72 @@
 .plan-tools .compact-financial-form legend {
   color: #52644a;
 }
+
+.activity-needs-target {
+  display: inline-block;
+  color: #82521c;
+  background: #fff1ce;
+  border-radius: 5px;
+  padding: 2px 6px;
+  margin: 3px 5px;
+  font-size: 11px;
+}
+.success-setup-notice {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff4d9;
+  color: #704c20;
+  font-size: 12px;
+}
+.success-date-shortcuts {
+  display: flex;
+  gap: 8px;
+  margin: 6px 0 12px;
+}
+.success-date-shortcuts button,
+.success-history button {
+  min-height: 40px;
+  padding: 6px 10px;
+}
+.success-result-fields {
+  min-width: 0;
+  margin: 10px 0;
+  padding: 10px;
+  border: 1px solid #d7e1ce;
+  border-radius: 10px;
+}
+.success-result-fields legend {
+  max-width: 100%;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.success-result-fields label {
+  display: grid;
+  gap: 6px;
+}
+.success-result-fields input,
+.success-result-fields textarea {
+  min-width: 0;
+  width: 100%;
+}
+.success-history > div {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.activity-measures {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid #d7e1ce;
+  border-radius: 10px;
+  min-width: 0;
+}
+.activity-measures > summary {
+  min-height: 40px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #294e3c;
+  font-weight: 600;
+}
+.activity-measures .success-summary {
+  margin-top: 8px;
+}

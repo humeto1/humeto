@@ -16,3 +16,14 @@ test("KPI periods use calendar boundaries, including leap years and weeks crossi
   assert.equal(kpiAchievement(0, 3, "at_most"), true);
   assert.equal(kpiAchievement(4, 3, "at_most"), false);
 });
+
+test("quarter and half-year targets follow calendar boundaries", () => {
+  assert.deepEqual(kpiPeriod("quarterly", "2028-02-15"), {
+    start: "2028-01-01",
+    end: "2028-03-31",
+    label: "2028-01-01 – 2028-03-31",
+  });
+  assert.equal(kpiPeriod("half_year", "2026-11-07").start, "2026-07-01");
+  assert.equal(kpiPeriod("half_year", "2026-01-01").end, "2026-06-30");
+  assert.equal(kpiAchievement(0, 0, "at_most"), true);
+});

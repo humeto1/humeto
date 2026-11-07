@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./activity-markers.css";
 export function ActivityBadges({
   activity,
@@ -33,6 +33,10 @@ export function ActivityTags({
 }) {
   const [csf, setCsf] = useState(isCsf),
     [kpi, setKpi] = useState(isKpi);
+  useEffect(() => {
+    setCsf(isCsf);
+    setKpi(isKpi);
+  }, [isCsf, isKpi]);
   return (
     <fieldset className="activity-indicator-options">
       <legend>Tags</legend>

@@ -5,7 +5,10 @@ import { z } from "zod";
 import { kpiPeriod, type KpiCadence } from "../../../../shared/kpi-period";
 const key = z.string().min(1).max(100),
   revision = z.number().int().nonnegative();
-const scope = z.object({ type: z.enum(["project", "goal"]), parentId: key });
+const scope = z.object({
+  type: z.enum(["project", "goal", "activity"]),
+  parentId: key,
+});
 const command = scope
   .extend({
     action: z.enum(["activity", "kpi", "result"]),
@@ -17,15 +20,24 @@ const command = scope
     note: z.string().trim().max(1000).optional(),
     isCsf: z.boolean().optional(),
     isKpi: z.boolean().optional(),
-    target: z.number().finite().positive().max(1e12).optional(),
+    target: z.number().finite().min(0).max(1e12).optional(),
     unit: z.string().trim().max(40).optional(),
     cadence: z
-      .enum(["once", "daily", "weekly", "monthly", "yearly"])
+      .enum([
+        "once",
+        "daily",
+        "weekly",
+        "monthly",
+        "quarterly",
+        "half_year",
+        "yearly",
+      ])
       .optional(),
     direction: z.enum(["at_least", "at_most"]).optional(),
     timezone: z.string().max(100).optional(),
     archived: z.boolean().optional(),
     day: z.iso.date().optional(),
+    entryMode: z.enum(["current", "dated"]).optional(),
     actual: z.number().finite().min(0).max(1e12).optional(),
   })
   .strict();
@@ -68,6 +80,21 @@ async function parent(
   parentId: string,
   lock = false,
 ) {
+  if (type === "activity") {
+    const supplied = await db()
+      .prepare(
+        "SELECT t.id,COALESCE((SELECT r.template_task_id FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id AND r.tenant_id=t.tenant_id WHERE o.task_id=t.id),t.id) AS canonical FROM tasks t WHERE t.tenant_id=? AND t.id=? AND t.storage_state IN ('active','planning')",
+      )
+      .get(tenant, parentId);
+    if (!supplied) throw new Failure("Activity not found.", 404);
+    const canonical = await db()
+      .prepare(
+        `SELECT id,title FROM tasks WHERE tenant_id=? AND id=? AND storage_state IN ('active','planning')${lock ? " FOR UPDATE" : ""}`,
+      )
+      .get(tenant, supplied.canonical);
+    if (!canonical) throw new Failure("Restore this activity first.", 404);
+    return canonical;
+  }
   const p = await db()
     .prepare(
       `SELECT id,title FROM ${type === "project" ? "projects" : "goals"} WHERE tenant_id=? AND id=?${lock ? " FOR UPDATE" : ""}`,
@@ -77,9 +104,11 @@ async function parent(
   return p;
 }
 function relation(type: string) {
-  return type === "project"
-    ? "t.project_id=?"
-    : `(EXISTS(SELECT 1 FROM task_goals g WHERE g.tenant_id=t.tenant_id AND g.task_id=t.id AND g.goal_id=?) OR EXISTS(SELECT 1 FROM projects p WHERE p.id=t.project_id AND p.tenant_id=t.tenant_id AND p.goal_id=?))`;
+  return type === "activity"
+    ? "t.id=?"
+    : type === "project"
+      ? "t.project_id=?"
+      : `(EXISTS(SELECT 1 FROM task_goals g WHERE g.tenant_id=t.tenant_id AND g.task_id=t.id AND g.goal_id=?) OR EXISTS(SELECT 1 FROM projects p WHERE p.id=t.project_id AND p.tenant_id=t.tenant_id AND p.goal_id=?))`;
 }
 function params(tenant: string, type: string, parentId: string) {
   return [tenant, parentId, ...(type === "goal" ? [parentId] : [])];
@@ -92,6 +121,8 @@ function localDay(zone: string) {
     day: "2-digit",
   }).format(new Date());
 }
+const resultColumns =
+  "r.kpi_id,to_char(r.period_start,'YYYY-MM-DD') AS period_start,to_char(r.period_end,'YYYY-MM-DD') AS period_end,r.actual,r.target_snapshot,r.unit_snapshot,r.cadence_snapshot,r.direction_snapshot,r.note,r.revision";
 export async function GET(req: Request) {
   try {
     const a = await authorized();
@@ -102,41 +133,105 @@ export async function GET(req: Request) {
         parentId: u.searchParams.get("parentId"),
       });
     const p = await parent(a.tenantId, v.type, v.parentId);
+    const parentId = String(p.id);
+    const offset = z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(1000000)
+      .parse(u.searchParams.get("offset") || 0);
+    const limit = z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(50)
+      .parse(u.searchParams.get("limit") || 12);
+    const selectedDay = u.searchParams.has("day")
+      ? z.iso.date().parse(u.searchParams.get("day"))
+      : undefined;
+    const metricId = u.searchParams.has("kpiId")
+      ? key.parse(u.searchParams.get("kpiId"))
+      : undefined;
     const activities = await db()
       .prepare(
         `SELECT t.id,t.title,t.stage,t.storage_state,t.is_csf,t.is_kpi,t.activity_note,t.revision,t.project_id,r.frequency FROM tasks t LEFT JOIN LATERAL (SELECT frequency FROM task_recurrences WHERE template_task_id=t.id AND tenant_id=t.tenant_id ORDER BY created_at DESC LIMIT 1) r ON TRUE WHERE t.tenant_id=? AND ${relation(v.type)} AND t.storage_state IN ('planning','active') AND NOT EXISTS(SELECT 1 FROM task_occurrences WHERE task_id=t.id) ORDER BY t.created_at,t.id`,
       )
-      .all(...params(a.tenantId, v.type, v.parentId));
+      .all(...params(a.tenantId, v.type, parentId));
     const kpis = await db()
       .prepare(
-        `SELECT k.* FROM activity_kpis k JOIN tasks t ON t.id=k.activity_id WHERE t.tenant_id=? AND ${relation(v.type)} ORDER BY k.created_at,k.id`,
+        `SELECT k.* FROM activity_kpis k JOIN tasks t ON t.id=k.activity_id WHERE t.tenant_id=? AND ${relation(v.type)} AND t.storage_state IN ('active','planning') ${metricId ? "AND k.id=?" : ""} ORDER BY k.created_at,k.id`,
       )
-      .all(...params(a.tenantId, v.type, v.parentId));
-    const results = await db()
-      .prepare(
-        `SELECT r.kpi_id,to_char(r.period_start,'YYYY-MM-DD') AS period_start,to_char(r.period_end,'YYYY-MM-DD') AS period_end,r.actual,r.target_snapshot,r.unit_snapshot,r.cadence_snapshot,r.direction_snapshot,r.note,r.revision FROM activity_kpis k JOIN tasks t ON t.id=k.activity_id JOIN LATERAL(SELECT * FROM plan_kpi_results WHERE kpi_id=k.id ORDER BY period_start DESC LIMIT 13) r ON TRUE WHERE t.tenant_id=? AND ${relation(v.type)} ORDER BY r.period_start DESC`,
-      )
-      .all(...params(a.tenantId, v.type, v.parentId));
+      .all(
+        ...params(a.tenantId, v.type, parentId),
+        ...(metricId ? [metricId] : []),
+      );
+    const ids = kpis.map((k) => String(k.id));
+    const periods = kpis.map((k) => {
+      const today = localDay(String(k.timezone)),
+        day = selectedDay || today;
+      return {
+        kpi_id: k.id,
+        day,
+        today,
+        ...kpiPeriod(k.cadence as KpiCadence, day),
+        cadence: k.cadence,
+      };
+    });
+    const history = ids.length
+      ? await db()
+          .prepare(
+            `SELECT ${resultColumns} FROM activity_kpis k JOIN LATERAL (SELECT * FROM plan_kpi_results WHERE kpi_id=k.id ORDER BY period_start DESC OFFSET ? LIMIT ?) r ON TRUE WHERE k.id=ANY(?::text[]) ORDER BY r.period_start DESC`,
+          )
+          .all(offset, limit, ids)
+      : [];
+    const current = ids.length
+      ? await db()
+          .prepare(
+            `SELECT ${resultColumns} FROM plan_kpi_results r JOIN jsonb_to_recordset(?::jsonb) AS wanted(kpi_id text,start date,cadence text) ON r.kpi_id=wanted.kpi_id AND r.period_start=wanted.start AND r.cadence_snapshot=wanted.cadence`,
+          )
+          .all(JSON.stringify(periods))
+      : [];
+    const totals = ids.length
+      ? await db()
+          .prepare(
+            "SELECT kpi_id,count(*)::int AS n FROM plan_kpi_results WHERE kpi_id=ANY(?::text[]) GROUP BY kpi_id",
+          )
+          .all(ids)
+      : [];
+    const definitions = ids.length
+      ? await db()
+          .prepare(
+            "SELECT wanted.kpi_id,v.target,v.unit,v.direction FROM jsonb_to_recordset(?::jsonb) AS wanted(kpi_id text,day date) JOIN LATERAL(SELECT target,unit,direction FROM activity_kpi_targets WHERE kpi_id=wanted.kpi_id AND effective_from<=wanted.day ORDER BY effective_from DESC LIMIT 1) v ON TRUE",
+          )
+          .all(JSON.stringify(periods))
+      : [];
     return Response.json(
       {
         parent: p,
         activities,
-        kpis: kpis.map((k) => {
-          const day = localDay(String(k.timezone)),
-            period = kpiPeriod(k.cadence as KpiCadence, day),
-            history = results.filter((r) => r.kpi_id === k.id);
+        kpis: kpis.map((k, i) => {
+          const period = periods[i],
+            total = Number(totals.find((t) => t.kpi_id === k.id)?.n || 0);
           return {
             ...k,
             target: Number(k.target),
-            day,
-            period,
-            current:
-              history.find(
-                (r) =>
-                  r.period_start === period.start &&
-                  r.cadence_snapshot === k.cadence,
-              ) || null,
-            history: history.slice(0, 12),
+            today: period.today,
+            day: period.day,
+            period: {
+              start: period.start,
+              end: period.end,
+              label: period.label,
+            },
+            periodTarget: definitions.find((d) => d.kpi_id === k.id) || {
+              target: k.target,
+              unit: k.unit,
+              direction: k.direction,
+            },
+            current: current.find((r) => r.kpi_id === k.id) || null,
+            history: history.filter((r) => r.kpi_id === k.id),
+            historyTotal: total,
+            historyOffset: offset,
+            historyMore: offset + limit < total,
           };
         }),
       },
@@ -153,7 +248,10 @@ export async function POST(req: Request) {
     if (!a || !(await canMutate(a))) throw new Failure("Not permitted.", 403);
     const v = command.parse(await req.json());
     return await withTransaction(async () => {
-      await parent(a.tenantId, v.type, v.parentId, true);
+      const plan = await parent(a.tenantId, v.type, v.parentId, true);
+      const parentId = String(plan.id);
+      if (v.type === "activity" && v.activityId && v.activityId !== parentId)
+        throw new Failure("Choose this activity.", 404);
       let changed = v.id || id();
       if (v.action === "activity") {
         if (v.id) {
@@ -161,7 +259,7 @@ export async function POST(req: Request) {
             .prepare(
               `SELECT t.id,t.revision FROM tasks t WHERE t.tenant_id=? AND ${relation(v.type)} AND t.id=? AND t.storage_state IN ('active','planning') FOR UPDATE`,
             )
-            .get(...params(a.tenantId, v.type, v.parentId), v.id);
+            .get(...params(a.tenantId, v.type, parentId), v.id);
           if (!t) throw new Failure("Activity not found.", 404);
           if (t.revision !== v.revision)
             throw new Failure(
@@ -181,6 +279,8 @@ export async function POST(req: Request) {
               a.tenantId,
             );
         } else {
+          if (v.type === "activity")
+            throw new Failure("Choose the existing activity.");
           if (!v.title || v.revision !== 0)
             throw new Failure("Name the activity.");
           await db()
@@ -229,7 +329,7 @@ export async function POST(req: Request) {
           .prepare(
             `SELECT t.id,t.storage_state FROM tasks t WHERE t.tenant_id=? AND ${relation(v.type)} AND t.id=? AND t.storage_state IN ('active','planning') FOR UPDATE`,
           )
-          .get(...params(a.tenantId, v.type, v.parentId), v.activityId || "");
+          .get(...params(a.tenantId, v.type, parentId), v.activityId || "");
         if (!t) throw new Failure("Choose an activity in this plan.", 404);
         if (v.action === "kpi") {
           if (!v.title || v.target === undefined || !v.cadence || !v.timezone)
@@ -299,9 +399,9 @@ export async function POST(req: Request) {
           }
           await db()
             .prepare(
-              "UPDATE tasks SET is_kpi=TRUE,revision=revision+1 WHERE id=? AND tenant_id=?",
+              "UPDATE tasks SET is_kpi=TRUE,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=?",
             )
-            .run(t.id, a.tenantId);
+            .run(a.id, t.id, a.tenantId);
         } else {
           if (!v.id || !v.day || v.actual === undefined)
             throw new Failure("Enter the measured total.");
@@ -314,6 +414,14 @@ export async function POST(req: Request) {
           if (k.revision !== v.kpiRevision)
             throw new Failure(
               "This measurement changed. Reload before logging.",
+              409,
+            );
+          if (
+            v.entryMode === "current" &&
+            v.day !== localDay(String(k.timezone))
+          )
+            throw new Failure(
+              "The reporting date changed. Refresh and choose the date before saving.",
               409,
             );
           if (v.day > localDay(String(k.timezone)))
@@ -329,6 +437,11 @@ export async function POST(req: Request) {
               "This result changed. Reload before replacing its total.",
               409,
             );
+          const definition = await db()
+            .prepare(
+              "SELECT target,unit,direction FROM activity_kpi_targets WHERE kpi_id=? AND effective_from<=? ORDER BY effective_from DESC LIMIT 1",
+            )
+            .get(k.id, v.day);
           await db()
             .prepare(
               `INSERT INTO plan_kpi_results(kpi_id,period_start,period_end,actual,target_snapshot,unit_snapshot,cadence_snapshot,direction_snapshot,note,recorded_by) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(kpi_id,period_start,cadence_snapshot) DO UPDATE SET actual=excluded.actual,note=excluded.note,recorded_by=excluded.recorded_by,updated_at=now(),revision=plan_kpi_results.revision+1`,
@@ -338,10 +451,10 @@ export async function POST(req: Request) {
               period.start,
               period.end,
               v.actual,
-              k.target,
-              k.unit,
+              definition?.target ?? k.target,
+              definition?.unit ?? k.unit,
               k.cadence,
-              k.direction,
+              definition?.direction ?? k.direction,
               v.note || "",
               a.id,
             );
