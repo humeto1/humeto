@@ -260,11 +260,6 @@ export function PlanSuccess({
         <div className="success-empty">
           <Target size={22} />
           <h4>Highlight what drives this {type}</h4>
-          <p>
-            “Run ad” can be a completed task and still be a CSF. “Daily protein”
-            can be a repeating activity with a KPI. Use the same boxes you plan
-            in WBS.
-          </p>
           <button
             type="button"
             className="plan-tool-primary"

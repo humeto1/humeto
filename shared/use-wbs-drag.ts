@@ -220,6 +220,9 @@ export function useWbsDrag(options: {
       onPointerDown(e: ReactPointerEvent<HTMLElement>) {
         if (e.button !== 0 || !e.isPrimary || pending.current) return;
         e.stopPropagation();
+        // A new pointer gesture is intentional; only suppress the click from
+        // the drag/pan that just ended, not a fresh tap on a box.
+        suppressUntil.current = 0;
         const element = e.currentTarget;
         const x = e.clientX,
           y = e.clientY,
