@@ -765,7 +765,7 @@
 .wbs-drag-source {
   opacity: 0.35;
 }
-.wbs-drop-target > .wbs-box {
+.wbs-drop-inside > .wbs-box {
   outline: 4px solid #50a175;
   outline-offset: 4px;
   box-shadow: 0 0 0 8px #50a17525;
@@ -798,4 +798,28 @@
   margin-top: 6px;
   font-size: 11px;
   color: #e3f2da;
+}
+
+.wbs-drop-before::before,
+.wbs-drop-after::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  height: 5px;
+  border-radius: 4px;
+  background: #24814b;
+  box-shadow: 0 0 0 3px #e2f1dc;
+  pointer-events: none;
+}
+.wbs-drop-before::before {
+  top: -12px;
+}
+.wbs-drop-after::after {
+  bottom: -12px;
+}
+
+.wbs-is-panning .wbs-canvas,
+.wbs-is-panning button {
+  cursor: grabbing;
 }

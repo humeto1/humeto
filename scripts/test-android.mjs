@@ -532,6 +532,29 @@ try {
           `!document.querySelector('.wbs-drag-ghost')&&!document.querySelector('.wbs-announcement')?.textContent.includes('Saving')`,
         );
       }
+      const beforePan = await cdp.evaluate(
+        `document.querySelector('.wbs-world').style.transform`,
+      );
+      await cdp.evaluate(
+        `(()=>{const el=document.querySelector('[data-node-id="${parent.id}"]');const r=el.getBoundingClientRect();const x=r.x+r.width/2,y=r.y+r.height/2;el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:78,pointerType:'touch',isPrimary:true,button:0,clientX:x,clientY:y}));window.dispatchEvent(new PointerEvent('pointermove',{pointerId:78,pointerType:'touch',isPrimary:true,button:0,clientX:x+40,clientY:y+20}));})()`,
+      );
+      await cdp.wait(
+        `document.querySelector('.wbs-dialog').classList.contains('wbs-is-panning')`,
+      );
+      assert.notEqual(
+        await cdp.evaluate(
+          `document.querySelector('.wbs-world').style.transform`,
+        ),
+        beforePan,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      assert.equal(
+        await cdp.evaluate(`!!document.querySelector('.wbs-drag-ghost')`),
+        false,
+      );
+      await cdp.evaluate(
+        `window.dispatchEvent(new PointerEvent('pointerup',{pointerId:78,pointerType:'touch',isPrimary:true,button:0}));document.querySelector('[aria-label="Fit project to screen"]').click()`,
+      );
       await dragNativeBox(activity.id);
       tree = (await nativeApi("/api/project-wbs?projectId=" + project.id)).data;
       assert.equal(

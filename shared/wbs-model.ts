@@ -93,3 +93,85 @@ export function layoutWbs(
     height: Math.max(180, ...boxes.map((b) => b.y + 154)),
   };
 }
+
+export type WbsDragSource = { id: string; title: string; available?: boolean };
+export type WbsDropTarget = {
+  nodeId: string;
+  parentId: string | null;
+  beforeId: string | null;
+  kind: "inside" | "before" | "after";
+  label: string;
+};
+export type WbsDropBox = {
+  id: string;
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+// Use screen-space bounds so zoom never shrinks the touch tolerance. The entire
+// card attaches a child; sibling insertion only happens in the surrounding gap.
+export function resolveWbsDrop(
+  nodes: WbsNode[],
+  source: WbsDragSource,
+  boxes: WbsDropBox[],
+  x: number,
+  y: number,
+  pointerType = "touch",
+): WbsDropTarget | null {
+  const excluded = source.available
+    ? new Set<string>()
+    : descendants(nodes, source.id);
+  const tolerance = pointerType === "mouse" ? 10 : 22;
+  const distance = (b: WbsDropBox) =>
+    Math.hypot(
+      Math.max(b.left - x, 0, x - b.right),
+      Math.max(b.top - y, 0, y - b.bottom),
+    );
+  const candidates = boxes
+    .filter((b) => distance(b) <= tolerance)
+    .sort(
+      (a, b) =>
+        distance(a) - distance(b) ||
+        Math.hypot(x - (a.left + a.right) / 2, y - (a.top + a.bottom) / 2) -
+          Math.hypot(x - (b.left + b.right) / 2, y - (b.top + b.bottom) / 2),
+    );
+  for (const box of candidates) {
+    if (excluded.has(box.id)) {
+      if (distance(box) === 0) return null;
+      continue;
+    }
+    if (box.id === WBS_ROOT)
+      return {
+        nodeId: box.id,
+        parentId: null,
+        beforeId: null,
+        kind: "inside",
+        label: "Add to main branch",
+      };
+    const node = nodes.find((n) => n.id === box.id);
+    if (!node) continue;
+    if (y >= box.top && y <= box.bottom)
+      return {
+        nodeId: node.id,
+        parentId: node.id,
+        beforeId: null,
+        kind: "inside",
+        label: `Add under ${node.title}`,
+      };
+    if (node.parent_id && excluded.has(node.parent_id)) continue;
+    const before = y < box.top;
+    const siblings = nodes
+      .filter((n) => n.parent_id === node.parent_id && n.id !== source.id)
+      .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+    const next = siblings[siblings.findIndex((n) => n.id === node.id) + 1];
+    return {
+      nodeId: node.id,
+      parentId: node.parent_id,
+      beforeId: before ? node.id : next?.id || null,
+      kind: before ? "before" : "after",
+      label: `${before ? "Before" : "After"} ${node.title}`,
+    };
+  }
+  return null;
+}

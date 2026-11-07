@@ -423,13 +423,16 @@ test("mobile project map supports brainstorming, independent selection, outline,
         );
         await page.mouse.down();
       }
-      await page.locator(".wbs-drag-ghost").waitFor();
+      await page.locator(".wbs-drag-ghost").waitFor({ timeout: 1200 });
       const end = await destination.boundingBox();
       if (touchSession) {
         await touchSession.send("Input.dispatchTouchEvent", {
           type: "touchMove",
           touchPoints: [
-            { x: end.x + end.width / 2, y: end.y + end.height * fraction },
+            {
+              x: end.x + end.width / 2,
+              y: fraction === -1 ? end.y - 6 : end.y + end.height * fraction,
+            },
           ],
         });
         await touchSession.send("Input.dispatchTouchEvent", {
@@ -440,7 +443,7 @@ test("mobile project map supports brainstorming, independent selection, outline,
       } else {
         await page.mouse.move(
           end.x + end.width / 2,
-          end.y + end.height * fraction,
+          fraction === -1 ? end.y - 6 : end.y + end.height * fraction,
           { steps: 5 },
         );
         await page.mouse.up();
@@ -453,6 +456,72 @@ test("mobile project map supports brainstorming, independent selection, outline,
             ?.textContent?.includes("Saving"),
       );
     }
+    async function panFromBox(touch) {
+      await dialog
+        .getByRole("button", { name: "Zoom in", exact: true })
+        .click();
+      const start = await box("Promoted child A").boundingBox();
+      const transform = await dialog
+        .locator(".wbs-world")
+        .getAttribute("style");
+      const before = (await tree()).revision;
+      const sx = start.x + start.width / 2,
+        sy = start.y + start.height / 2;
+      const session = touch ? await ctx.newCDPSession(page) : null;
+      if (session) {
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchStart",
+          touchPoints: [{ x: sx, y: sy }],
+        });
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [{ x: sx + 40, y: sy + 24 }],
+        });
+      } else {
+        await page.mouse.move(sx, sy);
+        await page.mouse.down();
+        await page.mouse.move(sx + 40, sy + 24, { steps: 3 });
+      }
+      await page.waitForFunction(() =>
+        document
+          .querySelector(".wbs-dialog")
+          ?.classList.contains("wbs-is-panning"),
+      );
+      await page.waitForTimeout(450);
+      assert.equal(
+        await page.locator(".wbs-drag-ghost").count(),
+        0,
+        "A quick swipe keeps panning even after the hold delay",
+      );
+      assert.notEqual(
+        await dialog.locator(".wbs-world").getAttribute("style"),
+        transform,
+      );
+      if (session) {
+        await session.send("Input.dispatchTouchEvent", {
+          type: "touchEnd",
+          touchPoints: [],
+        });
+        await session.detach();
+      } else await page.mouse.up();
+      assert.equal(
+        (await tree()).revision,
+        before,
+        "Panning never changes the hierarchy",
+      );
+      assert.equal(
+        await dialog
+          .getByRole("textbox", { name: "Activity name", exact: true })
+          .count(),
+        0,
+        "Panning does not open the activity editor",
+      );
+      await dialog
+        .getByRole("button", { name: "Fit project to screen", exact: true })
+        .click();
+    }
+    await panFromBox(false);
+    await panFromBox(true);
     await dragTo(
       pool.getByRole("button", {
         name: "Add Mobile research to map",
@@ -479,7 +548,7 @@ test("mobile project map supports brainstorming, independent selection, outline,
     );
     graph = await tree();
     assert.equal(graph.nodes.find((n) => n.id === researchId).parent_id, null);
-    await dragTo(box("Mobile research"), box("Mobile outreach"), 0.1);
+    await dragTo(box("Mobile research"), box("Mobile outreach"), -1);
     graph = await tree();
     const roots = graph.nodes
       .filter((n) => n.parent_id === null)
@@ -530,6 +599,20 @@ test("mobile project map supports brainstorming, independent selection, outline,
     assert.equal(
       graph.nodes.find((n) => n.title === "Nested leaf").parent_id,
       childA.id,
+    );
+    await dragTo(box("Mobile research"), box("Promoted child A"), 0.1, true);
+    graph = await tree();
+    assert.equal(
+      graph.nodes.find((n) => n.id === researchId).parent_id,
+      childA.id,
+      "The top of a second-tier box accepts a child",
+    );
+    await dragTo(box("Mobile research"), box("Nested leaf"), 0.9, true);
+    graph = await tree();
+    assert.equal(
+      graph.nodes.find((n) => n.id === researchId).parent_id,
+      graph.nodes.find((n) => n.title === "Nested leaf").id,
+      "The bottom of a third-tier box accepts a child",
     );
     await dragTo(box("Mobile outreach"), box("Promoted child A"));
     graph = await tree();

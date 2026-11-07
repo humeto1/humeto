@@ -243,7 +243,11 @@ export function WbsEditor({
       setBusy(false);
     }
   }
-  const { drag, bind: bindDrag } = useWbsDrag({
+  const {
+    drag,
+    panning,
+    bind: bindDrag,
+  } = useWbsDrag({
     nodes,
     enabled:
       writable &&
@@ -476,7 +480,7 @@ export function WbsEditor({
   return (
     <dialog
       ref={dialog}
-      className={`wbs-dialog ${drag ? "wbs-is-dragging" : ""}`}
+      className={`wbs-dialog ${drag ? "wbs-is-dragging" : ""} ${panning ? "wbs-is-panning" : ""}`}
       aria-labelledby={id + "-title"}
       onCancel={(e) => {
         e.preventDefault();
@@ -621,8 +625,8 @@ export function WbsEditor({
           )}
           {view === "map" && (
             <p className="wbs-map-hint">
-              Hold a box 1.5s to move · Drop inside to nest, at an edge to
-              reorder · Pinch to explore
+              Swipe anywhere to pan · Briefly hold a box to move · Drop on a box
+              to attach
             </p>
           )}
           <p className="wbs-announcement" role="status" aria-live="polite">
@@ -782,7 +786,7 @@ export function WbsEditor({
                       })()}
                     {layout.boxes.map((b) => (
                       <div
-                        className={`wbs-position ${drag?.id === b.node.id ? "wbs-drag-source" : ""} ${drag?.target?.nodeId === b.node.id ? "wbs-drop-target" : ""}`}
+                        className={`wbs-position ${drag?.id === b.node.id ? "wbs-drag-source" : ""} ${drag?.target?.nodeId === b.node.id ? `wbs-drop-target wbs-drop-${drag.target.kind}` : ""}`}
                         data-node-id={b.node.id}
                         {...bindDrag(b.node)}
                         key={b.node.id}

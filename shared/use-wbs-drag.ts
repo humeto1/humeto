@@ -5,15 +5,13 @@ import type {
   MouseEvent as ReactMouseEvent,
   RefObject,
 } from "react";
-import { descendants, WBS_ROOT, type WbsNode } from "./wbs-model";
+import { WBS_ROOT, type WbsNode } from "./wbs-model";
 
-type Source = { id: string; title: string; available?: boolean };
-type Target = {
-  nodeId: string;
-  parentId: string | null;
-  beforeId: string | null;
-  label: string;
-};
+import {
+  resolveWbsDrop,
+  type WbsDragSource as Source,
+  type WbsDropTarget as Target,
+} from "./wbs-model";
 type Drag = Source & { x: number; y: number; target: Target | null };
 export function useWbsDrag(options: {
   nodes: WbsNode[];
@@ -26,6 +24,7 @@ export function useWbsDrag(options: {
   const latest = useRef(options);
   latest.current = options;
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [panning, setPanning] = useState(false);
   const active = useRef<Drag | null>(null);
   const pending = useRef<{
     source: Source;
@@ -33,74 +32,66 @@ export function useWbsDrag(options: {
     x: number;
     y: number;
     element: HTMLElement;
+    pointerType: string;
+    panning: boolean;
+    lastX: number;
+    lastY: number;
     timer: ReturnType<typeof setTimeout>;
   } | null>(null);
   const suppressUntil = useRef(0);
   const frame = useRef(0);
   function targetAt(source: Source, x: number, y: number): Target | null {
     const { nodes, container } = latest.current;
-    const excluded = source.available
-      ? new Set<string>()
-      : descendants(nodes, source.id);
-    const boxes =
-      container.current?.querySelectorAll<HTMLElement>(
-        ".wbs-position[data-node-id]",
-      ) || [];
-    const candidates = Array.from(boxes, (box) => ({
-      box,
-      rect: box.getBoundingClientRect(),
-    })).sort(
-      (a, b) =>
-        Math.hypot(
-          x - (a.rect.left + a.rect.width / 2),
-          y - (a.rect.top + a.rect.height / 2),
-        ) -
-        Math.hypot(
-          x - (b.rect.left + b.rect.width / 2),
-          y - (b.rect.top + b.rect.height / 2),
-        ),
+    const el = container.current;
+    if (!el) return null;
+    const bounds = el.getBoundingClientRect();
+    if (
+      x < bounds.left ||
+      x > bounds.right ||
+      y < bounds.top ||
+      y > bounds.bottom
+    )
+      return null;
+    const boxes = Array.from(
+      el.querySelectorAll<HTMLElement>(".wbs-position[data-node-id]"),
+      (box) => ({
+        id: box.dataset.nodeId!,
+        ...(() => {
+          const r = box.getBoundingClientRect();
+          return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+        })(),
+      }),
     );
-    for (const { box, rect: r } of candidates) {
-      const nodeId = box.dataset.nodeId!;
-      if (
-        x < r.left - 8 ||
-        x > r.right + 8 ||
-        y < r.top - 8 ||
-        y > r.bottom + 8
-      )
-        continue;
-      if (excluded.has(nodeId)) return null;
-      if (nodeId === WBS_ROOT)
-        return {
-          nodeId,
-          parentId: null,
-          beforeId: null,
-          label: "Add to main branch",
-        };
-      const node = nodes.find((n) => n.id === nodeId);
-      if (!node) continue;
-      const fraction = (y - r.top) / r.height;
-      if (fraction >= 0.25 && fraction <= 0.75)
-        return {
-          nodeId,
-          parentId: node.id,
-          beforeId: null,
-          label: `Inside ${node.title}`,
-        };
-      if (node.parent_id && excluded.has(node.parent_id)) return null;
-      const siblings = nodes
-        .filter((n) => n.parent_id === node.parent_id && n.id !== source.id)
-        .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
-      const before = fraction < 0.25;
-      const next = siblings[siblings.findIndex((n) => n.id === nodeId) + 1];
-      return {
-        nodeId,
-        parentId: node.parent_id,
-        beforeId: before ? nodeId : next?.id || null,
-        label: `${before ? "Before" : "After"} ${node.title}`,
-      };
-    }
-    return null;
+    return resolveWbsDrop(
+      nodes,
+      source,
+      boxes,
+      x,
+      y,
+      pending.current?.pointerType,
+    );
+  }
+  function activate(x: number, y: number) {
+    const p = pending.current;
+    if (
+      !p ||
+      p.source.id === WBS_ROOT ||
+      p.panning ||
+      active.current ||
+      !latest.current.enabled
+    )
+      return;
+    clearTimeout(p.timer);
+    try {
+      p.element.setPointerCapture(p.pointerId);
+    } catch {}
+    const next: Drag = { ...p.source, x, y, target: null };
+    active.current = next;
+    setDrag(next);
+    latest.current.onNotice(
+      `Moving ${p.source.title}. Drop on a box to attach, or in a gap to reorder.`,
+    );
+    if (p.pointerType !== "mouse") navigator.vibrate?.(15);
   }
   useEffect(() => {
     function pan() {
@@ -139,12 +130,27 @@ export function useWbsDrag(options: {
       pending.current = null;
       active.current = null;
       setDrag(null);
+      setPanning(false);
     }
     function move(e: PointerEvent) {
       const p = pending.current;
       if (!p || e.pointerId !== p.pointerId) return;
+      const dx = e.clientX - p.lastX,
+        dy = e.clientY - p.lastY;
+      p.lastX = e.clientX;
+      p.lastY = e.clientY;
       if (!active.current) {
-        if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) clear();
+        const distance = Math.hypot(e.clientX - p.x, e.clientY - p.y);
+        if (!p.panning && distance > (p.pointerType === "mouse" ? 6 : 10)) {
+          clearTimeout(p.timer);
+          p.panning = true;
+          setPanning(true);
+          try {
+            p.element.setPointerCapture(p.pointerId);
+          } catch {}
+          latest.current.onPan(e.clientX - p.x, e.clientY - p.y);
+        } else if (p.panning) latest.current.onPan(dx, dy);
+        if (p.panning) e.preventDefault();
         return;
       }
       e.preventDefault();
@@ -163,7 +169,7 @@ export function useWbsDrag(options: {
       if (!p || e.pointerId !== p.pointerId) return;
       const wasDragging = active.current;
       const target = wasDragging && targetAt(p.source, e.clientX, e.clientY);
-      if (wasDragging) {
+      if (wasDragging || p.panning) {
         e.preventDefault();
         suppressUntil.current = Date.now() + 400;
       }
@@ -176,7 +182,8 @@ export function useWbsDrag(options: {
         );
     }
     function cancel() {
-      if (active.current) suppressUntil.current = Date.now() + 400;
+      if (active.current || pending.current?.panning)
+        suppressUntil.current = Date.now() + 400;
       clear();
     }
     function multiTouch(e: PointerEvent) {
@@ -211,36 +218,35 @@ export function useWbsDrag(options: {
   function bind(source: Source) {
     return {
       onPointerDown(e: ReactPointerEvent<HTMLElement>) {
-        if (
-          !latest.current.enabled ||
-          source.id === WBS_ROOT ||
-          e.button !== 0 ||
-          !e.isPrimary ||
-          pending.current
-        )
-          return;
+        if (e.button !== 0 || !e.isPrimary || pending.current) return;
         e.stopPropagation();
         const element = e.currentTarget;
         const x = e.clientX,
           y = e.clientY,
           pointerId = e.pointerId;
         const timer = setTimeout(() => {
-          if (!latest.current.enabled || !pending.current) return;
-          try {
-            element.setPointerCapture(pointerId);
-          } catch {}
-          const next: Drag = { ...source, x, y, target: null };
-          active.current = next;
-          setDrag(next);
-          latest.current.onNotice(
-            `Moving ${source.title}. Drop in a box to nest, or near its top or bottom to reorder.`,
-          );
-          navigator.vibrate?.(20);
-        }, 1500);
-        pending.current = { source, pointerId, x, y, element, timer };
+          const p = pending.current;
+          if (p) activate(p.lastX, p.lastY);
+        }, 350);
+        pending.current = {
+          source,
+          pointerId,
+          x,
+          y,
+          lastX: x,
+          lastY: y,
+          element,
+          pointerType: e.pointerType,
+          panning: false,
+          timer,
+        };
       },
       onClickCapture(e: ReactMouseEvent) {
-        if (Date.now() < suppressUntil.current || active.current) {
+        if (
+          Date.now() < suppressUntil.current ||
+          active.current ||
+          pending.current?.panning
+        ) {
           e.preventDefault();
           e.stopPropagation();
         }
@@ -250,5 +256,5 @@ export function useWbsDrag(options: {
       },
     };
   }
-  return { drag, bind };
+  return { drag, panning, bind };
 }
