@@ -520,6 +520,27 @@ try {
           `Array.from(document.querySelectorAll('.wbs-add-activity')).every(b=>b.textContent.trim()==='Add Activity')`,
         ),
       );
+      async function dragNativeBox(targetId) {
+        await cdp.evaluate(
+          `(()=>{const el=document.querySelector('[data-node-id="${parent.id}"]');const r=el.getBoundingClientRect();el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:77,pointerType:'touch',isPrimary:true,button:0,clientX:r.x+r.width/2,clientY:r.y+r.height/2}));})()`,
+        );
+        await cdp.wait(`!!document.querySelector('.wbs-drag-ghost')`);
+        await cdp.evaluate(
+          `(()=>{const r=document.querySelector('[data-node-id="${targetId}"]').getBoundingClientRect();for(const type of ['pointermove','pointerup'])window.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:77,pointerType:'touch',isPrimary:true,button:0,clientX:r.x+r.width/2,clientY:r.y+r.height/2}));})()`,
+        );
+        await cdp.wait(
+          `!document.querySelector('.wbs-drag-ghost')&&!document.querySelector('.wbs-announcement')?.textContent.includes('Saving')`,
+        );
+      }
+      await dragNativeBox(activity.id);
+      tree = (await nativeApi("/api/project-wbs?projectId=" + project.id)).data;
+      assert.equal(
+        tree.nodes.find((n) => n.id === parent.id).parent_id,
+        activity.id,
+      );
+      await dragNativeBox("__project__");
+      tree = (await nativeApi("/api/project-wbs?projectId=" + project.id)).data;
+      assert.equal(tree.nodes.find((n) => n.id === parent.id).parent_id, null);
       await cdp.wait(
         `!!document.querySelector('[aria-label="Activity options for Native removable parent"]')&&!document.querySelector('[aria-label="Activity options for Native removable parent"]').disabled`,
         60000,
@@ -528,11 +549,11 @@ try {
         `document.querySelector('[aria-label="Activity options for Native removable parent"]').click()`,
       );
       await cdp.wait(
-        `!!document.querySelector('[aria-label="Delete only this box"]')&&!document.querySelector('[aria-label="Delete only this box"]').disabled`,
+        `!!document.querySelector('[aria-label="Remove from map"]')&&!document.querySelector('[aria-label="Remove from map"]').disabled`,
         60000,
       );
       await cdp.evaluate(
-        `document.querySelector('[aria-label="Delete only this box"]').click()`,
+        `document.querySelector('[aria-label="Remove from map"]').click()`,
       );
       await cdp.wait(
         `!document.querySelector('[aria-label="Edit Native removable parent"]')&&!!document.querySelector('[aria-label="Edit Native promoted child"]')`,
@@ -547,11 +568,14 @@ try {
         `document.querySelector('[aria-label="Activity options for Native promoted child"]').click()`,
       );
       await cdp.wait(
-        `!!document.querySelector('[aria-label="Delete full branch"]')&&!document.querySelector('[aria-label="Delete full branch"]').disabled`,
+        `!!document.querySelector('[aria-label="Remove from map"]')&&!document.querySelector('[aria-label="Remove from map"]').disabled`,
         60000,
       );
       await cdp.evaluate(
-        `document.querySelector('[aria-label="Delete full branch"]').click()`,
+        `Array.from(document.querySelectorAll('.wbs-remove-scope input'))[1].click()`,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Remove from map"]').click()`,
       );
       await cdp.wait(
         `!document.querySelector('[aria-label="Edit Native promoted child"]')&&!document.querySelector('[aria-label="Edit Native nested leaf"]')`,

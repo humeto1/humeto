@@ -21,7 +21,16 @@ const input = z
     isKpi: z.boolean().optional(),
     activityNote: z.string().trim().max(1000).optional(),
     revision: z.number().int().positive(),
-    action: z.enum(["add", "edit", "select", "move", "link", "remove"]),
+    action: z.enum([
+      "add",
+      "edit",
+      "select",
+      "move",
+      "link",
+      "remove",
+      "detach",
+      "delete",
+    ]),
     id: key.optional(),
     taskRevision: z.number().int().positive().optional(),
     parentId: key.nullable().optional(),
@@ -74,7 +83,7 @@ export async function readWbs(
     .all(tenant, projectId)) as unknown as WbsNode[];
   const available = await db()
     .prepare(
-      `SELECT t.id,t.title FROM tasks t WHERE t.tenant_id=? AND ${type === "project" ? "t.project_id=?" : "EXISTS(SELECT 1 FROM task_goals g WHERE g.task_id=t.id AND g.tenant_id=t.tenant_id AND g.goal_id=?)"} AND t.storage_state IN ('active','planning')
+      `SELECT t.id,t.title FROM tasks t WHERE t.tenant_id=? AND ${type === "project" ? "t.project_id=?" : "EXISTS(SELECT 1 FROM (SELECT g.goal_id FROM task_goals g WHERE g.task_id=t.id AND g.tenant_id=t.tenant_id UNION SELECT p.goal_id FROM projects p WHERE p.id=t.project_id AND p.tenant_id=t.tenant_id) linked WHERE linked.goal_id=?)"} AND t.storage_state='active'
     AND NOT EXISTS(SELECT 1 FROM project_wbs_nodes n WHERE n.id=t.id)
     AND NOT EXISTS(SELECT 1 FROM task_occurrences o WHERE o.task_id=t.id)
     ORDER BY t.title LIMIT 500`,
@@ -116,8 +125,9 @@ export async function writeWbs(a: Actor, body: unknown) {
       throw new WbsError("An activity cannot be placed inside its own branch.");
     if (
       node &&
-      ["edit", "select", "remove"].includes(v.action) &&
-      (v.action !== "remove" || v.taskRevision !== undefined) &&
+      ["edit", "select", "remove", "detach", "delete"].includes(v.action) &&
+      (!["remove", "detach", "delete"].includes(v.action) ||
+        v.taskRevision !== undefined) &&
       node.revision !== v.taskRevision
     )
       throw new WbsError(
@@ -175,7 +185,7 @@ export async function writeWbs(a: Actor, body: unknown) {
         throw new WbsError("This project supports up to 500 activities.");
       const t = await db()
         .prepare(
-          `SELECT id FROM tasks WHERE id=? AND tenant_id=? AND ${v.type === "project" ? "project_id=?" : "EXISTS(SELECT 1 FROM task_goals g WHERE g.task_id=tasks.id AND g.tenant_id=tasks.tenant_id AND g.goal_id=?)"} AND storage_state IN ('active','planning') AND NOT EXISTS(SELECT 1 FROM task_occurrences WHERE task_id=tasks.id) FOR UPDATE`,
+          `SELECT id FROM tasks WHERE id=? AND tenant_id=? AND ${v.type === "project" ? "project_id=?" : "EXISTS(SELECT 1 FROM (SELECT g.goal_id FROM task_goals g WHERE g.task_id=tasks.id AND g.tenant_id=tasks.tenant_id UNION SELECT p.goal_id FROM projects p WHERE p.id=tasks.project_id AND p.tenant_id=tasks.tenant_id) linked WHERE linked.goal_id=?)"} AND storage_state IN ('active','planning') AND NOT EXISTS(SELECT 1 FROM task_occurrences WHERE task_id=tasks.id) FOR UPDATE`,
         )
         .get(v.id || "", a.tenantId, v.projectId);
       if (!t) throw new WbsError("Choose an existing task from this project.");
@@ -185,7 +195,7 @@ export async function writeWbs(a: Actor, body: unknown) {
         )
         .run(v.id, v.projectId, parent, position);
     }
-    if (v.action === "move") {
+    if (v.action === "move" || v.action === "link") {
       const siblings = nodes
         .filter((n) => n.parent_id === parent && n.id !== v.id)
         .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
@@ -194,7 +204,7 @@ export async function writeWbs(a: Actor, body: unknown) {
         : siblings.length;
       if (before < 0)
         throw new WbsError("Choose a sibling in the destination branch.");
-      siblings.splice(before, 0, node!);
+      siblings.splice(before, 0, node || ({ id: v.id! } as WbsNode));
       for (const [index, n] of siblings.entries())
         await db()
           .prepare(
@@ -326,7 +336,7 @@ export async function writeWbs(a: Actor, body: unknown) {
           a.tenantId,
         );
     }
-    if (v.action === "remove") {
+    if (["remove", "detach", "delete"].includes(v.action)) {
       const removed =
         v.removeMode === "branch"
           ? descendants(nodes, node!.id)
@@ -372,12 +382,14 @@ export async function writeWbs(a: Actor, body: unknown) {
             "UPDATE project_wbs_nodes SET parent_id=? WHERE project_id=? AND parent_id=?",
           )
           .run(node!.parent_id, v.projectId, node!.id);
-      // Archive, rather than erase, task records and dated completion/focus history.
+      // Removing a box preserves active tasks and their recurrence state. Planning-only
+      // boxes have no Tasks entry to keep, so retain their history in Archive.
+      const state = v.action === "delete" ? "bin" : "archive";
       await db()
         .prepare(
-          "UPDATE tasks SET storage_state='archive',stored_at=humeto_action_time(),purge_after=NULL,last_actor_id=?,revision=revision+1 WHERE tenant_id=? AND storage_state IN ('active','planning') AND (id=ANY(?::text[]) OR id IN(SELECT o.task_id FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id WHERE r.tenant_id=? AND r.template_task_id=ANY(?::text[])))",
+          `UPDATE tasks SET storage_state=?,stored_at=humeto_action_time(),purge_after=CASE WHEN ?='bin' THEN humeto_action_time()+interval '30 days' ELSE NULL END,last_actor_id=?,revision=revision+1 WHERE tenant_id=? AND storage_state IN ('active','planning') ${v.action === "detach" ? "AND storage_state='planning'" : ""} AND (id=ANY(?::text[]) OR id IN(SELECT o.task_id FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id WHERE r.tenant_id=? AND r.template_task_id=ANY(?::text[])))`,
         )
-        .run(a.id, a.tenantId, ids, a.tenantId, ids);
+        .run(state, state, a.id, a.tenantId, ids, a.tenantId, ids);
       await db()
         .prepare(
           "DELETE FROM project_wbs_nodes WHERE project_id=? AND id=ANY(?::text[])",

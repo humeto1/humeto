@@ -343,7 +343,7 @@ test("mobile project map supports brainstorming, independent selection, outline,
       })
       .click();
     const deletion = page.getByRole("dialog", {
-      name: "Delete activity or branch",
+      name: "Remove block or delete task",
       exact: true,
     });
     await deletion.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -366,7 +366,7 @@ test("mobile project map supports brainstorming, independent selection, outline,
       })
       .click();
     await deletion
-      .getByRole("button", { name: "Delete only this box", exact: true })
+      .getByRole("button", { name: "Remove from map", exact: true })
       .click();
     await page.waitForFunction(
       () => !document.querySelector('[aria-label="Edit Mobile research"]'),
@@ -380,6 +380,127 @@ test("mobile project map supports brainstorming, independent selection, outline,
         .count(),
       0,
     );
+    await dialog.getByRole("button", { name: "Map", exact: true }).click();
+    const pool = dialog.getByRole("complementary", {
+      name: "Available tasks outside the map",
+    });
+    await pool
+      .getByRole("button", { name: "Add Mobile research to map", exact: true })
+      .waitFor();
+    await page.screenshot({
+      path: "artifacts/project-wbs-available-tasks.png",
+    });
+    const boot = await body(await ctx.request.get("/api/mobile"));
+    const projectId = boot.projects.find(
+      (p) => p.title === "QA WBS project",
+    ).id;
+    const tree = async () =>
+      body(await ctx.request.get("/api/project-wbs?projectId=" + projectId));
+    const box = (title) =>
+      dialog.locator(".wbs-position").filter({
+        has: page.getByRole("button", { name: "Edit " + title, exact: true }),
+      });
+    async function dragTo(source, destination, fraction = 0.5, touch = false) {
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          ),
+      );
+      const start = await source.boundingBox();
+      const touchSession = touch ? await ctx.newCDPSession(page) : null;
+      if (touchSession)
+        await touchSession.send("Input.dispatchTouchEvent", {
+          type: "touchStart",
+          touchPoints: [
+            { x: start.x + start.width / 2, y: start.y + start.height / 2 },
+          ],
+        });
+      else {
+        await page.mouse.move(
+          start.x + start.width / 2,
+          start.y + start.height / 2,
+        );
+        await page.mouse.down();
+      }
+      await page.locator(".wbs-drag-ghost").waitFor();
+      const end = await destination.boundingBox();
+      if (touchSession) {
+        await touchSession.send("Input.dispatchTouchEvent", {
+          type: "touchMove",
+          touchPoints: [
+            { x: end.x + end.width / 2, y: end.y + end.height * fraction },
+          ],
+        });
+        await touchSession.send("Input.dispatchTouchEvent", {
+          type: "touchEnd",
+          touchPoints: [],
+        });
+        await touchSession.detach();
+      } else {
+        await page.mouse.move(
+          end.x + end.width / 2,
+          end.y + end.height * fraction,
+          { steps: 5 },
+        );
+        await page.mouse.up();
+      }
+      await page.locator(".wbs-drag-ghost").waitFor({ state: "hidden" });
+      await page.waitForFunction(
+        () =>
+          !document
+            .querySelector(".wbs-announcement")
+            ?.textContent?.includes("Saving"),
+      );
+    }
+    await dragTo(
+      pool.getByRole("button", {
+        name: "Add Mobile research to map",
+        exact: true,
+      }),
+      box("Mobile outreach"),
+    );
+    let graph = await tree();
+    const researchId = graph.nodes.find(
+      (n) => n.title === "Mobile research",
+    ).id;
+    const outreachId = graph.nodes.find(
+      (n) => n.title === "Mobile outreach",
+    ).id;
+    assert.equal(
+      graph.nodes.find((n) => n.id === researchId).parent_id,
+      outreachId,
+    );
+    await dragTo(
+      box("Mobile research"),
+      dialog.locator('[data-node-id="__project__"]'),
+      0.5,
+      true,
+    );
+    graph = await tree();
+    assert.equal(graph.nodes.find((n) => n.id === researchId).parent_id, null);
+    await dragTo(box("Mobile research"), box("Mobile outreach"), 0.1);
+    graph = await tree();
+    const roots = graph.nodes
+      .filter((n) => n.parent_id === null)
+      .sort((a, b) => a.position - b.position);
+    assert.equal(
+      roots[roots.findIndex((n) => n.id === outreachId) - 1].id,
+      researchId,
+    );
+    await dialog
+      .getByRole("button", { name: "Edit Mobile research", exact: true })
+      .waitFor();
+    assert.equal(
+      await pool
+        .getByRole("button", {
+          name: "Add Mobile research to map",
+          exact: true,
+        })
+        .count(),
+      0,
+    );
+    await dialog.getByRole("button", { name: "Outline", exact: true }).click();
     const promoted = dialog.locator(".wbs-box").filter({
       has: page.getByRole("button", {
         name: "Edit Promoted child A",
@@ -401,14 +522,32 @@ test("mobile project map supports brainstorming, independent selection, outline,
     await dialog
       .getByRole("button", { name: "Add 1 activity", exact: true })
       .click();
+    await dialog.getByRole("button", { name: "Map", exact: true }).click();
+    await dragTo(box("Promoted child A"), box("Mobile outreach"));
+    graph = await tree();
+    const childA = graph.nodes.find((n) => n.title === "Promoted child A");
+    assert.equal(childA.parent_id, outreachId);
+    assert.equal(
+      graph.nodes.find((n) => n.title === "Nested leaf").parent_id,
+      childA.id,
+    );
+    await dragTo(box("Mobile outreach"), box("Promoted child A"));
+    graph = await tree();
+    assert.equal(
+      graph.nodes.find((n) => n.id === outreachId).parent_id,
+      null,
+      "Cannot nest a parent in its descendant",
+    );
+    await dialog.getByRole("button", { name: "Outline", exact: true }).click();
     await dialog
       .getByRole("button", {
         name: "Activity options for Promoted child A",
         exact: true,
       })
       .click();
+    await deletion.getByRole("radio", { name: /Whole branch/ }).check();
     await deletion
-      .getByRole("button", { name: "Delete full branch", exact: true })
+      .getByRole("button", { name: "Remove from map", exact: true })
       .click();
     await page.waitForFunction(
       () =>
@@ -686,6 +825,217 @@ test("deleting a box promotes children in order; whole-branch deletion archives 
       planning.routines.some((r) => r.id === repeat.series_id),
       false,
       "Deleted recurring branch does not project new calendar tasks",
+    );
+  } finally {
+    await c.dispose();
+  }
+});
+
+test("removing map blocks preserves tasks and schedules; deleting uses Bin; available tasks can be relinked", async () => {
+  const c = await context("ayesha");
+  try {
+    const p = await setup(c, "QA remove versus delete");
+    await command(c, p, {
+      action: "add",
+      titles: ["Keep recurring task", "Planning only", "Branch"],
+    });
+    let state = await read(c, p);
+    let task = state.nodes.find((n) => n.title === "Keep recurring task");
+    const planning = state.nodes.find((n) => n.title === "Planning only");
+    const branch = state.nodes.find((n) => n.title === "Branch");
+    await command(c, p, {
+      action: "edit",
+      id: task.id,
+      taskRevision: task.revision,
+      title: task.title,
+      frequency: "daily",
+      firstDay: new Date().toISOString().slice(0, 10),
+      timezone: "UTC",
+    });
+    state = await read(c, p);
+    task = state.nodes.find((n) => n.id === task.id);
+    await command(c, p, {
+      action: "select",
+      id: task.id,
+      taskRevision: task.revision,
+      selected: true,
+    });
+    await runTaskScheduler({
+      d,
+      tenantId: "northstar",
+      userId: "ayesha",
+      routineOnly: true,
+      heartbeat: false,
+    });
+    state = await read(c, p);
+    task = state.nodes.find((n) => n.id === task.id);
+    const occurrence = await d
+      .prepare("SELECT task_id FROM task_occurrences WHERE series_id=? LIMIT 1")
+      .get(task.series_id);
+    await command(c, p, {
+      action: "detach",
+      id: task.id,
+      taskRevision: task.revision,
+      removeMode: "box",
+    });
+    state = await read(c, p);
+    assert.equal(
+      state.nodes.some((n) => n.id === task.id),
+      false,
+    );
+    assert.equal(
+      state.available.some((n) => n.id === task.id),
+      true,
+    );
+    assert.equal(
+      (
+        await d
+          .prepare("SELECT storage_state FROM tasks WHERE id=?")
+          .get(task.id)
+      ).storage_state,
+      "active",
+    );
+    assert.equal(
+      (
+        await d
+          .prepare("SELECT storage_state FROM tasks WHERE id=?")
+          .get(occurrence.task_id)
+      ).storage_state,
+      "active",
+    );
+    assert.equal(
+      (
+        await d
+          .prepare("SELECT wbs_suspended FROM task_recurrences WHERE id=?")
+          .get(task.series_id)
+      ).wbs_suspended,
+      false,
+    );
+    await command(c, p, {
+      action: "detach",
+      id: planning.id,
+      taskRevision: planning.revision,
+    });
+    state = await read(c, p);
+    assert.equal(
+      state.available.some((n) => n.id === planning.id),
+      false,
+    );
+    assert.equal(
+      (
+        await d
+          .prepare("SELECT storage_state FROM tasks WHERE id=?")
+          .get(planning.id)
+      ).storage_state,
+      "archive",
+    );
+    await command(c, p, { action: "link", id: task.id, parentId: branch.id });
+    state = await read(c, p);
+    assert.equal(
+      state.available.some((n) => n.id === task.id),
+      false,
+    );
+    await command(c, p, {
+      action: "detach",
+      id: branch.id,
+      taskRevision: branch.revision,
+      removeMode: "branch",
+    });
+    state = await read(c, p);
+    assert.equal(state.nodes.length, 0);
+    assert.equal(
+      state.available.some((n) => n.id === task.id),
+      true,
+    );
+    await command(c, p, { action: "link", id: task.id, parentId: null });
+    state = await read(c, p);
+    task = state.nodes.find((n) => n.id === task.id);
+    await command(c, p, {
+      action: "delete",
+      id: task.id,
+      taskRevision: task.revision,
+    });
+    state = await read(c, p);
+    assert.equal(
+      state.available.some((n) => n.id === task.id),
+      false,
+    );
+    for (const tid of [task.id, occurrence.task_id]) {
+      const row = await d
+        .prepare("SELECT storage_state,purge_after FROM tasks WHERE id=?")
+        .get(tid);
+      assert.equal(row.storage_state, "bin");
+      assert.ok(row.purge_after);
+    }
+    assert.ok(
+      await d
+        .prepare("SELECT task_id FROM task_occurrences WHERE task_id=?")
+        .get(occurrence.task_id),
+    );
+    // Keep this fixture out of the separate global Bin-expiry test.
+    await d
+      .prepare(
+        "UPDATE tasks SET storage_state='archive',purge_after=NULL WHERE id=ANY(?::text[])",
+      )
+      .run([task.id, occurrence.task_id]);
+    const goal = await body(
+      await c.post("/api/workspace/goals", {
+        data: {
+          title: "QA inherited available tasks",
+          description: "QA",
+          targetDate: "2027-06-30",
+          status: "Active",
+        },
+      }),
+    );
+    await d.prepare("UPDATE projects SET goal_id=? WHERE id=?").run(goal.id, p);
+    await command(c, p, { action: "add", titles: ["Inherited project task"] });
+    state = await read(c, p);
+    const inherited = state.nodes.find(
+      (n) => n.title === "Inherited project task",
+    );
+    await command(c, p, {
+      action: "select",
+      id: inherited.id,
+      taskRevision: inherited.revision,
+      selected: true,
+    });
+    state = await read(c, p);
+    await command(c, p, {
+      action: "detach",
+      id: inherited.id,
+      taskRevision: state.nodes.find((n) => n.id === inherited.id).revision,
+    });
+    const goalPath = "/api/project-wbs?type=goal&projectId=" + goal.id;
+    let goalMap = await body(await c.get(goalPath));
+    assert.equal(
+      goalMap.available.some((t) => t.id === inherited.id),
+      true,
+    );
+    await body(
+      await c.post("/api/project-wbs", {
+        data: {
+          type: "goal",
+          projectId: goal.id,
+          revision: goalMap.revision,
+          action: "link",
+          id: inherited.id,
+          parentId: null,
+        },
+      }),
+    );
+    goalMap = await body(await c.get(goalPath));
+    assert.equal(
+      goalMap.nodes.find((n) => n.id === inherited.id).parent_id,
+      null,
+    );
+    assert.equal(
+      (
+        await d
+          .prepare("SELECT project_id FROM tasks WHERE id=?")
+          .get(inherited.id)
+      ).project_id,
+      p,
     );
   } finally {
     await c.dispose();

@@ -37,6 +37,7 @@ import {
   type WbsNode,
 } from "./wbs-model";
 import "./project-wbs.css";
+import { useWbsDrag } from "./use-wbs-drag";
 type Data = {
   project: { id: string; title: string };
   revision: number;
@@ -134,6 +135,7 @@ export function WbsEditor({
   const nodes = data?.nodes || [];
   const selectedNode = nodes.find((n) => n.id === selected);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [removeScope, setRemoveScope] = useState<"box" | "branch">("box");
   const deleteNode = nodes.find((n) => n.id === deleting);
   const load = useCallback(async () => {
     const d = await request(
@@ -171,15 +173,21 @@ export function WbsEditor({
       }
     return nodes.filter((n) => keep.has(n.id));
   }, [nodes, query]);
-  const layout = useMemo(
-    () =>
-      layoutWbs(
-        visibleNodes,
-        query ? new Set() : collapsed,
-        query ? null : focus,
-      ),
-    [visibleNodes, collapsed, focus, query],
-  );
+  const layout = useMemo(() => {
+    const tree = layoutWbs(
+      visibleNodes,
+      query ? new Set() : collapsed,
+      query ? null : focus,
+    );
+    const root = tree.boxes.find((b) => b.node.id === WBS_ROOT);
+    return {
+      ...tree,
+      width:
+        root && data?.available.length
+          ? Math.max(tree.width, root.x + 392)
+          : tree.width,
+    };
+  }, [visibleNodes, collapsed, focus, query, data?.available.length]);
   const fit = useCallback(() => {
     const el = canvas.current;
     if (!el) return;
@@ -235,6 +243,42 @@ export function WbsEditor({
       setBusy(false);
     }
   }
+  const { drag, bind: bindDrag } = useWbsDrag({
+    nodes,
+    enabled:
+      writable &&
+      !busy &&
+      view === "map" &&
+      !adding &&
+      !selected &&
+      !linking &&
+      !deleting,
+    container: canvas,
+    onNotice: setNotice,
+    onPan: (x, y) => setOffset((old) => ({ x: old.x + x, y: old.y + y })),
+    onDrop: (source, target) => {
+      void mutate(
+        {
+          action: source.available ? "link" : "move",
+          id: source.id,
+          parentId: target.parentId,
+          beforeId: target.beforeId,
+        },
+        source.available
+          ? "Task added to the map."
+          : "Branch moved. Tasks and history are unchanged.",
+      ).then((saved) => {
+        if (saved) {
+          setCollapsed((old) => {
+            const next = new Set(old);
+            if (target.parentId) next.delete(target.parentId);
+            return next;
+          });
+          setQuery("");
+        }
+      });
+    },
+  });
   function toggleBranch(id: string) {
     setCollapsed((old) => {
       const n = new Set(old);
@@ -263,10 +307,12 @@ export function WbsEditor({
     setSelected(null);
     setAdding(null);
     setLinking(false);
+    setRemoveScope("box");
     setDeleting(id);
     setError("");
   }
-  async function remove(mode: "box" | "branch") {
+  async function remove(action: "detach" | "delete") {
+    const mode = removeScope;
     if (!deleteNode) return;
     const removed =
       mode === "branch"
@@ -276,14 +322,14 @@ export function WbsEditor({
     if (
       await mutate(
         {
-          action: "remove",
+          action,
           id: deleteNode.id,
           taskRevision: deleteNode.revision,
           removeMode: mode,
         },
-        mode === "branch"
-          ? "Branch deleted. Activities and history are in Archive."
-          : "Box deleted. Its children are connected to its parent.",
+        action === "delete"
+          ? "Removed from the map. Deleted tasks are in Bin for 30 days."
+          : "Removed from the map. Linked tasks stay in Tasks.",
       )
     ) {
       setDeleting(null);
@@ -430,7 +476,7 @@ export function WbsEditor({
   return (
     <dialog
       ref={dialog}
-      className="wbs-dialog"
+      className={`wbs-dialog ${drag ? "wbs-is-dragging" : ""}`}
       aria-labelledby={id + "-title"}
       onCancel={(e) => {
         e.preventDefault();
@@ -531,6 +577,16 @@ export function WbsEditor({
               </button>
             )}
             <span>{nodes.length} activities</span>
+            <button
+              className="wbs-pool-toggle"
+              type="button"
+              onClick={() => {
+                setLinkParent(null);
+                setLinking(true);
+              }}
+            >
+              {data?.available.length || 0} available tasks
+            </button>
           </div>
           {focus && (
             <nav className="wbs-breadcrumb" aria-label="Branch path">
@@ -565,7 +621,8 @@ export function WbsEditor({
           )}
           {view === "map" && (
             <p className="wbs-map-hint">
-              Pinch to explore · Tap a box to edit · Drag the background to pan
+              Hold a box 1.5s to move · Drop inside to nest, at an edge to
+              reorder · Pinch to explore
             </p>
           )}
           <p className="wbs-announcement" role="status" aria-live="polite">
@@ -585,7 +642,12 @@ export function WbsEditor({
                   ref={canvas}
                   aria-label="Project activity tree. Drag to pan, pinch to zoom, or use the zoom controls."
                   onPointerDown={(e) => {
-                    if ((e.target as HTMLElement).closest("button")) return;
+                    if (
+                      (e.target as HTMLElement).closest(
+                        "button, .wbs-position, .wbs-available",
+                      )
+                    )
+                      return;
                     e.currentTarget.setPointerCapture(e.pointerId);
                     pointers.current.set(e.pointerId, {
                       x: e.clientX,
@@ -661,9 +723,68 @@ export function WbsEditor({
                         );
                       })}
                     </svg>
+                    {!focus &&
+                      !query &&
+                      !!data.available.length &&
+                      (() => {
+                        const root = layout.boxes.find(
+                          (b) => b.node.id === WBS_ROOT,
+                        );
+                        return (
+                          root && (
+                            <aside
+                              className="wbs-available"
+                              style={{ left: root.x + 116, top: root.y }}
+                              aria-label="Available tasks outside the map"
+                            >
+                              <strong>
+                                Available tasks{" "}
+                                <span>{data.available.length}</span>
+                              </strong>
+                              <div className="wbs-available-grid">
+                                {data.available.slice(0, 4).map((task) => (
+                                  <button
+                                    type="button"
+                                    key={task.id}
+                                    {...bindDrag({ ...task, available: true })}
+                                    disabled={busy || !writable}
+                                    aria-label={`Add ${task.title} to map`}
+                                    onClick={() =>
+                                      void mutate(
+                                        {
+                                          action: "link",
+                                          id: task.id,
+                                          parentId: null,
+                                        },
+                                        "Task added to the map.",
+                                      )
+                                    }
+                                  >
+                                    <Plus size={14} />
+                                    <span>{task.title}</span>
+                                  </button>
+                                ))}
+                              </div>
+                              {data.available.length > 4 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setLinkParent(null);
+                                    setLinking(true);
+                                  }}
+                                >
+                                  View all {data.available.length} tasks
+                                </button>
+                              )}
+                            </aside>
+                          )
+                        );
+                      })()}
                     {layout.boxes.map((b) => (
                       <div
-                        className="wbs-position"
+                        className={`wbs-position ${drag?.id === b.node.id ? "wbs-drag-source" : ""} ${drag?.target?.nodeId === b.node.id ? "wbs-drop-target" : ""}`}
+                        data-node-id={b.node.id}
+                        {...bindDrag(b.node)}
                         key={b.node.id}
                         style={{ left: b.x - 92, top: b.y }}
                       >
@@ -757,6 +878,19 @@ export function WbsEditor({
             </>
           )}
         </div>
+        {drag && (
+          <div
+            className="wbs-drag-ghost"
+            style={{
+              left: `clamp(8px, ${drag.x + 14}px, calc(100vw - 200px))`,
+              top: Math.max(8, drag.y - 40),
+            }}
+            aria-hidden="true"
+          >
+            <strong>{drag.title}</strong>
+            <small>{drag.target?.label || "Drop on a box to connect"}</small>
+          </div>
+        )}
         {deleteNode && (
           <div
             className="wbs-sheet-scrim"
@@ -768,56 +902,79 @@ export function WbsEditor({
               className="wbs-sheet wbs-delete-sheet"
               role="dialog"
               aria-modal="true"
-              aria-label="Delete activity or branch"
+              aria-label="Remove block or delete task"
             >
               <div className="wbs-sheet-handle" />
               <span className="wbs-eyebrow">ACTIVITY OPTIONS</span>
-              <h3>Delete “{deleteNode.title}”?</h3>
+              <h3>Remove “{deleteNode.title}”?</h3>
+              {nodes.some((n) => n.parent_id === deleteNode.id) && (
+                <fieldset className="wbs-remove-scope">
+                  <legend>What should be removed?</legend>
+                  <label>
+                    <input
+                      type="radio"
+                      name={id + "-scope"}
+                      checked={removeScope === "box"}
+                      onChange={() => setRemoveScope("box")}
+                      disabled={busy}
+                    />{" "}
+                    Only this box
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name={id + "-scope"}
+                      checked={removeScope === "branch"}
+                      onChange={() => setRemoveScope("branch")}
+                      disabled={busy}
+                    />{" "}
+                    Whole branch ({descendants(nodes, deleteNode.id).size}{" "}
+                    boxes)
+                  </label>
+                </fieldset>
+              )}
               <p>
-                Deleted activities and linked tasks move to Archive. Saved
-                history is kept.
+                {removeScope === "box"
+                  ? "Children reconnect to this box’s parent."
+                  : "Includes every box below this one."}
               </p>
-              {nodes.some((n) => n.parent_id === deleteNode.id) ? (
-                <>
-                  <button
-                    type="button"
-                    className="wbs-delete-option"
-                    disabled={busy}
-                    onClick={() => void remove("box")}
-                    aria-label="Delete only this box"
-                  >
-                    <strong>Delete only this box</strong>
-                    <small>
-                      Reconnect its child activities to{" "}
-                      {nodes.find((n) => n.id === deleteNode.parent_id)
-                        ?.title || "the project / goal"}
-                      .
-                    </small>
-                  </button>
-                  <button
-                    type="button"
-                    className="wbs-delete-option wbs-delete-danger"
-                    disabled={busy}
-                    onClick={() => void remove("branch")}
-                    aria-label="Delete full branch"
-                  >
-                    <strong>
-                      <Trash2 size={15} /> Delete full branch
-                    </strong>
-                    <small>
-                      {descendants(nodes, deleteNode.id).size} activities,
-                      including everything below this box.
-                    </small>
-                  </button>
-                </>
-              ) : (
+              <button
+                type="button"
+                className="wbs-delete-option"
+                aria-label="Remove from map"
+                disabled={busy}
+                onClick={() => void remove("detach")}
+              >
+                <strong>Remove from map</strong>
+                <small>
+                  Keep linked tasks in Tasks, including their schedules and
+                  history. Boxes without a task are simply removed.
+                </small>
+              </button>
+              {nodes.some(
+                (n) =>
+                  n.storage_state === "active" &&
+                  (removeScope === "branch"
+                    ? descendants(nodes, deleteNode.id).has(n.id)
+                    : n.id === deleteNode.id),
+              ) && (
                 <button
                   type="button"
                   className="wbs-delete-option wbs-delete-danger"
                   disabled={busy}
-                  onClick={() => void remove("box")}
+                  onClick={() => void remove("delete")}
                 >
-                  <Trash2 size={16} /> Delete activity
+                  <strong>
+                    <Trash2 size={15} />{" "}
+                    {removeScope === "branch"
+                      ? "Delete tasks and remove branch"
+                      : "Delete task and remove box"}
+                  </strong>
+                  <small>
+                    Also delete the linked{" "}
+                    {removeScope === "branch" ? "tasks" : "task"} from Tasks.
+                    Restore from Bin within 30 days.
+                  </small>
                 </button>
               )}
               <button
@@ -955,7 +1112,7 @@ export function WbsEditor({
                 </>
               ) : linking ? (
                 <>
-                  <h3>Use an existing activity</h3>
+                  <h3>Available tasks</h3>
                   <p>
                     The same task will appear in your map. Its history stays
                     intact.
@@ -976,8 +1133,11 @@ export function WbsEditor({
                               },
                               "Task added to the map.",
                             )
-                          )
+                          ) {
                             setLinking(false);
+                            setFocus(null);
+                            setQuery("");
+                          }
                         }}
                       >
                         <Plus size={16} />
@@ -985,9 +1145,7 @@ export function WbsEditor({
                       </button>
                     ))}
                     {!data?.available.length && (
-                      <p>
-                        All eligible project activities are already in the map.
-                      </p>
+                      <p>All project / goal tasks are already in the map.</p>
                     )}
                   </div>
                 </>
@@ -1290,7 +1448,7 @@ function ActivityDetails({
           disabled={busy || !writable}
           onClick={() => void onRemove()}
         >
-          Delete activity or branch
+          Remove block or delete task
         </button>
       </details>
     </>
