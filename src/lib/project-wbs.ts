@@ -32,6 +32,7 @@ const input = z
       .optional(),
     title: z.string().trim().min(1).max(200).optional(),
     selected: z.boolean().optional(),
+    removeMode: z.enum(["box", "branch"]).default("box"),
     beforeId: key.nullable().optional(),
     frequency: z
       .enum(["once", "daily", "weekdays", "weekly", "monthly", "yearly"])
@@ -115,7 +116,8 @@ export async function writeWbs(a: Actor, body: unknown) {
       throw new WbsError("An activity cannot be placed inside its own branch.");
     if (
       node &&
-      ["edit", "select"].includes(v.action) &&
+      ["edit", "select", "remove"].includes(v.action) &&
+      (v.action !== "remove" || v.taskRevision !== undefined) &&
       node.revision !== v.taskRevision
     )
       throw new WbsError(
@@ -325,28 +327,68 @@ export async function writeWbs(a: Actor, body: unknown) {
         );
     }
     if (v.action === "remove") {
-      if (nodes.some((n) => n.parent_id === node!.id))
-        throw new WbsError(
-          "Move or remove the child activities before removing this category.",
-        );
-      // A category can be removed without deleting its record or its descendants.
-      // Children move up one level; existing task/history records are untouched.
-      if (node!.storage_state !== "planning")
-        throw new WbsError(
-          "Remove this activity from Tasks before removing its box.",
-        );
-      if (node!.series_id || node!.stage === "Done")
-        throw new WbsError(
-          "Keep completed or repeating activities in the WBS to preserve their context.",
-        );
+      const removed =
+        v.removeMode === "branch"
+          ? descendants(nodes, node!.id)
+          : new Set([node!.id]);
+      const ids = [...removed];
+      // Match scheduler lock order before moving templates and occurrences to Archive.
       await db()
         .prepare(
-          "UPDATE project_wbs_nodes SET parent_id=? WHERE parent_id=? AND project_id=?",
+          "SELECT id FROM task_recurrences WHERE tenant_id=? AND template_task_id=ANY(?::text[]) ORDER BY id FOR UPDATE",
         )
-        .run(node!.parent_id, v.id, v.projectId);
+        .all(a.tenantId, ids);
       await db()
-        .prepare("DELETE FROM project_wbs_nodes WHERE id=? AND project_id=?")
-        .run(v.id, v.projectId);
+        .prepare(
+          "SELECT id FROM tasks WHERE tenant_id=? AND (id=ANY(?::text[]) OR id IN(SELECT o.task_id FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id WHERE r.tenant_id=? AND r.template_task_id=ANY(?::text[]))) ORDER BY id FOR UPDATE",
+        )
+        .all(a.tenantId, ids, a.tenantId, ids);
+      if (v.taskRevision !== undefined) {
+        const locked = await db()
+          .prepare("SELECT revision FROM tasks WHERE id=? AND tenant_id=?")
+          .get(node!.id, a.tenantId);
+        if (locked?.revision !== v.taskRevision)
+          throw new WbsError(
+            "This activity changed. Reload before deleting it.",
+            409,
+          );
+      }
+      const children = nodes
+        .filter((n) => n.parent_id === node!.id)
+        .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+      const siblings = nodes
+        .filter((n) => n.parent_id === node!.parent_id)
+        .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+      const order = siblings.flatMap((n) =>
+        n.id === node!.id
+          ? v.removeMode === "box"
+            ? children.map((c) => c.id)
+            : []
+          : [n.id],
+      );
+      if (v.removeMode === "box")
+        await db()
+          .prepare(
+            "UPDATE project_wbs_nodes SET parent_id=? WHERE project_id=? AND parent_id=?",
+          )
+          .run(node!.parent_id, v.projectId, node!.id);
+      // Archive, rather than erase, task records and dated completion/focus history.
+      await db()
+        .prepare(
+          "UPDATE tasks SET storage_state='archive',stored_at=humeto_action_time(),purge_after=NULL,last_actor_id=?,revision=revision+1 WHERE tenant_id=? AND storage_state IN ('active','planning') AND (id=ANY(?::text[]) OR id IN(SELECT o.task_id FROM task_occurrences o JOIN task_recurrences r ON r.id=o.series_id WHERE r.tenant_id=? AND r.template_task_id=ANY(?::text[])))",
+        )
+        .run(a.id, a.tenantId, ids, a.tenantId, ids);
+      await db()
+        .prepare(
+          "DELETE FROM project_wbs_nodes WHERE project_id=? AND id=ANY(?::text[])",
+        )
+        .run(v.projectId, ids);
+      for (const [position, id] of order.entries())
+        await db()
+          .prepare(
+            "UPDATE project_wbs_nodes SET position=? WHERE project_id=? AND id=?",
+          )
+          .run(position, v.projectId, id);
     }
     await db()
       .prepare(

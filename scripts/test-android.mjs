@@ -57,6 +57,13 @@ async function run(cmd, args, env, name, cwd = root) {
 }
 const results = [];
 async function check(name, fn) {
+  const wbsSmoke = new Set([
+    "Native bridge uses isolated backend; no anonymous task access",
+    "Password sign-in through native UI and HttpOnly session cookie",
+    "Saved login is encrypted and survives app process restart without cookies",
+    "Native compact plan tabs, WBS tags and KPI results share one activity",
+  ]);
+  if (process.env.HUMETO_ANDROID_SMOKE === "wbs" && !wbsSmoke.has(name)) return;
   await fn();
   results.push({ name, status: "passed" });
   console.log("PASS " + name);
@@ -462,6 +469,92 @@ try {
       );
       await cdp.wait(
         `(${card}).textContent.includes('Native daily leads')&&(${card}).textContent.includes('Target met')`,
+      );
+      tree = (await nativeApi("/api/project-wbs?projectId=" + project.id)).data;
+      assert.equal(
+        (
+          await nativeApi("/api/project-wbs", {
+            projectId: project.id,
+            revision: tree.revision,
+            action: "add",
+            titles: ["Native removable parent"],
+          })
+        ).status,
+        200,
+      );
+      tree = (await nativeApi("/api/project-wbs?projectId=" + project.id)).data;
+      const parent = tree.nodes.find(
+        (n) => n.title === "Native removable parent",
+      );
+      await nativeApi("/api/project-wbs", {
+        projectId: project.id,
+        revision: tree.revision,
+        action: "add",
+        parentId: parent.id,
+        titles: ["Native promoted child"],
+      });
+      tree = (await nativeApi("/api/project-wbs?projectId=" + project.id)).data;
+      const child = tree.nodes.find((n) => n.title === "Native promoted child");
+      await nativeApi("/api/project-wbs", {
+        projectId: project.id,
+        revision: tree.revision,
+        action: "add",
+        parentId: child.id,
+        titles: ["Native nested leaf"],
+      });
+      await cdp.evaluate(
+        `(${card}).querySelector('[role=tab][id$="-wbs"]').click()`,
+      );
+      await cdp.evaluate(`(${card}).querySelector('.wbs-launch').click()`);
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Activity options for Native removable parent"]')`,
+      );
+      assert.equal(
+        await cdp.evaluate(
+          `document.querySelector('.wbs-footer .wbs-primary').textContent.trim()`,
+        ),
+        "Add Category",
+      );
+      assert.ok(
+        await cdp.evaluate(
+          `Array.from(document.querySelectorAll('.wbs-add-activity')).every(b=>b.textContent.trim()==='Add Activity')`,
+        ),
+      );
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Activity options for Native removable parent"]')&&!document.querySelector('[aria-label="Activity options for Native removable parent"]').disabled`,
+        60000,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Activity options for Native removable parent"]').click()`,
+      );
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Delete only this box"]')&&!document.querySelector('[aria-label="Delete only this box"]').disabled`,
+        60000,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Delete only this box"]').click()`,
+      );
+      await cdp.wait(
+        `!document.querySelector('[aria-label="Edit Native removable parent"]')&&!!document.querySelector('[aria-label="Edit Native promoted child"]')`,
+      );
+      tree = (await nativeApi("/api/project-wbs?projectId=" + project.id)).data;
+      assert.equal(tree.nodes.find((n) => n.id === child.id).parent_id, null);
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Activity options for Native promoted child"]')&&!document.querySelector('[aria-label="Activity options for Native promoted child"]').disabled`,
+        60000,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Activity options for Native promoted child"]').click()`,
+      );
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Delete full branch"]')&&!document.querySelector('[aria-label="Delete full branch"]').disabled`,
+        60000,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Delete full branch"]').click()`,
+      );
+      await cdp.wait(
+        `!document.querySelector('[aria-label="Edit Native promoted child"]')&&!document.querySelector('[aria-label="Edit Native nested leaf"]')`,
       );
       assert.equal(
         await cdp.evaluate("document.documentElement.scrollWidth>innerWidth"),

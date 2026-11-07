@@ -37,7 +37,7 @@ export async function runTaskScheduler({
       .run(now.toISOString());
   const series = await d
     .prepare(
-      "SELECT id FROM task_recurrences WHERE status='active' AND wbs_suspended=FALSE AND next_day<=? AND (next_day || ' ' || local_time)<=to_char(timezone(task_recurrences.timezone,?::timestamptz),'YYYY-MM-DD HH24:MI')" +
+      "SELECT id FROM task_recurrences WHERE status='active' AND wbs_suspended=FALSE AND EXISTS(SELECT 1 FROM tasks template WHERE template.id=task_recurrences.template_task_id AND template.tenant_id=task_recurrences.tenant_id AND template.storage_state='active') AND next_day<=? AND (next_day || ' ' || local_time)<=to_char(timezone(task_recurrences.timezone,?::timestamptz),'YYYY-MM-DD HH24:MI')" +
         (tenantId ? " AND tenant_id=? AND user_id=?" : "") +
         (routineOnly ? " AND track_occurrences=TRUE" : "") +
         " ORDER BY next_day LIMIT 500",

@@ -55,7 +55,7 @@ export function layoutWbs(
     const x = xs.length
       ? (xs[0] + xs[xs.length - 1]) / 2
       : cursor++ * 208 + 104;
-    boxes.push({ node, x, y: depth * 150 + 24 });
+    boxes.push({ node, x, y: depth * 180 + 24 });
     return x;
   };
   if (focus) {
@@ -90,6 +90,6 @@ export function layoutWbs(
     boxes,
     edges,
     width: Math.max(208, cursor * 208),
-    height: Math.max(180, ...boxes.map((b) => b.y + 126)),
+    height: Math.max(180, ...boxes.map((b) => b.y + 154)),
   };
 }

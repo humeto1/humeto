@@ -25,6 +25,8 @@ import {
   RefreshCw,
   ArrowUp,
   ArrowDown,
+  MoreVertical,
+  Trash2,
 } from "lucide-react";
 import { webApi, type Transport } from "./transport";
 import {
@@ -131,6 +133,8 @@ export function WbsEditor({
   const gesture = useRef<{ distance: number; scale: number } | null>(null);
   const nodes = data?.nodes || [];
   const selectedNode = nodes.find((n) => n.id === selected);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const deleteNode = nodes.find((n) => n.id === deleting);
   const load = useCallback(async () => {
     const d = await request(
       "/api/project-wbs?projectId=" +
@@ -255,47 +259,49 @@ export function WbsEditor({
     setAdding({ parent });
     setIdeas("");
   }
+  function openDelete(id: string) {
+    setSelected(null);
+    setAdding(null);
+    setLinking(false);
+    setDeleting(id);
+    setError("");
+  }
+  async function remove(mode: "box" | "branch") {
+    if (!deleteNode) return;
+    const removed =
+      mode === "branch"
+        ? descendants(nodes, deleteNode.id)
+        : new Set([deleteNode.id]);
+    const parent = deleteNode.parent_id;
+    if (
+      await mutate(
+        {
+          action: "remove",
+          id: deleteNode.id,
+          taskRevision: deleteNode.revision,
+          removeMode: mode,
+        },
+        mode === "branch"
+          ? "Branch deleted. Activities and history are in Archive."
+          : "Box deleted. Its children are connected to its parent.",
+      )
+    ) {
+      setDeleting(null);
+      setCollapsed((old) => new Set([...old].filter((id) => !removed.has(id))));
+      if (focus && removed.has(focus)) setFocus(parent);
+    }
+  }
   function nodeBox(n: WbsNode, outline = false) {
     const root = n.id === WBS_ROOT,
-      children = visibleNodes.filter((c) => c.parent_id === n.id).length,
+      children = nodes.filter((c) => c.parent_id === n.id).length,
       done = wbsDone(n),
       active = n.storage_state === "active";
     return (
       <div
         className={`wbs-box ${root ? "wbs-root" : ""} ${done ? "wbs-done" : ""} ${selected === n.id ? "wbs-selected" : ""} ${outline ? "wbs-outline-box" : ""}`}
       >
-        <button
-          type="button"
-          className="wbs-box-title"
-          onClick={() =>
-            root
-              ? add(null)
-              : (setSelected(n.id), setAdding(null), setLinking(false))
-          }
-          aria-label={root ? "Add activity to project" : `Edit ${n.title}`}
-        >
-          <span className="wbs-box-kicker">
-            {root ? (
-              "PROJECT"
-            ) : n.frequency ? (
-              <>
-                <Repeat2 size={12} /> Repeating
-              </>
-            ) : done ? (
-              <>
-                <Check size={12} /> Completed
-              </>
-            ) : active ? (
-              "In Tasks"
-            ) : (
-              "Category"
-            )}
-            {!root && <ActivityBadges activity={n} />}
-          </span>
-          <strong>{root ? data?.project.title : n.title}</strong>
-        </button>
-        <div className="wbs-box-actions">
-          {!root && (
+        {!root && (
+          <div className="wbs-box-top">
             <button
               type="button"
               role="switch"
@@ -324,26 +330,60 @@ export function WbsEditor({
               {active ? <Check size={13} /> : <Plus size={13} />}{" "}
               {active ? "In Tasks" : "Add to Tasks"}
             </button>
-          )}
-          {root ? (
             <button
               type="button"
+              className="wbs-more"
+              aria-label={`Activity options for ${n.title}`}
+              aria-haspopup="dialog"
               disabled={!writable || busy}
-              onClick={() => add(null)}
+              onClick={() => openDelete(n.id)}
             >
-              <Plus size={14} /> Add activity
+              <MoreVertical size={17} />
             </button>
-          ) : (
-            <button
-              type="button"
-              className="wbs-icon"
-              disabled={!writable || busy}
-              aria-label={`Add child to ${n.title}`}
-              onClick={() => add(n.id)}
-            >
-              <Plus size={16} />
-            </button>
-          )}
+          </div>
+        )}
+        <button
+          type="button"
+          className="wbs-box-title"
+          onClick={() =>
+            root
+              ? add(null)
+              : (setSelected(n.id), setAdding(null), setLinking(false))
+          }
+          aria-label={root ? "Add activity to project" : `Edit ${n.title}`}
+        >
+          <span className="wbs-box-kicker">
+            {root ? (
+              planType.toUpperCase()
+            ) : n.frequency ? (
+              <>
+                <Repeat2 size={12} /> Repeating
+              </>
+            ) : done ? (
+              <>
+                <Check size={12} /> Completed
+              </>
+            ) : active ? (
+              "In Tasks"
+            ) : (
+              "Category"
+            )}
+            {!root && <ActivityBadges activity={n} />}
+          </span>
+          <strong>{root ? data?.project.title : n.title}</strong>
+        </button>
+        <div className="wbs-box-actions">
+          <button
+            type="button"
+            className="wbs-add-activity"
+            disabled={!writable || busy}
+            aria-label={
+              root ? "Add Activity to project" : `Add Activity under ${n.title}`
+            }
+            onClick={() => add(root ? null : n.id)}
+          >
+            <Plus size={14} /> Add Activity
+          </button>
           {!!children && (
             <button
               type="button"
@@ -394,7 +434,8 @@ export function WbsEditor({
       aria-labelledby={id + "-title"}
       onCancel={(e) => {
         e.preventDefault();
-        if (selected || adding || linking) {
+        if (selected || adding || linking || deleting) {
+          setDeleting(null);
           setSelected(null);
           setAdding(null);
           setLinking(false);
@@ -402,7 +443,10 @@ export function WbsEditor({
       }}
     >
       <div className="wbs-shell">
-        <div className="wbs-main" inert={!!(adding || selectedNode || linking)}>
+        <div
+          className="wbs-main"
+          inert={!!(adding || selectedNode || linking || deleteNode)}
+        >
           <header className="wbs-header">
             <div>
               <span className="wbs-eyebrow">SPACE TO THINK</span>
@@ -608,7 +652,7 @@ export function WbsEditor({
                         const a = positions.get(edge.from),
                           b = positions.get(edge.to);
                         if (!a || !b) return null;
-                        const y = a.y + 108;
+                        const y = a.y + 140;
                         return (
                           <path
                             key={edge.to}
@@ -636,8 +680,15 @@ export function WbsEditor({
                         ready.
                       </p>
                       {writable && (
-                        <button type="button" onClick={() => add(null)}>
-                          <Plus size={18} /> Add your first ideas
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFocus(null);
+                            setQuery("");
+                            add(null);
+                          }}
+                        >
+                          <Plus size={18} /> Add Category
                         </button>
                       )}
                     </div>
@@ -668,9 +719,13 @@ export function WbsEditor({
                   type="button"
                   className="wbs-primary"
                   disabled={!writable || busy}
-                  onClick={() => add(focus)}
+                  onClick={() => {
+                    setFocus(null);
+                    setQuery("");
+                    add(null);
+                  }}
                 >
-                  <Plus size={18} /> Add ideas
+                  <Plus size={18} /> Add Category
                 </button>
                 <div className="wbs-zoom">
                   <button
@@ -702,6 +757,97 @@ export function WbsEditor({
             </>
           )}
         </div>
+        {deleteNode && (
+          <div
+            className="wbs-sheet-scrim"
+            onClick={(e) => {
+              if (e.target === e.currentTarget && !busy) setDeleting(null);
+            }}
+          >
+            <section
+              className="wbs-sheet wbs-delete-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Delete activity or branch"
+            >
+              <div className="wbs-sheet-handle" />
+              <span className="wbs-eyebrow">ACTIVITY OPTIONS</span>
+              <h3>Delete “{deleteNode.title}”?</h3>
+              <p>
+                Deleted activities and linked tasks move to Archive. Saved
+                history is kept.
+              </p>
+              {nodes.some((n) => n.parent_id === deleteNode.id) ? (
+                <>
+                  <button
+                    type="button"
+                    className="wbs-delete-option"
+                    disabled={busy}
+                    onClick={() => void remove("box")}
+                    aria-label="Delete only this box"
+                  >
+                    <strong>Delete only this box</strong>
+                    <small>
+                      Reconnect its child activities to{" "}
+                      {nodes.find((n) => n.id === deleteNode.parent_id)
+                        ?.title || "the project / goal"}
+                      .
+                    </small>
+                  </button>
+                  <button
+                    type="button"
+                    className="wbs-delete-option wbs-delete-danger"
+                    disabled={busy}
+                    onClick={() => void remove("branch")}
+                    aria-label="Delete full branch"
+                  >
+                    <strong>
+                      <Trash2 size={15} /> Delete full branch
+                    </strong>
+                    <small>
+                      {descendants(nodes, deleteNode.id).size} activities,
+                      including everything below this box.
+                    </small>
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="wbs-delete-option wbs-delete-danger"
+                  disabled={busy}
+                  onClick={() => void remove("box")}
+                >
+                  <Trash2 size={16} /> Delete activity
+                </button>
+              )}
+              <button
+                type="button"
+                autoFocus
+                className="wbs-delete-cancel"
+                disabled={busy}
+                onClick={() => setDeleting(null)}
+              >
+                Cancel
+              </button>
+              {error && (
+                <p role="alert" className="wbs-error">
+                  {error}
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void load()
+                        .then(() => setError(""))
+                        .catch((e) => setError(e.message))
+                    }
+                  >
+                    Reload tree
+                  </button>
+                </p>
+              )}
+            </section>
+          </div>
+        )}
         {(adding || selectedNode || linking) && (
           <div
             className="wbs-sheet-scrim"
@@ -759,7 +905,7 @@ export function WbsEditor({
                       if (
                         await mutate(
                           { action: "add", parentId: adding.parent, titles },
-                          `${titles.length} ${titles.length === 1 ? "idea" : "ideas"} added.`,
+                          `${titles.length} ${titles.length === 1 ? "activity" : "activities"} added.`,
                         )
                       ) {
                         setAdding(null);
@@ -789,7 +935,9 @@ export function WbsEditor({
                     >
                       Add{" "}
                       {ideas.split("\n").filter((s) => s.trim()).length || ""}{" "}
-                      ideas
+                      {ideas.split("\n").filter((s) => s.trim()).length === 1
+                        ? "activity"
+                        : "activities"}
                     </button>
                   </form>
                   <button
@@ -894,15 +1042,7 @@ export function WbsEditor({
                       setSelected(null);
                       setQuery("");
                     }}
-                    onRemove={async () => {
-                      if (
-                        await mutate(
-                          { action: "remove", id: selectedNode.id },
-                          "Box removed. You can recover it using an existing project activity.",
-                        )
-                      )
-                        setSelected(null);
-                    }}
+                    onRemove={async () => openDelete(selectedNode.id)}
                   />
                 )
               )}
@@ -1144,19 +1284,14 @@ function ActivityDetails({
             <ArrowDown size={16} /> Move down
           </button>
         </div>
-        {node.storage_state === "planning" &&
-          !node.frequency &&
-          node.stage !== "Done" &&
-          !nodes.some((n) => n.parent_id === node.id) && (
-            <button
-              type="button"
-              className="wbs-remove"
-              disabled={busy || !writable}
-              onClick={() => void onRemove()}
-            >
-              Remove this box
-            </button>
-          )}
+        <button
+          type="button"
+          className="wbs-remove"
+          disabled={busy || !writable}
+          onClick={() => void onRemove()}
+        >
+          Delete activity or branch
+        </button>
       </details>
     </>
   );

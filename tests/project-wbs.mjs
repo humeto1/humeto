@@ -290,13 +290,13 @@ test("mobile project map supports brainstorming, independent selection, outline,
     const dialog = page.getByRole("dialog");
     await dialog.waitFor();
     await dialog
-      .getByRole("button", { name: "Add ideas", exact: true })
+      .getByRole("button", { name: "Add Category", exact: true })
       .click();
     await dialog
       .getByLabel("Activities or categories")
       .fill("Mobile research\nMobile outreach");
     await dialog
-      .getByRole("button", { name: "Add 2 ideas", exact: true })
+      .getByRole("button", { name: "Add 2 activities", exact: true })
       .click();
     await dialog
       .getByRole("button", { name: "Edit Mobile research", exact: true })
@@ -336,6 +336,98 @@ test("mobile project map supports brainstorming, independent selection, outline,
       .locator(".wbs-done")
       .filter({ hasText: "Mobile research" })
       .waitFor();
+    await dialog
+      .getByRole("button", {
+        name: "Activity options for Mobile outreach",
+        exact: true,
+      })
+      .click();
+    const deletion = page.getByRole("dialog", {
+      name: "Delete activity or branch",
+      exact: true,
+    });
+    await deletion.getByRole("button", { name: "Cancel", exact: true }).click();
+    await dialog
+      .getByRole("button", {
+        name: "Add Activity under Mobile research",
+        exact: true,
+      })
+      .click();
+    await dialog
+      .getByLabel("Activities or categories")
+      .fill("Promoted child A\nPromoted child B");
+    await dialog
+      .getByRole("button", { name: "Add 2 activities", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", {
+        name: "Activity options for Mobile research",
+        exact: true,
+      })
+      .click();
+    await deletion
+      .getByRole("button", { name: "Delete only this box", exact: true })
+      .click();
+    await page.waitForFunction(
+      () => !document.querySelector('[aria-label="Edit Mobile research"]'),
+    );
+    await dialog
+      .getByRole("button", { name: "Edit Promoted child A", exact: true })
+      .waitFor();
+    assert.equal(
+      await dialog
+        .getByRole("button", { name: "Edit Mobile research", exact: true })
+        .count(),
+      0,
+    );
+    const promoted = dialog.locator(".wbs-box").filter({
+      has: page.getByRole("button", {
+        name: "Edit Promoted child A",
+        exact: true,
+      }),
+    });
+    const switchBox = await promoted.getByRole("switch").boundingBox(),
+      titleBox = await promoted
+        .getByRole("button", { name: "Edit Promoted child A", exact: true })
+        .boundingBox();
+    assert.ok(switchBox.y < titleBox.y, "Task control sits above the title");
+    await dialog
+      .getByRole("button", {
+        name: "Add Activity under Promoted child A",
+        exact: true,
+      })
+      .click();
+    await dialog.getByLabel("Activities or categories").fill("Nested leaf");
+    await dialog
+      .getByRole("button", { name: "Add 1 activity", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", {
+        name: "Activity options for Promoted child A",
+        exact: true,
+      })
+      .click();
+    await deletion
+      .getByRole("button", { name: "Delete full branch", exact: true })
+      .click();
+    await page.waitForFunction(
+      () =>
+        !document.querySelector(
+          '[aria-label="Activity options for Promoted child A"]',
+        ),
+    );
+    assert.equal(
+      await dialog
+        .getByRole("button", { name: "Edit Nested leaf", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await dialog
+        .getByRole("button", { name: "Edit Promoted child B", exact: true })
+        .isVisible(),
+      true,
+    );
     await dialog.getByRole("button", { name: "Map", exact: true }).click();
     mkdirSync("artifacts", { recursive: true });
     await page.screenshot({ path: "artifacts/project-wbs-mobile.png" });
@@ -401,6 +493,27 @@ test("mobile project map supports brainstorming, independent selection, outline,
         ) > 50,
     );
     await page.screenshot({ path: "artifacts/project-wbs-mobile-branch.png" });
+    await dialog
+      .getByRole("button", { name: "Add Category", exact: true })
+      .click();
+    await dialog
+      .getByLabel("Activities or categories")
+      .fill("Category added from focus");
+    await dialog
+      .getByRole("button", { name: "Add 1 activity", exact: true })
+      .click();
+    await dialog
+      .getByRole("button", {
+        name: "Edit Category added from focus",
+        exact: true,
+      })
+      .waitFor();
+    assert.equal(
+      await dialog
+        .getByRole("button", { name: "Whole project", exact: true })
+        .count(),
+      0,
+    );
 
     await dialog
       .getByRole("button", { name: "Close project map", exact: true })
@@ -413,5 +526,168 @@ test("mobile project map supports brainstorming, independent selection, outline,
     const done = new Promise((r) => vite.once("exit", r));
     vite.kill("SIGTERM");
     await done;
+  }
+});
+
+test("deleting a box promotes children in order; whole-branch deletion archives tasks and repeating history", async () => {
+  const c = await context("ayesha");
+  try {
+    const p = await setup(c, "QA deletion graph");
+    await command(c, p, {
+      action: "add",
+      titles: ["Before", "Parent", "After"],
+    });
+    let state = await read(c, p),
+      parent = state.nodes.find((n) => n.title === "Parent");
+    await command(c, p, {
+      action: "add",
+      parentId: parent.id,
+      titles: ["Child A", "Child B"],
+    });
+    state = await read(c, p);
+    const child = state.nodes.find((n) => n.title === "Child A"),
+      other = state.nodes.find((n) => n.title === "Child B");
+    await command(c, p, {
+      action: "add",
+      parentId: child.id,
+      titles: ["Grandchild"],
+    });
+    await command(c, p, {
+      action: "select",
+      id: parent.id,
+      taskRevision: parent.revision,
+      selected: true,
+    });
+    state = await read(c, p);
+    parent = state.nodes.find((n) => n.id === parent.id);
+    await command(c, p, {
+      action: "edit",
+      id: parent.id,
+      taskRevision: parent.revision,
+      title: parent.title,
+      stage: "Done",
+      isCsf: true,
+      frequency: "once",
+    });
+    const completed = await d
+      .prepare("SELECT completed_at FROM tasks WHERE id=?")
+      .get(parent.id);
+    state = await read(c, p);
+    parent = state.nodes.find((n) => n.id === parent.id);
+    await command(c, p, {
+      action: "remove",
+      id: parent.id,
+      taskRevision: parent.revision,
+      removeMode: "box",
+    });
+    state = await read(c, p);
+    assert.deepEqual(
+      state.nodes
+        .filter((n) => n.parent_id === null)
+        .sort((a, b) => a.position - b.position)
+        .map((n) => n.title),
+      ["Before", "Child A", "Child B", "After"],
+    );
+    assert.equal(
+      state.nodes.find((n) => n.title === "Grandchild").parent_id,
+      child.id,
+    );
+    const archived = await d
+      .prepare(
+        "SELECT storage_state,stage,completed_at,is_csf FROM tasks WHERE id=?",
+      )
+      .get(parent.id);
+    assert.equal(archived.storage_state, "archive");
+    assert.equal(archived.stage, "Done");
+    assert.equal(archived.completed_at, completed.completed_at);
+    assert.equal(archived.is_csf, true);
+    const current = state.nodes.find((n) => n.id === child.id);
+    await command(c, p, {
+      action: "remove",
+      id: child.id,
+      taskRevision: current.revision,
+      removeMode: "branch",
+    });
+    state = await read(c, p);
+    assert.equal(
+      state.nodes.some((n) => n.id === child.id || n.title === "Grandchild"),
+      false,
+    );
+    assert.equal(state.nodes.find((n) => n.id === other.id).parent_id, null);
+    assert.equal(
+      (
+        await d
+          .prepare("SELECT storage_state FROM tasks WHERE id=?")
+          .get(child.id)
+      ).storage_state,
+      "archive",
+    );
+    await command(c, p, { action: "add", titles: ["Repeating branch"] });
+    state = await read(c, p);
+    let repeat = state.nodes.find((n) => n.title === "Repeating branch");
+    await command(c, p, {
+      action: "edit",
+      id: repeat.id,
+      taskRevision: repeat.revision,
+      title: repeat.title,
+      frequency: "daily",
+      firstDay: new Date().toISOString().slice(0, 10),
+      timezone: "UTC",
+    });
+    state = await read(c, p);
+    repeat = state.nodes.find((n) => n.id === repeat.id);
+    await command(c, p, {
+      action: "select",
+      id: repeat.id,
+      taskRevision: repeat.revision,
+      selected: true,
+    });
+    await runTaskScheduler({
+      d,
+      tenantId: "northstar",
+      userId: "ayesha",
+      routineOnly: true,
+      heartbeat: false,
+    });
+    state = await read(c, p);
+    repeat = state.nodes.find((n) => n.id === repeat.id);
+    const occurrence = await d
+      .prepare("SELECT task_id FROM task_occurrences WHERE series_id=? LIMIT 1")
+      .get(repeat.series_id);
+    assert.ok(occurrence.task_id);
+    await command(c, p, {
+      action: "remove",
+      id: repeat.id,
+      taskRevision: repeat.revision,
+      removeMode: "branch",
+    });
+    assert.equal(
+      (
+        await d
+          .prepare("SELECT storage_state FROM tasks WHERE id=?")
+          .get(occurrence.task_id)
+      ).storage_state,
+      "archive",
+    );
+    assert.equal(
+      (
+        await d
+          .prepare(
+            "SELECT task_id FROM task_occurrences WHERE series_id=? LIMIT 1",
+          )
+          .get(repeat.series_id)
+      ).task_id,
+      occurrence.task_id,
+    );
+    const planning = await body(
+      await c.get("/api/workspace/planning?timezone=UTC"),
+    );
+    assert.equal(
+      planning.routines.some((r) => r.id === repeat.series_id),
+      false,
+      "Deleted recurring branch does not project new calendar tasks",
+    );
+  } finally {
+    await c.dispose();
   }
 });
