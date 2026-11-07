@@ -9,9 +9,12 @@ const fail = (error: string, status = 400) =>
   NextResponse.json({ error }, { status });
 export async function focusRead(a: Actor) {
   if (!isStaff(a)) return fail("Task focus is not permitted.", 403);
+  await db()
+    .prepare("SELECT humeto_focus_attendance_sweep(?,?)")
+    .get(a.tenantId, a.id);
   const rows = await db()
     .prepare(
-      `SELECT f.*,t.title,(SELECT CASE WHEN o.canonical_title=t.title THEN o.display_title ELSE '' END FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS display_title,t.stage AS task_stage,t.revision AS task_revision,t.project_id,COALESCE(p.title,'') AS project_title,
+      `SELECT f.*,t.title,(SELECT CASE WHEN o.canonical_title=t.title THEN o.display_title ELSE '' END FROM task_occurrences o WHERE o.task_id=t.id LIMIT 1) AS display_title,t.value_currency,t.stage AS task_stage,t.revision AS task_revision,t.project_id,COALESCE(p.title,'') AS project_title,
  f.elapsed_seconds+CASE WHEN f.running_since IS NULL THEN 0 ELSE GREATEST(0,floor(extract(epoch FROM (humeto_action_time()-f.running_since)))::bigint) END AS total_seconds
  FROM focus_sessions f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id
  LEFT JOIN projects p ON p.id=t.project_id AND p.tenant_id=t.tenant_id
@@ -60,6 +63,7 @@ export async function focusInterpret(a: Actor, body: unknown) {
 const command = z.object({
   action: z.enum([
     "start",
+    "confirm",
     "pause",
     "resume",
     "extend",
@@ -214,6 +218,16 @@ export async function focusMutation(a: Actor, body: unknown) {
       )
       .get(active.task_id, a.tenantId);
     if (!t) return fail("Task not found.", 404);
+    if (v.action === "confirm") {
+      if (active.state !== "running")
+        return fail("Resume the paused focus first.", 409);
+      await db()
+        .prepare(
+          "UPDATE focus_sessions SET attendance_due_at=humeto_action_time()+interval '30 minutes',attendance_prompt_at=NULL,revision=revision+1 WHERE id=?",
+        )
+        .run(active.id);
+      return NextResponse.json({ ok: true });
+    }
     if (v.action === "switch") {
       const next = await db()
         .prepare(

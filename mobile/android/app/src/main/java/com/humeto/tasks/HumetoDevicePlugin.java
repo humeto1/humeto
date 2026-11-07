@@ -198,15 +198,36 @@ public class HumetoDevicePlugin extends Plugin {
    return;
   }
 
-  nm.notify(FOCUS_NOTIFICATION_ID, builder.build());
+  String sessionId = call.getString("sessionId", "");
+  if (!sessionId.isEmpty()) {
+   try {
+    String token=call.getString("sessionToken", "");
+    if(token.matches("[A-Za-z0-9_-]{43}")) {
+     javax.crypto.Cipher cipher=javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,sessionKey());
+     FocusActionReceiver.prefs(getContext()).edit().putString("iv",android.util.Base64.encodeToString(cipher.getIV(),2)).putString("value",android.util.Base64.encodeToString(cipher.doFinal(token.getBytes(java.nio.charset.StandardCharsets.UTF_8)),2)).apply();
+    }
+   }catch(Exception ignored){}
+   FocusActionReceiver.prefs(getContext()).edit().putString("sessionId", sessionId).putString("server", call.getString("server", "https://www.humeto.com")).apply();
+   try {
+    org.json.JSONObject active=new org.json.JSONObject().put("id",sessionId).put("title",title).put("state",state).put("attendance_due_at",call.getString("attendanceDueAt", "")).put("check_in_at",java.time.Instant.ofEpochMilli(checkInAt).toString());
+    FocusActionReceiver.show(getContext(),active,call.getBoolean("attendancePrompt",false),null);
+   } catch(Exception ignored) { nm.notify(FOCUS_NOTIFICATION_ID, builder.build()); }
+  } else nm.notify(FOCUS_NOTIFICATION_ID, builder.build());
   call.resolve();
  }
 
+ @PluginMethod public void performFocusAction(PluginCall call) {
+  String action=call.getString("action", "");String id=call.getString("sessionId", "");
+  if(!java.util.Arrays.asList("pause","resume","stop","complete","confirm","check","timeout").contains(action)||!id.equals(FocusActionReceiver.prefs(getContext()).getString("sessionId",""))){call.reject("Focus session unavailable");return;}
+  getContext().sendBroadcast(new Intent(getContext(),FocusActionReceiver.class).setAction("humeto.focus."+action).putExtra("sessionId",id));call.resolve();
+ }
  @PluginMethod public void clearFocusNotification(PluginCall call) {
   NotificationManager nm = (NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
   if (nm != null) {
    nm.cancel(FOCUS_NOTIFICATION_ID);
   }
+  FocusActionReceiver.cancel(getContext());
+  FocusActionReceiver.prefs(getContext()).edit().clear().apply();
   call.resolve();
  }
 

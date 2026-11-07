@@ -50,7 +50,7 @@ export function PlanSummary({
         </span>
       )}
       <span
-        className="plan-summary-item"
+        className="plan-summary-item plan-estimate-legacy"
         title="Estimated profit: upfront plus completion. Conditional rewards remain separate."
       >
         <TrendingUp size={14} />

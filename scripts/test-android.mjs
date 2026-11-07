@@ -62,8 +62,16 @@ async function check(name, fn) {
     "Password sign-in through native UI and HttpOnly session cookie",
     "Saved login is encrypted and survives app process restart without cookies",
     "Native compact plan tabs, WBS tags and KPI results share one activity",
+    "Native plan menus rename, pause, duplicate, delete and Go to filtered tasks",
   ]);
   if (process.env.HUMETO_ANDROID_SMOKE === "wbs" && !wbsSmoke.has(name)) return;
+  if (
+    process.env.HUMETO_ANDROID_SMOKE === "plans" &&
+    !(wbsSmoke.has(name) && !name.startsWith("Native compact")) &&
+    name !==
+      "Native focus notification controls and attendance pause work without opening the app"
+  )
+    return;
   await fn();
   results.push({ name, status: "passed" });
   console.log("PASS " + name);
@@ -667,6 +675,228 @@ try {
           timeout: 15000,
         }),
       );
+    },
+  );
+  await check(
+    "Native plan menus rename, pause, duplicate, delete and Go to filtered tasks",
+    async () => {
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Close project map"]')?.click()`,
+      );
+      const goal = await nativeApi("/api/workspace/goals", {
+        title: "Native menu goal",
+        description: "Native QA",
+        targetDate: "2027-12-31",
+        status: "Active",
+      });
+      assert.equal(goal.status, 200);
+      const made = await nativeApi("/api/workspace/projects", {
+        title: "Native menu project",
+        description: "Native QA",
+        targetDate: "2027-12-31",
+        status: "Active",
+        goalId: goal.data.id,
+      });
+      assert.equal(made.status, 200);
+      const task = await nativeApi("/api/workspace/tasks", {
+        title: "Native pause task",
+        projectId: made.data.id,
+        important: false,
+        urgent: false,
+      });
+      assert.equal(task.status, 200);
+      await cdp.evaluate(`window.dispatchEvent(new Event('online'))`);
+      await cdp.click("Plans", true);
+      await cdp.click("Projects", true);
+      const card = (name) =>
+        `Array.from(document.querySelectorAll('.mobile-plan-card')).find(e=>e.querySelector('.project strong')?.textContent===${JSON.stringify(name)})`;
+      async function menu(name) {
+        await cdp.wait(`!!(${card(name)})`);
+        await cdp.evaluate(
+          `(${card(name)}).querySelector('.plan-more').click()`,
+        );
+        await cdp.wait(`!!document.querySelector('.plan-action-list')`);
+      }
+      await menu("Native menu project");
+      await cdp.click("Rename", true);
+      await cdp.fill(
+        ".plan-action-dialog input[name=planName]",
+        "Native renamed project",
+      );
+      await cdp.click("Save name", true);
+      await cdp.wait(`!document.querySelector('.plan-action-dialog')`);
+      await cdp.evaluate(
+        `(${card("Native renamed project")}).querySelector('.wbs-launch').click()`,
+      );
+      await cdp.wait(
+        `!!document.querySelector('[aria-label="Rename project"]')`,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Rename project"]').click()`,
+      );
+      await cdp.fill(
+        ".plan-action-dialog input[name=planName]",
+        "Native map project",
+      );
+      await cdp.click("Save name", true);
+      await cdp.wait(
+        `document.querySelector('.wbs-header h2')?.textContent==='Native map project'`,
+      );
+      await cdp.evaluate(
+        `document.querySelector('[aria-label="Close project map"]').click()`,
+      );
+      await menu("Native map project");
+      await cdp.click("Pause", true);
+      await cdp.click("Pause project", true);
+      await cdp.wait(`!document.querySelector('.plan-action-dialog')`);
+      let boot = (await nativeApi("/api/mobile")).data;
+      assert.equal(
+        boot.tasks.find((t) => t.id === task.data.id).is_plan_paused,
+        true,
+      );
+      await cdp.evaluate(
+        `(${card("Native map project")}).querySelector('.project').click()`,
+      );
+      await cdp.wait(
+        `document.querySelector('[aria-label="Project filter"]')?.value===${JSON.stringify(made.data.id)}`,
+      );
+      await cdp.click("Plans", true);
+      await cdp.click("Projects", true);
+      await menu("Native map project");
+      await cdp.click("Resume", true);
+      await cdp.click("Resume project", true);
+      await cdp.wait(`!document.querySelector('.plan-action-dialog')`);
+      boot = (await nativeApi("/api/mobile")).data;
+      assert.equal(
+        boot.tasks.find((t) => t.id === task.data.id).is_plan_paused,
+        false,
+      );
+      await menu("Native map project");
+      await cdp.click("Duplicate", true);
+      await cdp.fill(
+        ".plan-action-dialog input[name=planName]",
+        "Native planning copy",
+      );
+      await cdp.click("Create copy", true);
+      await cdp.wait(`!document.querySelector('.plan-action-dialog')`);
+      boot = (await nativeApi("/api/mobile")).data;
+      const copied = boot.projects.find(
+        (p) => p.title === "Native planning copy",
+      );
+      assert.ok(copied);
+      const copiedMap = (
+        await nativeApi("/api/project-wbs?projectId=" + copied.id)
+      ).data;
+      assert.equal(copiedMap.nodes.length, 1);
+      assert.equal(copiedMap.nodes[0].storage_state, "planning");
+      await menu("Native planning copy");
+      await cdp.click("Delete", true);
+      await cdp.click("Delete project", true);
+      await cdp.wait(`!document.querySelector('.plan-action-dialog')`);
+      assert.equal(
+        (await nativeApi("/api/plan-actions?type=project&planId=" + copied.id))
+          .status,
+        404,
+      );
+      await cdp.click("Goals", true);
+      await menu("Native menu goal");
+      await cdp.click("Rename", true);
+      await cdp.fill(
+        ".plan-action-dialog input[name=planName]",
+        "Native renamed goal",
+      );
+      await cdp.click("Save name", true);
+      await cdp.wait(`!document.querySelector('.plan-action-dialog')`);
+      await cdp.evaluate(
+        `(${card("Native renamed goal")}).querySelector('.project').click()`,
+      );
+      await cdp.wait(
+        `document.querySelector('[aria-label="Goal filter"]')?.value===${JSON.stringify(goal.data.id)}`,
+      );
+    },
+  );
+  await check(
+    "Native focus notification controls and attendance pause work without opening the app",
+    async () => {
+      adbRun([
+        "shell",
+        "pm",
+        "grant",
+        "com.humeto.tasks.qa",
+        "android.permission.POST_NOTIFICATIONS",
+      ]);
+      const task = await nativeApi("/api/workspace/tasks", {
+        title: "Notification focus audit",
+        important: false,
+        urgent: false,
+      });
+      assert.equal(task.status, 200);
+      const start = await nativeApi("/api/workspace/focus", {
+        action: "start",
+        taskId: task.data.id,
+        taskRevision: 1,
+        minutes: 30,
+      });
+      assert.equal(start.status, 200);
+      let active = (await nativeApi("/api/workspace/focus")).data.active;
+      const tok = await cdp.evaluate(
+        `(async()=>(await window.Capacitor.Plugins.HumetoDevice.readSession()).token)()`,
+      );
+      await cdp.evaluate(
+        `window.Capacitor.Plugins.HumetoDevice.updateFocusNotification(${JSON.stringify({ sessionId: active.id, title: active.title, state: "running", targetMinutes: 30, remainingSeconds: 1800, checkInAt: Date.now() + 1800000, attendanceDueAt: active.attendance_due_at, server: qaOrigin, sessionToken: tok })})`,
+      );
+      let dump = adbRun(["shell", "dumpsys", "notification", "--noredact"]);
+      assert.ok(
+        dump.includes("Pause") &&
+          dump.includes("Complete") &&
+          dump.includes("Stop"),
+        "Native focus notification exposes Pause, Stop and Complete",
+      );
+      const nativeAction = async (action) => {
+        await cdp.evaluate(
+          `window.Capacitor.Plugins.HumetoDevice.performFocusAction(${JSON.stringify({ sessionId: active.id, action })})`,
+        );
+      };
+      await nativeAction("pause");
+      for (let i = 0; i < 30; i++) {
+        active = (await nativeApi("/api/workspace/focus")).data.active;
+        if (active.state === "paused") break;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      assert.equal(active.state, "paused");
+      await new Promise((r) => setTimeout(r, 500));
+      dump = adbRun(["shell", "dumpsys", "notification", "--noredact"]);
+      assert.ok(dump.includes("Start"));
+      await nativeAction("resume");
+      for (let i = 0; i < 30; i++) {
+        active = (await nativeApi("/api/workspace/focus")).data.active;
+        if (active.state === "running") break;
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      assert.equal(active.state, "running");
+      const local = database(fixture.url);
+      await local
+        .prepare(
+          "UPDATE focus_sessions SET attendance_due_at=now()-interval '2 seconds' WHERE id=?",
+        )
+        .run(active.id);
+      await nativeAction("check");
+      await new Promise((r) => setTimeout(r, 1500));
+      dump = adbRun(["shell", "dumpsys", "notification", "--noredact"]);
+      assert.ok(dump.includes("Still working"));
+      await local
+        .prepare(
+          "UPDATE focus_sessions SET attendance_due_at=now()-interval '62 seconds' WHERE id=?",
+        )
+        .run(active.id);
+      await nativeAction("timeout");
+      await new Promise((r) => setTimeout(r, 1000));
+      active = (await nativeApi("/api/workspace/focus")).data.active;
+      assert.equal(active.state, "paused");
+      await nativeAction("complete");
+      await new Promise((r) => setTimeout(r, 1000));
+      assert.equal((await nativeApi("/api/workspace/focus")).data.active, null);
+      await local.close();
     },
   );
   await check(

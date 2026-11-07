@@ -1,4 +1,5 @@
 export type Task = {
+  is_plan_paused?: boolean;
   is_csf?: boolean;
   is_kpi?: boolean;
   routine_id?: string;

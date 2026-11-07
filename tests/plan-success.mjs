@@ -320,8 +320,8 @@ test("compact mobile tabs edit indicators on the same box, show profit frequency
     ]);
     assert.equal(
       await card
-        .locator(".plan-summary")
-        .getByText("PKR 150,000", { exact: true })
+        .locator(".work-totals")
+        .getByText("PKR 150,000 / monthly", { exact: true })
         .isVisible(),
       true,
     );

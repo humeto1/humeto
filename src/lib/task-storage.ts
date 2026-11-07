@@ -62,9 +62,9 @@ export async function storageWrite(a: Actor, id: string, body: unknown) {
       );
     await db()
       .prepare(
-        "UPDATE tasks SET storage_state=?,stored_at=CASE WHEN ?='active' THEN NULL ELSE humeto_action_time() END,purge_after=CASE WHEN ?='bin' THEN humeto_action_time()+interval '30 days' ELSE NULL END,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=?",
+        "UPDATE tasks SET project_id=CASE WHEN ?='active' AND NOT EXISTS(SELECT 1 FROM projects p WHERE p.id=tasks.project_id AND p.tenant_id=tasks.tenant_id) THEN '' ELSE project_id END,storage_state=?,stored_at=CASE WHEN ?='active' THEN NULL ELSE humeto_action_time() END,purge_after=CASE WHEN ?='bin' THEN humeto_action_time()+interval '30 days' ELSE NULL END,last_actor_id=?,revision=revision+1 WHERE id=? AND tenant_id=?",
       )
-      .run(state, state, state, a.id, id, a.tenantId);
+      .run(state, state, state, state, a.id, id, a.tenantId);
     await audit(
       a.tenantId,
       a.id,

@@ -1,4 +1,5 @@
 "use client";
+import { WorkTotals } from "./work-totals";
 import { ProjectWbs } from "./project-wbs";
 import { PlanInsights } from "./plan-insights";
 import { useState, useId, useEffect } from "react";
@@ -42,6 +43,7 @@ export function ParentControls({
   }
   return (
     <div className="parent-controls plan-tools">
+      <WorkTotals type={type} id={id} request={request} />
       <div
         role="tablist"
         aria-label={`${type === "project" ? "Project" : "Goal"} tools`}
@@ -95,16 +97,6 @@ export function ParentControls({
           {visited.has(t.id) &&
             (t.id === "wbs" ? (
               <>
-                <div className="plan-panel-heading">
-                  <div>
-                    <span className="plan-kicker">BRAINSTORM & PLAN</span>
-                    <h3>See how the work fits together</h3>
-                    <p>
-                      Break ideas into activities. Choose which ones appear in
-                      Tasks.
-                    </p>
-                  </div>
-                </div>
                 {type === "project" ? (
                   <ProjectWbs
                     projectId={id}
@@ -126,20 +118,6 @@ export function ParentControls({
                 className="plan-settings"
                 aria-label={`${type} settings`}
               >
-                <div className="plan-panel-heading">
-                  <div>
-                    <span className="plan-kicker">
-                      SET UP YOUR {type.toUpperCase()}
-                    </span>
-                    <h3>The details behind the work</h3>
-                    <p>
-                      Manage timing, responsibility
-                      {type === "project"
-                        ? ", value and collaboration."
-                        : " and financial targets."}
-                    </p>
-                  </div>
-                </div>
                 <PlanInsights
                   type={type}
                   id={id}

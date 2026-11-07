@@ -1905,6 +1905,11 @@ async function route(
     const { path } = await ctx.params;
     return await handle(req, path, a);
   } catch (e) {
+    if (
+      e instanceof Error &&
+      e.message === "Resume the project or goal before working on this task."
+    )
+      return fail(e.message, 409);
     if (e instanceof ReadingError) return fail(e.message, e.status);
     if (e instanceof RequestWorkflowError) return fail(e.message, e.status);
     if (e instanceof z.ZodError)

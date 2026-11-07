@@ -154,7 +154,7 @@ export async function GET(req: Request) {
       : undefined;
     const activities = await db()
       .prepare(
-        `SELECT t.id,t.title,t.stage,t.storage_state,t.is_csf,t.is_kpi,t.activity_note,t.revision,t.project_id,r.frequency FROM tasks t LEFT JOIN LATERAL (SELECT frequency FROM task_recurrences WHERE template_task_id=t.id AND tenant_id=t.tenant_id ORDER BY created_at DESC LIMIT 1) r ON TRUE WHERE t.tenant_id=? AND ${relation(v.type)} AND t.storage_state IN ('planning','active') AND NOT EXISTS(SELECT 1 FROM task_occurrences WHERE task_id=t.id) ORDER BY t.created_at,t.id`,
+        `SELECT t.id,t.title,t.stage,humeto_task_plan_paused(t.id) AS is_plan_paused,t.storage_state,t.is_csf,t.is_kpi,t.activity_note,t.revision,t.project_id,r.frequency FROM tasks t LEFT JOIN LATERAL (SELECT frequency FROM task_recurrences WHERE template_task_id=t.id AND tenant_id=t.tenant_id ORDER BY created_at DESC LIMIT 1) r ON TRUE WHERE t.tenant_id=? AND ${relation(v.type)} AND t.storage_state IN ('planning','active') AND NOT EXISTS(SELECT 1 FROM task_occurrences WHERE task_id=t.id) ORDER BY t.created_at,t.id`,
       )
       .all(...params(a.tenantId, v.type, parentId));
     const kpis = await db()

@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import { db, id, audit, withTransaction } from "./db";
 import type { Actor } from "./types";
@@ -15,6 +16,7 @@ export class WbsError extends Error {
 const key = z.string().min(1).max(100);
 const input = z
   .object({
+    commandId: z.string().uuid().optional(),
     projectId: key,
     type: z.enum(["project", "goal"]).default("project"),
     isCsf: z.boolean().optional(),
@@ -55,7 +57,7 @@ const input = z
 async function project(tenant: string, projectId: string, type = "project") {
   const p = await db()
     .prepare(
-      `SELECT id,title FROM ${type === "goal" ? "goals" : "projects"} WHERE id=? AND tenant_id=?`,
+      `SELECT id,title,status FROM ${type === "goal" ? "goals" : "projects"} WHERE id=? AND tenant_id=?`,
     )
     .get(projectId, tenant);
   if (!p) throw new WbsError("Project not found.", 404);
@@ -74,7 +76,7 @@ export async function readWbs(
     .get(projectId, tenant);
   const nodes = (await db()
     .prepare(
-      `SELECT n.*,t.title,t.stage,t.storage_state,t.revision,t.due_date,t.is_csf,t.is_kpi,t.activity_note,
+      `SELECT n.*,t.title,t.stage,humeto_task_plan_paused(t.id) AS is_plan_paused,t.storage_state,t.revision,t.due_date,t.is_csf,t.is_kpi,t.activity_note,
     r.id AS series_id,r.frequency,r.first_day FROM project_wbs_nodes n
     JOIN tasks t ON t.id=n.id AND t.tenant_id=?
     LEFT JOIN LATERAL (SELECT id,frequency,first_day FROM task_recurrences WHERE template_task_id=t.id AND tenant_id=t.tenant_id ORDER BY CASE WHEN status IN ('active','paused') THEN 0 ELSE 1 END,created_at DESC LIMIT 1) r ON TRUE
@@ -110,6 +112,24 @@ export async function writeWbs(a: Actor, body: unknown) {
         "SELECT revision FROM project_wbs WHERE project_id=? AND tenant_id=? FOR UPDATE",
       )
       .get(v.projectId, a.tenantId);
+    const hash = createHash("sha256")
+      .update(JSON.stringify({ ...v, revision: undefined }))
+      .digest("hex");
+    if (v.commandId) {
+      const prior = await db()
+        .prepare(
+          "SELECT payload_hash,result FROM project_wbs_commands WHERE tenant_id=? AND user_id=? AND command_id=?",
+        )
+        .get(a.tenantId, a.id, v.commandId);
+      if (prior) {
+        if (prior.payload_hash !== hash)
+          throw new WbsError(
+            "This saved activity changed. Reload before retrying.",
+            409,
+          );
+        return prior.result;
+      }
+    }
     if (Number(state?.revision) !== v.revision)
       throw new WbsError(
         "This project changed elsewhere. Reload the tree before saving.",
@@ -415,6 +435,13 @@ export async function writeWbs(a: Actor, body: unknown) {
       v.projectId,
       "Updated project breakdown",
     );
-    return { ok: true, id: changedId, revision: v.revision + 1 };
+    const result = { ok: true, id: changedId, revision: v.revision + 1 };
+    if (v.commandId)
+      await db()
+        .prepare(
+          "INSERT INTO project_wbs_commands(tenant_id,user_id,command_id,payload_hash,result) VALUES(?,?,?,?,?::jsonb)",
+        )
+        .run(a.tenantId, a.id, v.commandId, hash, JSON.stringify(result));
+    return result;
   });
 }

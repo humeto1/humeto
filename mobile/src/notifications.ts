@@ -9,7 +9,7 @@ try {
     localStorage.getItem("humeto-focus-snapshot") || "null",
   );
 } catch {}
-import { api } from "./api";
+import { api, SERVER, getSavedToken } from "./api";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { browserAlerts, type DeviceAlerts } from "../../shared/alert-controls";
@@ -28,6 +28,11 @@ const Device = registerPlugin<{
   settings: () => Promise<void>;
   updateFocusNotification: (options: {
     title: string;
+    sessionId?: string;
+    attendanceDueAt?: string;
+    attendancePrompt?: boolean;
+    server?: string;
+    sessionToken?: string;
     state: string;
     targetMinutes: number;
     remainingSeconds: number;
@@ -143,7 +148,13 @@ async function updateFocusTimer(
   receivedAt = Date.now(),
 ) {
   if (Capacitor.getPlatform() !== "android") return;
-  const value = prefsEnabled
+  if (active && !localStorage.getItem("humeto-focus-notification-permission")) {
+    localStorage.setItem("humeto-focus-notification-permission", "asked");
+    const permission = await LocalNotifications.checkPermissions();
+    if (permission.display === "prompt")
+      await LocalNotifications.requestPermissions();
+  }
+  const value = active
     ? focusNotification(
         active || null,
         serverNow,
@@ -160,7 +171,21 @@ async function updateFocusTimer(
   }
   focusSnapshot = value.snapshot;
   localStorage.setItem("humeto-focus-snapshot", JSON.stringify(focusSnapshot));
-  await Device.updateFocusNotification(value.options).catch(() => {});
+  await Device.updateFocusNotification({
+    ...value.options,
+    sessionId: active?.id,
+    attendancePrompt: !!active?.attendance_prompt_at,
+    attendanceDueAt: active?.attendance_due_at
+      ? new Date(
+          Date.now() +
+            Date.parse(active.attendance_due_at) -
+            (Date.parse(serverNow || "") || receivedAt) -
+            Math.max(0, Date.now() - receivedAt),
+        ).toISOString()
+      : "",
+    server: SERVER,
+    sessionToken: (await getSavedToken()) || "",
+  }).catch(() => {});
 }
 
 export async function syncNotifications(

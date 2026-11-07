@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { WorkTotals } from "./work-totals";
+import { ProfitReceipt } from "./profit-receipt";
 import { ActivityMeasures } from "./activity-measures";
 import { ActivityTags } from "./activity-markers";
 import { webApi, type Transport } from "./transport";
@@ -21,7 +23,8 @@ export function TaskActivityTags({
   refresh: () => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+    [error, setError] = useState(""),
+    [profit, setProfit] = useState(false);
   return (
     <>
       <form
@@ -56,15 +59,27 @@ export function TaskActivityTags({
           isKpi={task.is_kpi}
           disabled={!writable || busy}
         />
-        <small>
-          Tags do not change completion or repetition. Repeating occurrences
-          share the same activity tags.
-        </small>
+
         {error && <p role="alert">{error}</p>}
         <button type="submit" disabled={!writable || busy}>
           {busy ? "Saving…" : "Save tags"}
         </button>
       </form>
+      <WorkTotals type="task" id={task.id} request={request} />
+      <button
+        type="button"
+        disabled={!writable}
+        onClick={() => setProfit(true)}
+      >
+        Record actual profit
+      </button>
+      {profit && (
+        <ProfitReceipt
+          prompt={{ taskId: task.id }}
+          request={request}
+          onClose={() => setProfit(false)}
+        />
+      )}
       <ActivityMeasures
         activityId={task.id}
         isKpi={task.is_kpi}

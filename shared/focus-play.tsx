@@ -3,12 +3,18 @@ import { Shuffle, Wind } from "lucide-react";
 import "./focus-controls.css";
 
 export function RandomTaskPicker({
-  tasks,
+  tasks: allTasks,
   onChoose,
 }: {
-  tasks: { id: string; title: string; display_title?: string }[];
+  tasks: {
+    id: string;
+    title: string;
+    display_title?: string;
+    is_plan_paused?: boolean;
+  }[];
   onChoose: (id: string) => void;
 }) {
+  const tasks = allTasks.filter((t) => !t.is_plan_paused);
   const [rolling, setRolling] = useState(false);
   const [candidate, setCandidate] = useState<(typeof tasks)[number] | null>(
     null,

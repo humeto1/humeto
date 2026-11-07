@@ -23,6 +23,7 @@ const periods: Record<string, string> = {
   yearly: "Yearly",
 };
 type Activity = {
+  is_plan_paused?: boolean;
   id: string;
   title: string;
   stage: string;
@@ -220,10 +221,6 @@ export function PlanSuccess({
       <div className="plan-panel-heading">
         <div>
           <h3>What matters & how it’s doing</h3>
-          <p>
-            Review the CSF and KPI markers on your activities. Markers stay
-            independent of Tasks and completion.
-          </p>
         </div>
       </div>
       {kpis.length > 0 && (

@@ -55,17 +55,17 @@ export async function POST(req: Request) {
       const now = new Date();
       const reminders = await d
         .prepare(
-          "SELECT r.*,t.title,t.important,t.urgent,t.stage,t.storage_state FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND t.stage!='Done' AND t.storage_state='active' AND ((r.origin='manual' AND r.remind_at::timestamptz>=now()-interval '1 minute') OR (r.origin='automatic' AND r.remind_at::timestamptz>=now()-interval '2 days')) ORDER BY r.remind_at LIMIT 200",
+          "SELECT r.*,t.title,t.important,t.urgent,t.stage,t.storage_state FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND t.stage!='Done' AND t.storage_state='active' AND NOT humeto_task_plan_paused(t.id) AND ((r.origin='manual' AND r.remind_at::timestamptz>=now()-interval '1 minute') OR (r.origin='automatic' AND r.remind_at::timestamptz>=now()-interval '2 days')) ORDER BY r.remind_at LIMIT 200",
         )
         .all(a.tenantId, a.id);
       const series = await d
         .prepare(
-          "SELECT r.*,t.title,t.important,t.urgent,t.storage_state FROM task_recurrences r JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.status='active' AND t.storage_state='active'",
+          "SELECT r.*,t.title,t.important,t.urgent,t.storage_state FROM task_recurrences r JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.status='active' AND t.storage_state='active' AND NOT humeto_task_plan_paused(t.id)",
         )
         .all(a.tenantId, a.id);
       const focus = await d
         .prepare(
-          "SELECT f.*,t.title FROM focus_sessions f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id WHERE f.tenant_id=? AND f.user_id=? AND f.ended_at IS NULL AND t.storage_state='active'",
+          "SELECT f.*,t.title FROM focus_sessions f JOIN tasks t ON t.id=f.task_id AND t.tenant_id=f.tenant_id WHERE f.tenant_id=? AND f.user_id=? AND f.ended_at IS NULL AND t.storage_state='active' AND NOT humeto_task_plan_paused(t.id)",
         )
         .get(a.tenantId, a.id);
       await d

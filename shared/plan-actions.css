@@ -1,0 +1,166 @@
+.plan-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+.plan-card-header > .project {
+  flex: 1;
+  min-width: 0;
+}
+.plan-go {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  color: #214e3e;
+}
+button.plan-more,
+button.plan-rename-icon {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #214e3e;
+  cursor: pointer;
+}
+.plan-action-dialog {
+  width: calc(100% - 24px);
+  max-width: 440px;
+  max-height: 88dvh;
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid #dce3d4;
+  border-radius: 18px;
+  background: #fffefa;
+  color: #244736;
+  font-family: inherit;
+}
+.plan-action-dialog::backdrop {
+  background: #173b3355;
+}
+.plan-action-dialog * {
+  box-sizing: border-box;
+}
+.plan-action-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.plan-action-dialog h3 {
+  margin: 0;
+  font-size: 19px;
+}
+.plan-action-dialog button {
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #d7e0ce;
+  border-radius: 10px;
+  background: #fff;
+  color: #284e3b;
+  font: inherit;
+  cursor: pointer;
+}
+.plan-action-dialog button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.plan-action-dialog button:focus-visible,
+.plan-action-dialog input:focus-visible {
+  outline: 3px solid #6f9d82;
+  outline-offset: 2px;
+}
+.plan-action-list,
+.plan-action-dialog form {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.plan-action-list strong {
+  overflow-wrap: anywhere;
+}
+.plan-action-dialog p {
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.plan-action-dialog label {
+  display: grid;
+  gap: 7px;
+  font-size: 14px;
+}
+.plan-action-dialog input[name="planName"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border: 1px solid #d7e0ce;
+  border-radius: 9px;
+  padding: 9px;
+  font: inherit;
+}
+.plan-action-dialog .plan-delete-tasks {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-delete-tasks input {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+.plan-action-dialog .plan-action-primary {
+  background: #214e3e;
+  color: white;
+}
+.plan-action-dialog .plan-action-danger {
+  color: #983d32;
+  background: #fff3ed;
+  border-color: #e8cbbf;
+}
+.workstream-card > .plan-card-header {
+  justify-content: space-between;
+  align-items: center;
+}
+.workstream-plan-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.activity-paused {
+  background: #f7e3bd;
+  color: #704b15;
+}
+
+.plan-card-header .project > span:not(.plan-go) {
+  min-width: 0;
+  flex: 1;
+}
+.plan-card-header .project strong {
+  overflow-wrap: anywhere;
+}
+
+.mobile-plan-card.plan-paused,
+.task-row:has(.activity-paused) {
+  background: #eeefea;
+  opacity: 0.68;
+}
+
+.workstream-card:has(.stream-status.paused),
+.compact-task:has(.activity-paused) {
+  background: #eeefea;
+  opacity: 0.68;
+}
+
+.touch-task-card:has(.activity-paused) .task {
+  background: #eeefea;
+  opacity: 0.68;
+}

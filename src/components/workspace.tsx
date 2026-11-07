@@ -1,4 +1,7 @@
 "use client";
+import { WorkTotals } from "../../shared/work-totals";
+import { FocusAttendance } from "../../shared/focus-attendance";
+import { ProfitReceiptLauncher } from "../../shared/profit-receipt";
 import { TaskActivityTags } from "../../shared/task-activity-tags";
 import { ActivityBadges } from "../../shared/activity-markers";
 import { taskSearchScore } from "../../shared/task-search";
@@ -624,6 +627,34 @@ export default function Workspace({
     window.addEventListener("keydown", keys);
     return () => window.removeEventListener("keydown", keys);
   }, []);
+  useEffect(() => {
+    if (view !== "tasks") return;
+    const u = new URL(window.location.href);
+    const p = u.searchParams.get("project"),
+      g = u.searchParams.get("goal");
+    if (p || g) {
+      setTaskProject(p || "all");
+      setTaskGoal(g || "all");
+      setTaskCategory("all");
+      setTaskNature("all");
+      setTaskImpact("all");
+      setTaskDateFilter("all");
+      setTaskOwnerFilter("all");
+      setSearch("");
+    }
+  }, [view]);
+  useEffect(() => {
+    if (
+      !["all", "none"].includes(taskProject) &&
+      !data.projects.some((p) => p.id === taskProject)
+    )
+      setTaskProject("all");
+    if (
+      !["all", "none"].includes(taskGoal) &&
+      !data.goals.some((g) => g.id === taskGoal)
+    )
+      setTaskGoal("all");
+  }, [data.projects, data.goals, taskProject, taskGoal]);
   async function navigate(target: string) {
     if (editor.current && !(await editor.current.flush())) {
       notify("Save failed. Your answers remain here; retry before leaving.");
@@ -1017,6 +1048,9 @@ export default function Workspace({
             {t.display_title || t.title}
           </strong>
           <ActivityBadges activity={t} />
+          {!t.project_id && !t.goals?.length && (
+            <WorkTotals type="task" id={t.id} compact />
+          )}
           {t.display_title && <small>Original: {t.title}</small>}
           <TaskValueBadge task={t} />
           <span className="compact-task-context">
@@ -1238,6 +1272,8 @@ export default function Workspace({
   }
   return (
     <TaskCurrencyProvider syncToken={data.tasks}>
+      <ProfitReceiptLauncher />
+      <FocusAttendance onUpdate={() => void refresh()} />
       <div
         className={
           isSuperAdmin ? "workspace-app superadmin-shell" : "workspace-app"
@@ -2343,6 +2379,18 @@ export default function Workspace({
             {view === "progress" && staff && (
               <TaskProgress
                 onOpenTask={(id) => showModal("task-details:" + id)}
+                onOpenPlan={(type, id) => {
+                  setTaskProject(type === "project" ? id : "all");
+                  setTaskGoal(type === "goal" ? id : "all");
+                  setTaskCategory("all");
+                  setTaskNature("all");
+                  setTaskImpact("all");
+                  setTaskDateFilter("all");
+                  setTaskOwnerFilter("all");
+                  void navigate(
+                    "/workspace/tasks?" + type + "=" + encodeURIComponent(id),
+                  );
+                }}
                 tasks={data.tasks}
                 projects={data.projects || []}
                 goals={data.goals || []}

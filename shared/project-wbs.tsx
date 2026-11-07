@@ -1,4 +1,6 @@
 "use client";
+import { WorkTotals } from "./work-totals";
+import { PlanActions } from "./plan-actions";
 import { ActivityMeasures } from "./activity-measures";
 import { ActivityBadges, ActivityTags } from "./activity-markers";
 import React, {
@@ -40,7 +42,7 @@ import {
 import "./project-wbs.css";
 import { useWbsDrag } from "./use-wbs-drag";
 type Data = {
-  project: { id: string; title: string };
+  project: { id: string; title: string; status?: string };
   revision: number;
   nodes: WbsNode[];
   available: { id: string; title: string }[];
@@ -75,7 +77,6 @@ export function ProjectWbs({
         <Network size={19} />
         <span>
           <strong>{planType === "goal" ? "Goal map" : "Project map"}</strong>
-          <small>Brainstorm, break down, choose what to work on</small>
         </span>
         <ChevronRight size={18} />
       </button>
@@ -121,7 +122,10 @@ export function WbsEditor({
     [view, setView] = useState<"map" | "outline">("map"),
     [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null),
-    [adding, setAdding] = useState<{ parent: string | null } | null>(null),
+    [adding, setAdding] = useState<{
+      parent: string | null;
+      commandId?: string;
+    } | null>(null),
     [linking, setLinking] = useState(false),
     [ideas, setIdeas] = useState("");
   const [linkParent, setLinkParent] = useState<string | null>(null);
@@ -134,6 +138,11 @@ export function WbsEditor({
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ distance: number; scale: number } | null>(null);
   const nodes = data?.nodes || [];
+  const [pendingAdd, setPendingAdd] = useState<{
+    titles: string[];
+    commandId: string;
+    parent: string | null;
+  } | null>(null);
   const selectedNode = nodes.find((n) => n.id === selected);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [removeScope, setRemoveScope] = useState<"box" | "branch">("box");
@@ -203,7 +212,7 @@ export function WbsEditor({
     setScale(s);
     setOffset({
       x: (el.clientWidth - layout.width * s) / 2,
-      y: Math.max(16, (el.clientHeight - layout.height * s) / 2),
+      y: 16,
     });
   }, [layout.width, layout.height]);
   useEffect(() => {
@@ -230,11 +239,8 @@ export function WbsEditor({
       });
       await load();
       setNotice(message);
-      try {
-        await onUpdate?.();
-      } catch {
-        setNotice(message + " Refresh Tasks when your connection returns.");
-      }
+      void onUpdate?.().catch(() => {});
+      window.dispatchEvent(new Event("humeto-profit"));
       return true;
     } catch (e) {
       setError((e as Error).message);
@@ -349,9 +355,9 @@ export function WbsEditor({
       active = n.storage_state === "active";
     return (
       <div
-        className={`wbs-box ${root ? "wbs-root" : ""} ${done ? "wbs-done" : ""} ${selected === n.id ? "wbs-selected" : ""} ${outline ? "wbs-outline-box" : ""}`}
+        className={`wbs-box ${root ? "wbs-root" : ""} ${done ? "wbs-done" : ""} ${(n.is_plan_paused || (root && data?.project.status === "Paused")) && !done ? "wbs-paused" : ""} ${n.id.startsWith("pending-") ? "wbs-pending" : ""} ${selected === n.id ? "wbs-selected" : ""} ${outline ? "wbs-outline-box" : ""}`}
       >
-        {!root && (
+        {!root && !n.id.startsWith("pending-") && (
           <div className="wbs-box-top">
             <button
               type="button"
@@ -401,6 +407,7 @@ export function WbsEditor({
               ? add(null)
               : (setSelected(n.id), setAdding(null), setLinking(false))
           }
+          disabled={n.id.startsWith("pending-")}
           aria-label={root ? "Add activity to project" : `Edit ${n.title}`}
         >
           <span className="wbs-box-kicker">
@@ -423,6 +430,14 @@ export function WbsEditor({
           </span>
           <strong>{root ? data?.project.title : n.title}</strong>
         </button>
+        {root && (
+          <WorkTotals
+            type={planType}
+            id={projectId}
+            request={request}
+            compact
+          />
+        )}
         <div className="wbs-box-actions">
           <button
             type="button"
@@ -500,9 +515,19 @@ export function WbsEditor({
         >
           <header className="wbs-header">
             <div>
-              <span className="wbs-eyebrow">SPACE TO THINK</span>
               <h2 id={id + "-title"}>{data?.project.title || "Project map"}</h2>
             </div>
+            <PlanActions
+              type={planType}
+              planId={projectId}
+              writable={writable}
+              request={request}
+              renameOnly
+              onUpdate={async () => {
+                await load();
+                await onUpdate?.();
+              }}
+            />
             <button
               type="button"
               className="wbs-icon"
@@ -624,15 +649,25 @@ export function WbsEditor({
               </button>
             </div>
           )}
-          {view === "map" && (
-            <p className="wbs-map-hint">
-              Swipe anywhere to pan · Briefly hold a box to move · Drop on a box
-              to attach
-            </p>
-          )}
           <p className="wbs-announcement" role="status" aria-live="polite">
-            {busy ? "Saving…" : notice}
+            {busy ? "Saving…" : ""}
           </p>
+          {pendingAdd && !busy && error && (
+            <button
+              type="button"
+              className="wbs-retry-add"
+              onClick={() => {
+                setAdding({
+                  parent: pendingAdd.parent,
+                  commandId: pendingAdd.commandId,
+                });
+                setIdeas(pendingAdd.titles.join("\n"));
+                setPendingAdd(null);
+              }}
+            >
+              Retry adding activity
+            </button>
+          )}
           {!data ? (
             <div className="wbs-loading">
               {error
@@ -797,28 +832,6 @@ export function WbsEditor({
                       </div>
                     ))}
                   </div>
-                  {!nodes.length && (
-                    <div className="wbs-empty">
-                      <span>Start with the big pieces.</span>
-                      <p>
-                        Add a few activities, then break them into smaller
-                        ideas. Choose what appears in Tasks whenever you’re
-                        ready.
-                      </p>
-                      {writable && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFocus(null);
-                            setQuery("");
-                            add(null);
-                          }}
-                        >
-                          <Plus size={18} /> Add Category
-                        </button>
-                      )}
-                    </div>
-                  )}
                   {query && !visibleNodes.length && (
                     <div className="wbs-empty">
                       No activities match “{query}”.
@@ -1047,16 +1060,12 @@ export function WbsEditor({
               </button>
               {adding ? (
                 <>
-                  <span className="wbs-eyebrow">GROW YOUR PROJECT</span>
                   <h3>
                     {adding.parent
                       ? `Ideas under ${nodes.find((n) => n.id === adding.parent)?.title}`
                       : "What does this project involve?"}
                   </h3>
-                  <p>
-                    One idea per line. These stay in your map until you add them
-                    to Tasks.
-                  </p>
+
                   <form
                     onSubmit={async (e) => {
                       e.preventDefault();
@@ -1064,15 +1073,43 @@ export function WbsEditor({
                         .split("\n")
                         .map((s) => s.trim())
                         .filter(Boolean);
-                      if (
-                        await mutate(
-                          { action: "add", parentId: adding.parent, titles },
-                          `${titles.length} ${titles.length === 1 ? "activity" : "activities"} added.`,
-                        )
-                      ) {
-                        setAdding(null);
-                        setIdeas("");
-                      }
+                      if (!titles.length || busyRef.current || !data) return;
+                      const parent = adding.parent,
+                        previous = data;
+                      const provisional = titles.map((title, index) => ({
+                        id: "pending-" + crypto.randomUUID(),
+                        title,
+                        parent_id: parent,
+                        position:
+                          nodes.filter((n) => n.parent_id === parent).length +
+                          index,
+                        stage: "To do",
+                        storage_state: "planning",
+                        revision: 0,
+                        due_date: "",
+                        frequency: null,
+                        first_day: null,
+                        series_id: null,
+                      }));
+                      setAdding(null);
+                      setIdeas("");
+                      const commandId = adding.commandId || crypto.randomUUID();
+                      setPendingAdd({ titles, parent, commandId });
+                      setCollapsed((old) => {
+                        const n = new Set(old);
+                        if (parent) n.delete(parent);
+                        return n;
+                      });
+                      setData({
+                        ...data,
+                        nodes: [...data.nodes, ...provisional],
+                      });
+                      const saved = await mutate(
+                        { action: "add", parentId: parent, titles, commandId },
+                        "",
+                      );
+                      if (saved) setPendingAdd(null);
+                      else setData(previous);
                     }}
                   >
                     <label htmlFor={id + "-ideas"}>
@@ -1083,7 +1120,7 @@ export function WbsEditor({
                       id={id + "-ideas"}
                       value={ideas}
                       onChange={(e) => setIdeas(e.target.value)}
-                      rows={5}
+                      rows={3}
                       maxLength={8000}
                       placeholder={
                         "Research the market\nFind potential institutes\nPlan a demo"

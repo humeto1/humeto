@@ -150,6 +150,7 @@ export default function TaskFocus({
     onFocusChange(!!active && !showAll);
     return () => onFocusChange(false);
   }, [active?.id, showAll, onFocusChange]);
+
   useEffect(() => {
     setProgress(active?.progress == null ? "" : String(active.progress));
     setNextStep(active?.next_step || "");
@@ -157,7 +158,7 @@ export default function TaskFocus({
     setPreview(null);
     setMessage("");
     setSwitching(false);
-    setShowAll(location.hash === "#task-followups");
+    setShowAll(location.hash === "#task-followups" || new URL(location.href).searchParams.has("project") || new URL(location.href).searchParams.has("goal"));
   }, [active?.id]);
   useEffect(() => {
     const revealInbox = () => {
@@ -185,7 +186,7 @@ export default function TaskFocus({
     };
   }, [memberKey]);
   const candidates = [...tasks]
-    .filter((t) => t.stage !== "Done" && t.id !== active?.task_id)
+    .filter((t) => t.stage !== "Done" && !t.is_plan_paused && t.id !== active?.task_id)
     .filter((t) => taskSearchScore(t, focusSearch) > 0)
     .sort(
       (a, b) =>
@@ -263,6 +264,7 @@ export default function TaskFocus({
       });
       const j = await r.json();
       if (!r.ok) throw Error(j.error || "Could not update focus.");
+      if(active && ["pause","stop","complete"].includes(action)) window.dispatchEvent(new CustomEvent("humeto-profit-prompt",{detail:{taskId:active.task_id,sessionId:active.id}}));
       setPreview(null);
       setMessage("");
       if (["start", "switch"].includes(action)) {

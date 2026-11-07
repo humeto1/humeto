@@ -110,6 +110,10 @@ test("focus UI hides the board, restores a paused timer and completes the chosen
     await page.getByText("Paused · timer stopped", { exact: true }).waitFor();
     await page.getByRole("button", { name: "Stop", exact: true }).click();
     await page
+      .getByRole("dialog", { name: "Actual profit received", exact: true })
+      .getByRole("button", { name: "Nothing received / Skip", exact: true })
+      .click();
+    await page
       .getByRole("heading", { name: "Choose a task", exact: true })
       .waitFor();
     const stopped = await (

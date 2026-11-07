@@ -35,9 +35,19 @@ export async function runTaskScheduler({
         "INSERT INTO task_scheduler_heartbeat(id,heartbeat) VALUES('main',?) ON CONFLICT(id) DO UPDATE SET heartbeat=excluded.heartbeat",
       )
       .run(now.toISOString());
+  const checking = await d
+    .prepare(
+      "SELECT DISTINCT tenant_id,user_id FROM focus_sessions WHERE state='running' AND attendance_due_at<=?" +
+        (tenantId ? " AND tenant_id=? AND user_id=?" : ""),
+    )
+    .all(now.toISOString(), ...(tenantId ? [tenantId, userId] : []));
+  for (const f of checking)
+    await d
+      .prepare("SELECT humeto_focus_attendance_sweep(?,?)")
+      .get(f.tenant_id, f.user_id);
   const series = await d
     .prepare(
-      "SELECT id FROM task_recurrences WHERE status='active' AND wbs_suspended=FALSE AND EXISTS(SELECT 1 FROM tasks template WHERE template.id=task_recurrences.template_task_id AND template.tenant_id=task_recurrences.tenant_id AND template.storage_state='active') AND next_day<=? AND (next_day || ' ' || local_time)<=to_char(timezone(task_recurrences.timezone,?::timestamptz),'YYYY-MM-DD HH24:MI')" +
+      "SELECT id FROM task_recurrences WHERE status='active' AND wbs_suspended=FALSE AND EXISTS(SELECT 1 FROM tasks template WHERE template.id=task_recurrences.template_task_id AND template.tenant_id=task_recurrences.tenant_id AND template.storage_state='active' AND NOT humeto_task_plan_paused(template.id)) AND next_day<=? AND (next_day || ' ' || local_time)<=to_char(timezone(task_recurrences.timezone,?::timestamptz),'YYYY-MM-DD HH24:MI')" +
         (tenantId ? " AND tenant_id=? AND user_id=?" : "") +
         (routineOnly ? " AND track_occurrences=TRUE" : "") +
         " ORDER BY next_day LIMIT 500",
@@ -85,7 +95,7 @@ export async function runTaskScheduler({
       for (const occurrenceDay of days) {
         const t = await d
           .prepare(
-            "SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active'",
+            "SELECT * FROM tasks WHERE id=? AND tenant_id=? AND storage_state='active' AND NOT humeto_task_plan_paused(id)",
           )
           .get(s.template_task_id, s.tenant_id);
         if (!t) return;
@@ -240,7 +250,7 @@ export async function runTaskScheduler({
 
       const reminders = await d
         .prepare(
-          "SELECT r.*,t.important,t.urgent,n.notified_at,n.nudge_count FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id LEFT JOIN task_followup_notifications n ON n.reminder_id=r.id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND r.remind_at<=? AND t.stage!='Done' AND t.storage_state='active' AND (n.reminder_id IS NULL OR (? > 0 AND n.notified_at <= ?::timestamptz - (? * interval '1 minute'))) ORDER BY r.remind_at LIMIT 100",
+          "SELECT r.*,t.important,t.urgent,n.notified_at,n.nudge_count FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id LEFT JOIN task_followup_notifications n ON n.reminder_id=r.id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND r.remind_at<=? AND t.stage!='Done' AND t.storage_state='active' AND NOT humeto_task_plan_paused(t.id) AND (n.reminder_id IS NULL OR (? > 0 AND n.notified_at <= ?::timestamptz - (? * interval '1 minute'))) ORDER BY r.remind_at LIMIT 100",
         )
         .all(
           tenant,

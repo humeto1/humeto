@@ -101,7 +101,7 @@ export async function schedulingRead(a: Actor, summary = false) {
     now = new Date();
   const rows = await d
     .prepare(
-      "SELECT r.*,t.title,t.stage,t.revision AS task_revision,n.notified_at,n.nudge_count FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id LEFT JOIN task_followup_notifications n ON n.reminder_id=r.id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND t.stage!='Done' ORDER BY r.remind_at LIMIT 100",
+      "SELECT r.*,t.title,t.stage,t.revision AS task_revision,n.notified_at,n.nudge_count FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id LEFT JOIN task_followup_notifications n ON n.reminder_id=r.id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND t.stage!='Done' AND NOT humeto_task_plan_paused(t.id) ORDER BY r.remind_at LIMIT 100",
     )
     .all(a.tenantId, a.id);
   const quiet = quietUntil(now, prefs),
@@ -129,7 +129,7 @@ export async function schedulingRead(a: Actor, summary = false) {
     );
   const series = await d
     .prepare(
-      "SELECT r.*,t.title,(SELECT count(*) FROM task_occurrences o WHERE o.series_id=r.id AND o.task_id IS NOT NULL) AS occurrence_count FROM task_recurrences r JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.wbs_suspended=FALSE ORDER BY r.created_at DESC LIMIT 100",
+      "SELECT r.*,humeto_task_plan_paused(t.id) AS is_plan_paused,t.title,(SELECT count(*) FROM task_occurrences o WHERE o.series_id=r.id AND o.task_id IS NOT NULL) AS occurrence_count FROM task_recurrences r JOIN tasks t ON t.id=r.template_task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.wbs_suspended=FALSE ORDER BY r.created_at DESC LIMIT 100",
     )
     .all(a.tenantId, a.id);
   const events = await d

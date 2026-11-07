@@ -134,7 +134,7 @@ export async function agentState(
   const reminders = (
     await db()
       .prepare(
-        "SELECT r.id,r.task_id,t.title,r.remind_at,r.timezone FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND t.stage!='Done' ORDER BY r.remind_at LIMIT 100",
+        "SELECT r.id,r.task_id,t.title,r.remind_at,r.timezone FROM task_reminders r JOIN tasks t ON t.id=r.task_id AND t.tenant_id=r.tenant_id WHERE r.tenant_id=? AND r.user_id=? AND r.status='scheduled' AND t.stage!='Done' AND NOT humeto_task_plan_paused(t.id) ORDER BY r.remind_at LIMIT 100",
       )
       .all(a.tenantId, a.id)
   ).map((r) => ({

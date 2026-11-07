@@ -1,0 +1,78 @@
+.work-totals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 8px 0;
+}
+.work-totals > span {
+  min-width: 0;
+  padding: 7px;
+  background: #eef3e6;
+  border-radius: 8px;
+}
+.work-totals small {
+  display: block;
+  font-size: 10px;
+  color: #57684e;
+}
+.work-totals strong {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: #254b39;
+}
+.wbs-root .work-totals {
+  margin: 0 7px;
+  gap: 3px;
+}
+.wbs-root .work-totals > span {
+  padding: 4px;
+  background: #ffffff12;
+}
+.wbs-root .work-totals small,
+.wbs-root .work-totals strong {
+  color: #f2f5ed;
+  font-size: 8px;
+}
+.plan-summary .plan-estimate-legacy {
+  display: none;
+}
+.plan-action-dialog input,
+.plan-action-dialog select {
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  font: inherit;
+  border: 1px solid #d7e0ce;
+  border-radius: 9px;
+  padding: 8px;
+}
+.focus-attendance {
+  position: fixed;
+  z-index: 1200;
+  bottom: 80px;
+  left: 12px;
+  right: 12px;
+  max-width: 480px;
+  margin: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #bfccae;
+  border-radius: 14px;
+  background: #fff8df;
+  box-shadow: 0 5px 25px #183c3230;
+  color: #254b39;
+}
+.focus-attendance strong {
+  flex: 1 0 100%;
+  font-size: 14px;
+}
+.focus-attendance button {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #c6d3bd;
+  border-radius: 9px;
+  background: white;
+}

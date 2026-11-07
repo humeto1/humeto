@@ -4,10 +4,23 @@ import "./activity-markers.css";
 export function ActivityBadges({
   activity,
 }: {
-  activity: { is_csf?: boolean; is_kpi?: boolean };
+  activity: {
+    is_csf?: boolean;
+    is_kpi?: boolean;
+    is_plan_paused?: boolean;
+    stage?: string;
+  };
 }) {
   return (
     <span className="activity-badges">
+      {activity.is_plan_paused && activity.stage !== "Done" && (
+        <span
+          className="activity-paused"
+          title="Resume the project or goal to work on this task"
+        >
+          Paused
+        </span>
+      )}
       {activity.is_csf && (
         <span className="activity-csf" title="Critical success factor">
           CSF

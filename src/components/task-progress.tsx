@@ -1,4 +1,5 @@
 "use client";
+import { PlanActions } from "../../shared/plan-actions";
 import { PlanSummary } from "../../shared/plan-summary";
 import { computeGoalTiming } from "../../shared/goal-clock";
 import { GoalDeadlineFields } from "../../shared/goal-timing";
@@ -32,6 +33,7 @@ export default function TaskProgress({
   refresh,
   writable,
   onOpenTask,
+  onOpenPlan,
 }: {
   tasks: Task[];
   projects: Workstream[];
@@ -39,6 +41,7 @@ export default function TaskProgress({
   refresh: () => Promise<void>;
   writable: boolean;
   onOpenTask: (id: string) => void;
+  onOpenPlan: (type: "project" | "goal", id: string) => void;
 }) {
   const [tab, setTab] = useState("projects"),
     [edit, setEdit] = useState<{
@@ -257,21 +260,37 @@ export default function TaskProgress({
               const done = related.filter((t) => t.stage === "Done").length;
               return (
                 <article className="workstream-card" key={item.id}>
-                  <div>
+                  <div className="plan-card-header">
                     <span
                       className={"stream-status " + item.status.toLowerCase()}
                     >
                       {item.status}
                     </span>
-                    <button
-                      className="subtle-link"
-                      onClick={() => {
-                        setEdit({ kind: tab as "projects" | "goals", item });
-                        setError("");
-                      }}
-                    >
-                      Edit
-                    </button>
+                    <div className="workstream-plan-actions">
+                      <button
+                        type="button"
+                        className="plan-go"
+                        aria-label={`Go to tasks for ${item.title}`}
+                        onClick={() =>
+                          onOpenPlan(
+                            tab === "projects" ? "project" : "goal",
+                            item.id,
+                          )
+                        }
+                      >
+                        Go <ArrowUpRight size={17} />
+                      </button>
+                      <PlanActions
+                        type={tab === "projects" ? "project" : "goal"}
+                        planId={item.id}
+                        writable={writable}
+                        onUpdate={refresh}
+                        onEdit={() => {
+                          setEdit({ kind: tab as "projects" | "goals", item });
+                          setError("");
+                        }}
+                      />
+                    </div>
                   </div>
                   <h2>{item.title}</h2>
                   <PlanSummary plan={item} />

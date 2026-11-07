@@ -44,6 +44,7 @@ export type Application = {
   submitted_at?: string;
 };
 export type Task = {
+  is_plan_paused?: boolean;
   is_csf?: boolean;
   is_kpi?: boolean;
   routine_id?: string;

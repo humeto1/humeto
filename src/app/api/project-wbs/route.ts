@@ -13,6 +13,11 @@ async function authorized() {
     : null;
 }
 function error(e: unknown) {
+  if (
+    e instanceof Error &&
+    e.message === "Resume the project or goal before working on this task."
+  )
+    return Response.json({ error: e.message }, { status: 409 });
   return Response.json(
     {
       error:

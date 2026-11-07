@@ -1,4 +1,5 @@
 export type WbsNode = {
+  is_plan_paused?: boolean;
   is_csf?: boolean;
   is_kpi?: boolean;
   activity_note?: string;

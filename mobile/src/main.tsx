@@ -1,3 +1,7 @@
+import { WorkTotals } from "../../shared/work-totals";
+import { FocusAttendance } from "../../shared/focus-attendance";
+import { ProfitReceipt } from "../../shared/profit-receipt";
+import { PlanActions } from "../../shared/plan-actions";
 import {TaskActivityTags} from "../../shared/task-activity-tags";
 import {PlanSummary} from "../../shared/plan-summary";
 import {ActivityBadges} from "../../shared/activity-markers";
@@ -489,6 +493,7 @@ function Auth({ ready }: { ready: () => Promise<void> }) {
   );
 }
 function App() {
+  const [profitPrompt,setProfitPrompt]=useState<{taskId:string;sessionId:string}|null>(null);
   const [data, setData] = useState<Bootstrap | null>(null),
     [loading, setLoading] = useState(true),
     [tab, setTab] = useState("today"),
@@ -579,6 +584,11 @@ function App() {
       ).catch(() => {});
     }
   }
+  useEffect(() => {
+    if (!data) return;
+    if (!["all","none"].includes(projectFilter) && !data.projects.some(p=>p.id===projectFilter)) setProjectFilter("all");
+    if (!["all","none"].includes(goalFilter) && !data.goals.some(g=>g.id===goalFilter)) setGoalFilter("all");
+  },[data?.projects,data?.goals,projectFilter,goalFilter]);
   useEffect(() => {
     const refreshAlerts = () => void load();
     window.addEventListener("humeto-reminders", refreshAlerts);
@@ -799,7 +809,7 @@ function App() {
     completed = data.tasks.filter((t) => t.stage === "Done");
   const focusTask = data.tasks.find((t) => t.id === active?.task_id);
   const focusMatches = pending.filter(
-    (t) => taskSearchScore(t, focusSearch) > 0,
+    (t) => !t.is_plan_paused && taskSearchScore(t, focusSearch) > 0,
   );
   const focusChoice =
     focusMatches.find((t) => t.id === focusSelection) ||
@@ -907,6 +917,7 @@ function App() {
             {t.display_title || t.title}
           </strong>
           <ActivityBadges activity={t}/>
+          {!t.project_id && !t.goals?.length && <WorkTotals type="task" id={t.id} request={api} compact/>}
           {t.display_title && <small>Original: {t.title}</small>}
           <small>
             {t.project_title || "No project"} · {formatDate(t.due_date)}
@@ -950,7 +961,8 @@ function App() {
           minutes,
           ...extras,
         });
-        const updated = await api("/api/workspace/focus");
+        if(active && ["pause","stop","complete"].includes(action))setProfitPrompt({taskId:active.task_id,sessionId:active.id});
+          const updated = await api("/api/workspace/focus");
         updated.receivedAt ||= Date.now();
         focusRef.current = updated;
         setFocus(updated);
@@ -972,6 +984,8 @@ function App() {
     : 0;
   return (
     <TaskCurrencyProvider request={api} syncToken={data.tasks}>
+      <FocusAttendance request={api} onUpdate={()=>void refresh()}/>
+      {profitPrompt&&<ProfitReceipt prompt={profitPrompt} request={api} onClose={()=>setProfitPrompt(null)}/>}
       <div
         className={
           "app" +
@@ -1995,9 +2009,11 @@ function App() {
                       {kind === "projects" ? "Projects" : "Goals"}
                     </h2>
                     {data[kind].map((p) => (
-                      <article className="mobile-plan-card" key={p.id}>
+                      <article className={`mobile-plan-card ${p.status === "Paused" ? "plan-paused" : ""}`} key={p.id}>
+                        <div className="plan-card-header">
                         <button
                           className="project"
+                          aria-label={`Go to tasks for ${p.title}`}
                           key={p.id}
                           onClick={() => {
                             setQuery("");
@@ -2043,8 +2059,10 @@ function App() {
                               linked tasks
                             </small>
                           </span>
-                          <ChevronRight size={17} />
+                          <span className="plan-go">Go <ChevronRight size={17} /></span>
                         </button>
+                        <PlanActions type={kind === "projects" ? "project" : "goal"} planId={p.id} writable={writable} request={api} onUpdate={refresh}/>
+                        </div>
                         <PlanSummary plan={p}/>
                         <ParentControls
                           type={kind === "projects" ? "project" : "goal"}
@@ -2469,7 +2487,7 @@ function App() {
                       {active?.task_id !== task.id && (
                         <button
                           className="secondary"
-                          disabled={!writable}
+                          disabled={!writable || !!task.is_plan_paused}
                           onClick={() => {
                             setFocusQuery(task.title);
                             setSheet("focus-picker");
@@ -2481,7 +2499,7 @@ function App() {
                       )}
                       <button
                         className="primary"
-                        disabled={!writable}
+                        disabled={!writable || !!task.is_plan_paused}
                         onClick={() =>
                           void run(async () => {
                             await patch(task, { stage: "Done" });
@@ -2738,7 +2756,7 @@ function App() {
                   {task.stage !== "Done" && (
                     <button
                       className="primary full"
-                      disabled={!writable}
+                      disabled={!writable || !!task.is_plan_paused}
                       onClick={() =>
                         void run(async () => {
                           await patch(task, { stage: "Done" });

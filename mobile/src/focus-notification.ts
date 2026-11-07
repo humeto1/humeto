@@ -2,6 +2,8 @@ export type FocusSessionData = {
   id: string;
   title: string;
   check_in_at: string | null;
+  attendance_due_at?: string | null;
+  attendance_prompt_at?: string | null;
   break_until?: string;
   ended_at?: string | null;
   state: string;
