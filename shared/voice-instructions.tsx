@@ -34,7 +34,6 @@ export function VoiceInstructions({
 }) {
   const [supported, setSupported] = useState<boolean | null>(null);
   const [listening, setListening] = useState(false);
-  const [text, setText] = useState("");
   const [error, setError] = useState("");
   const recognition = useRef<Recognition | null>(null);
   useEffect(() => {
@@ -64,11 +63,12 @@ export function VoiceInstructions({
   function start() {
     if (nativeDictate) {
       if (listening) return;
-      setText("");
       setError("");
       setListening(true);
       void nativeDictate()
-        .then((transcript) => setText(transcript.slice(0, 2000)))
+        .then((transcript) => {
+          if (transcript.trim()) onInsert(transcript.slice(0, 2000));
+        })
         .catch((cause: unknown) =>
           setError(
             cause instanceof Error
@@ -87,15 +87,16 @@ export function VoiceInstructions({
     r.lang = navigator.language || "en-US";
     r.continuous = false;
     r.interimResults = true;
-    setText("");
+    let transcript = "";
     setError("");
     setListening(true);
     r.onresult = (event) => {
-      setText(
-        Array.from(event.results, (result) => result[0]?.transcript || "")
-          .join(" ")
-          .slice(0, 2000),
-      );
+      transcript = Array.from(
+        event.results,
+        (result) => result[0]?.transcript || "",
+      )
+        .join(" ")
+        .slice(0, 2000);
     };
     r.onerror = ({ error: code }) =>
       setError(
@@ -106,6 +107,8 @@ export function VoiceInstructions({
             : "Speech recognition is unavailable. Try again, type, or use your keyboard microphone.",
       );
     r.onend = () => {
+      if (transcript.trim()) onInsert(transcript);
+      transcript = "";
       recognition.current = null;
       setListening(false);
     };
@@ -162,63 +165,24 @@ export function VoiceInstructions({
           {listening ? <Square size={22} /> : <Mic size={24} />}
         </button>
       )}
-      <details
-        open={listening || !!text || !!error || undefined}
-        style={{
-          position: "absolute",
-          right: 0,
-          bottom: "calc(100% + 10px)",
-          width: "min(310px, calc(100vw - 48px))",
-          maxHeight: "30dvh",
-          overflowY: "auto",
-          padding: "10px 14px",
-          borderRadius: 16,
-          background: "#fff",
-          boxShadow: "0 4px 24px #183b3220",
-          zIndex: 5,
-        }}
-      >
-        <summary style={{ cursor: "pointer", color: "#536852" }}>
-          About dictation
-        </summary>
-        <p style={{ margin: "4px 0" }} role="status">
-          {listening
-            ? nativeDictate
-              ? "Speak in the speech window. Your transcript will appear here for review."
-              : "Listening… Speak in your device’s language. Stop to review."
-            : nativeDictate
-              ? "Device speech recognition · Your speech provider may process audio online. Review the text before sending."
-              : supported === false
-                ? "To speak your instruction, use your keyboard’s microphone or a browser that supports dictation."
-                : "Browser dictation · Your browser may process speech online. Humeto receives text only when you send it."}
+      {error && (
+        <p
+          role="alert"
+          style={{
+            position: "absolute",
+            right: 0,
+            bottom: "100%",
+            width: "min(310px, calc(100vw - 48px))",
+            padding: 12,
+            borderRadius: 12,
+            background: "#fff",
+            boxShadow: "0 4px 24px #183b3220",
+            zIndex: 5,
+          }}
+        >
+          {error}
         </p>
-        {error && <p role="alert">{error}</p>}
-        {text && (
-          <div>
-            <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-              {text}
-            </p>
-            <button
-              type="button"
-              disabled={listening || disabled}
-              onClick={() => {
-                onInsert(text);
-                setText("");
-              }}
-            >
-              Use dictated text
-            </button>{" "}
-            <button
-              type="button"
-              disabled={listening}
-              onClick={() => setText("")}
-            >
-              Discard
-            </button>
-            <p>Review and edit your instruction before sending.</p>
-          </div>
-        )}
-      </details>
+      )}
     </div>
   );
 }

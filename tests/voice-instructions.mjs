@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
-test("dictation reviews text without sending, preserves draft and releases microphone", async () => {
+test("dictation inserts directly into editable draft without a confirmation layer", async () => {
   const browser = await chromium.launch();
   try {
     const context = await browser.newContext({
@@ -42,18 +42,23 @@ test("dictation reviews text without sending, preserves draft and releases micro
       }),
     );
     assert.equal(await input.inputValue(), "Existing draft");
-    assert.equal(
-      await page
-        .getByRole("button", { name: "Use dictated text", exact: true })
-        .isDisabled(),
-      true,
-    );
     await page
       .getByRole("button", { name: "Stop dictation", exact: true })
       .click();
-    await page
-      .getByRole("button", { name: "Use dictated text", exact: true })
-      .click();
+    assert.equal(
+      await page.getByText("About dictation", { exact: true }).count(),
+      0,
+    );
+    assert.equal(
+      await page
+        .getByRole("button", { name: "Use dictated text", exact: true })
+        .count(),
+      0,
+    );
+    assert.equal(
+      await page.getByRole("button", { name: "Discard", exact: true }).count(),
+      0,
+    );
     assert.equal(
       await input.inputValue(),
       "Existing draft Create a task tomorrow",
@@ -91,9 +96,7 @@ test("unsupported browser keeps typed instructions available", async () => {
     });
     const page = await context.newPage();
     await page.goto("/workspace/assistant");
-    await page
-      .getByText("To speak your instruction, use your keyboard")
-      .waitFor();
+
     await page
       .getByLabel("Message Humeto assistant", { exact: true })
       .fill("Typed instruction");
